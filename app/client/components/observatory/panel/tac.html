@@ -1,4 +1,4 @@
-<if :when="observatory.model">
+<logic :if="observatory.model">
 <w-container fluid class="observatory">
   <aside class="sidebar" aria-label="Application information">
     <div class="brand"><img class="brand-symbol" src="/shared/assets/observatory.svg" alt="" role="presentation" /><div><strong>Swarx Agent Observatory</strong></div></div>
@@ -7,8 +7,8 @@
   <main :class="'main section-' + observatory.section">
     <w-app-bar class="topbar"><span class="eyebrow">LOCAL AGENT &amp; RESOURCE MONITOR</span><div class="status-controls"><span :class="'live-state state-' + observatory.status"><i class="dot"></i>{observatory.status}</span></div></w-app-bar>
     <section class="page-heading"><div><h1>{observatory.section === 'running' ? "What’s running." : observatory.section === 'processes' ? 'Observed processes.' : observatory.section === 'runtime' ? 'Runtimes.' : observatory.section === 'history' ? 'Resource history.' : 'Activity.'}</h1><p>Reported sessions and tasks; measured local processes where supported.</p></div><div class="sample-info">Updated {observatory.model.sampled}<br /><span>Observed for {observatory.model.elapsed}</span></div></section>
-    <if :when="observatory.problem"><w-alert variant="warning" class="alert" role="status">{observatory.problem}</w-alert></if>
-    <for :each="error in observatory.model.errors"><w-alert variant="warning" class="alert" role="status">{error}</w-alert></for>
+    <logic :if="observatory.problem"><w-alert variant="warning" class="alert" role="status">{observatory.problem}</w-alert></logic>
+    <loop :for="error in observatory.model.errors"><w-alert variant="warning" class="alert" role="status">{error}</w-alert></loop>
     <section class="summary-grid grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Reported session sources">
       <w-card variant="outlined" class="metric-card"><div class="metric-label">REPORTED HARNESSES</div><strong>{observatory.model.harnessCount}</strong><p>From explicit sources only</p></w-card>
       <w-card variant="outlined" class="metric-card"><div class="metric-label">LINKED SESSIONS</div><strong>{observatory.model.linkedSessionCount}</strong><p>Verified chat IDs · no resource split</p></w-card>
@@ -20,67 +20,67 @@
         <div class="panel-heading"><h2>Agents &amp; assigned work</h2><p>Harness and session labels come from explicit sources. Command resources require an explicit link with a matching OS identity.</p></div>
         <p class="feed-notice">{observatory.model.logicalNotice} History stays in Activity; source records are not a unique agent count.</p>
         <div :class="'logical-scroll agent-grid' + (observatory.model.logicalCount === 0 ? ' is-empty' : '')">
-          <for :each="agent in observatory.model.logical">
+          <loop :for="agent in observatory.model.logical">
             <article :class="'logical-agent-row logical-state-' + agent.status" :data-agent="agent.id" :data-session="agent.session ? agent.session.id : ''" :data-task="agent.task ? agent.task.id : ''" :data-family="agent.family" :data-source="agent.source">
               <div class="logical-title"><div><h3>{agent.name}</h3><small>{agent.family} · {agent.session ? agent.session.name : 'Session not linked'}</small></div><span :class="'status-pill state-' + agent.status">{agent.status}</span></div>
               <p class="agent-session-id">{agent.session ? 'Session ID · ' + agent.session.id : 'No verified session ID supplied'}</p>
               <details class="agent-identity"><summary>Technical identity</summary><p>{agent.id}</p></details>
               <div class="feed-time">{agent.feedLabel} · {agent.source}<br />{agent.capturedLabel} · {agent.ageLabel}</div>
               <div class="assignment"><small>ASSIGNED TASK</small><strong>{agent.taskLabel}</strong><span>{agent.taskState}</span></div>
-              <if :when="agent.currentAction || agent.actionTiming"><div class="current-action"><if :when="agent.currentAction"><small>{agent.actionLabel}</small><strong>{agent.currentAction}</strong></if><if :when="agent.actionTiming"><p class="action-timing">{agent.actionTiming}</p></if></div></if>
-              <if :when="agent.command_resources.length">
+              <logic :if="agent.currentAction || agent.actionTiming"><div class="current-action"><logic :if="agent.currentAction"><small>{agent.actionLabel}</small><strong>{agent.currentAction}</strong></logic><logic :if="agent.actionTiming"><p class="action-timing">{agent.actionTiming}</p></logic></div></logic>
+              <logic :if="agent.command_resources.length">
                 <div class="agent-resources">
-                  <for :each="resource in agent.command_resources">
+                  <loop :for="resource in agent.command_resources">
                     <section class="command-resource" :data-binding="resource.binding_id">
                       <h4>Linked command process · {resource.name}</h4>
                       <p class="command-resource-scope">PID {resource.pid} · command root only · no whole-agent total<br />Reported owner · {agent.name}<br />Session · {resource.owner.session_id}</p>
                       <dl class="command-resource-metrics"><div><dt>CPU</dt><dd>{resource.cpu}</dd></div><div><dt>RSS</dt><dd>{resource.memory}</dd></div><div><dt>Disk read</dt><dd>{resource.diskRead}</dd></div><div><dt>Disk write</dt><dd>{resource.diskWrite}</dd></div><div><dt>Network</dt><dd>Unavailable</dd></div></dl>
-                      <if :when="resource.descendant_rows.length"><details class="command-descendants" :data-binding="resource.binding_id"><summary>{resource.descendant_rows.length} observed child processes</summary><p>Current PID/birth lineage only. Each metric belongs to its process; root totals above exclude children.</p><for :each="child in resource.descendant_rows"><div class="command-child"><strong>{child.name} · PID {child.pid}</strong><p>{child.cpu} CPU · RSS {child.memory}<br />{child.networkLabel} · {child.diskLabel}<br />{child.relationship}</p></div></for></details></if><p class="command-resource-trust">{resource.trustLabel}<br />Sampled {resource.sampleLabel}</p>
+                      <logic :if="resource.descendant_rows.length"><details class="command-descendants" :data-binding="resource.binding_id"><summary>{resource.descendant_rows.length} observed child processes</summary><p>Current PID/birth lineage only. Each metric belongs to its process; root totals above exclude children.</p><loop :for="child in resource.descendant_rows"><div class="command-child"><strong>{child.name} · PID {child.pid}</strong><p>{child.cpu} CPU · RSS {child.memory}<br />{child.networkLabel} · {child.diskLabel}<br />{child.relationship}</p></div></loop></details></logic><p class="command-resource-trust">{resource.trustLabel}<br />Sampled {resource.sampleLabel}</p>
                     </section>
-                  </for>
+                  </loop>
                 </div>
-              </if>
+              </logic>
             </article>
-          </for>
-          <if :when="observatory.model.logicalCount === 0"><div class="empty task-feed-empty">No fresh active-task reports.<p>This feed does not prove no agents are working. After reopening the app, a coordinator must send a new report. Previously reported work stays in Activity.</p></div></if>
+          </loop>
+          <logic :if="observatory.model.logicalCount === 0"><div class="empty task-feed-empty">No fresh active-task reports.<p>This feed does not prove no agents are working. After reopening the app, a coordinator must send a new report. Previously reported work stays in Activity.</p></div></logic>
         </div>
       </section>
       <section class="runtime-overview" aria-label="Session resources and separate local context">
         <div class="panel-heading"><h2>Session resources</h2><p>Only current verified command roots and descendants carry session links. These cards do not measure remote model work.</p></div>
         <div class="session-resource-grid">
-          <for :each="session in observatory.model.resourceSessions">
-            <if :when="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></if>
+          <loop :for="session in observatory.model.resourceSessions">
+            <logic :if="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></logic>
             <w-card variant="outlined" class="session-resource-card" :data-session="session.key">
               <h2 class="session-resource-title">{session.name}</h2>
               <p class="session-resource-provider">{session.family}</p>
-              <if :when="session.id"><p class="session-native-id">Session ID · {session.id}</p></if>
-              <if :when="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></if>
+              <logic :if="session.id"><p class="session-native-id">Session ID · {session.id}</p></logic>
+              <logic :if="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></logic>
               <p class="session-label-source">Reported label source · {session.source}</p>
-              <if :when="session.model"><p class="session-label-source session-model">Model {session.model}<if :when="session.provider"> · provider {session.provider}</if> · reported by {session.family} (configuration, not measured usage)</p></if>
-              <for :each="runtime in session.commands">
+              <logic :if="session.model"><p class="session-label-source session-model">Model {session.model}<logic :if="session.provider"> · provider {session.provider}</logic> · reported by {session.family} (configuration, not measured usage)</p></logic>
+              <loop :for="runtime in session.commands">
                 <article class="session-command-resource" :data-group="runtime.id">
                   <h3>{runtime.name}</h3>
                   <p class="runtime-card-scope">PID {runtime.pid} · birth {runtime.started}<br />Command-root totals exclude descendants · {runtime.processCount} current processes</p>
                   <div class="runtime-card-metrics"><div><small>ROOT CPU · ONE CORE</small><strong>{runtime.cpu}</strong></div><div><small>ROOT RSS</small><strong>{runtime.memory}</strong></div><div><small>NETWORK RECEIVE</small><strong>{runtime.download}</strong></div><div><small>NETWORK SEND</small><strong>{runtime.upload}</strong></div><div><small>ROOT DISK READ</small><strong>{runtime.diskRead}</strong></div><div><small>ROOT DISK WRITE</small><strong>{runtime.diskWrite}</strong></div></div>
                   <p class="runtime-card-note">{runtime.networkNote}.</p>
                 </article>
-              </for>
+              </loop>
               <p class="session-resource-note">{session.resourceNotice}</p>
             </w-card>
-          </for>
+          </loop>
         </div>
-        <if :when="observatory.model.resourceSessions.length === 0"><div class="empty">No explicitly linked sessions yet.<p>Local process measurements below do not identify a conversation.</p></div></if>
+        <logic :if="observatory.model.resourceSessions.length === 0"><div class="empty">No explicitly linked sessions yet.<p>Local process measurements below do not identify a conversation.</p></div></logic>
         <details class="shared-resource-context" open="open">
           <summary>Shared / unassigned local context</summary>
           <p>Measured process groups below are not session allocations. Inclusive shared groups may contain linked command processes; do not add the two displays together.</p>
           <div class="context-resource-grid">
-            <for :each="runtime in observatory.model.sharedResources">
+            <loop :for="runtime in observatory.model.sharedResources">
               <w-card variant="outlined" class="context-resource-card" :data-group="runtime.id">
                 <h3>{runtime.name}</h3><p>{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel}</p>
                 <p>CPU {runtime.cpu} · RSS {runtime.memory}<br />Receive {runtime.download} · Send {runtime.upload}<br />Disk read {runtime.diskRead} · Disk write {runtime.diskWrite}</p>
                 <p class="runtime-card-note">{runtime.networkNote}. Local context only.</p>
               </w-card>
-            </for>
+            </loop>
           </div>
         </details>
       </section>
@@ -89,57 +89,57 @@
         <div class="process-toolbar"><div class="view-tabs" role="group" aria-label="Process view"><w-btn :variant="observatory.processView === 'table' ? 'tonal' : 'text'" size="sm" on:click="observatory.setProcessView('table')">Table</w-btn><w-btn :variant="observatory.processView === 'tree' ? 'tonal' : 'text'" size="sm" on:click="observatory.setProcessView('tree')">Tree</w-btn></div><label class="search-field"><span>⌕</span><input aria-label="Filter sessions or processes by provider, title, exact ID, name or PID" placeholder="Provider, session title or ID, process or PID" :value="observatory.query" on:input="observatory.query = $event.target.value" on:keyup="observatory.search()" /></label></div>
         <div class="session-list session-process-list" role="group" aria-label="Verified session processes">
           <div class="session-process-grid">
-            <for :each="session in observatory.model.resourceSessions">
-              <if :when="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></if>
+            <loop :for="session in observatory.model.resourceSessions">
+              <logic :if="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></logic>
               <w-card variant="outlined" :class="'session-process-card graph-group mode-' + observatory.processView" :data-group="session.key" :data-session="session.key">
                 <h3 class="session-resource-title">{session.name}</h3><p class="session-resource-provider">{session.family} · {session.processCount} currently linked processes</p>
-                <if :when="session.id"><p class="session-native-id">Session ID · {session.id}</p></if>
-                <if :when="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></if>
+                <logic :if="session.id"><p class="session-native-id">Session ID · {session.id}</p></logic>
+                <logic :if="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></logic>
                 <p class="session-label-source">Reported label source · {session.source}</p>
-                <if :when="session.model"><p class="session-label-source session-model">Model {session.model}<if :when="session.provider"> · provider {session.provider}</if> · reported by {session.family} (configuration, not measured usage)</p></if>
-                <if :when="session.tree.length"><div class="session-process-table">
+                <logic :if="session.model"><p class="session-label-source session-model">Model {session.model}<logic :if="session.provider"> · provider {session.provider}</logic> · reported by {session.family} (configuration, not measured usage)</p></logic>
+                <logic :if="session.tree.length"><div class="session-process-table">
                   <table><thead><tr><th scope="col">Individual process</th><th scope="col">CPU</th><th scope="col">RSS</th></tr></thead><tbody>
-                    <for :each="process in session.tree">
-                      <tr><td><button class="session-process-pick" data-process-view="table" :data-session="session.key" :data-pid="process.pid" :data-started="process.started" on:click="observatory.selectSessionProcess(session.key, process.pid, process.started)"><strong>{process.name}</strong><span>PID {process.pid} · parent {process.parent} · depth {process.depth}</span></button><details class="command-descendants session-process-details" :data-binding="session.key + ':' + process.pid + ':' + process.started"><summary>Identity &amp; I/O</summary><p>Birth · {process.started}<br />{process.networkLabel}<br />{process.diskLabel}<br />{process.relationship}</p><if :when="process.owner"><p>Reported owner · {process.owner.agent_name}</p></if></details></td><td>{process.cpu}</td><td>{process.memory}</td></tr>
-                    </for>
+                    <loop :for="process in session.tree">
+                      <tr><td><button class="session-process-pick" data-process-view="table" :data-session="session.key" :data-pid="process.pid" :data-started="process.started" on:click="observatory.selectSessionProcess(session.key, process.pid, process.started)"><strong>{process.name}</strong><span>PID {process.pid} · parent {process.parent} · depth {process.depth}</span></button><details class="command-descendants session-process-details" :data-binding="session.key + ':' + process.pid + ':' + process.started"><summary>Identity &amp; I/O</summary><p>Birth · {process.started}<br />{process.networkLabel}<br />{process.diskLabel}<br />{process.relationship}</p><logic :if="process.owner"><p>Reported owner · {process.owner.agent_name}</p></logic></details></td><td>{process.cpu}</td><td>{process.memory}</td></tr>
+                    </loop>
                   </tbody></table>
-                </div></if>
-                <if :when="session.graph.nodes.length"><div class="session-process-tree">
+                </div></logic>
+                <logic :if="session.graph.nodes.length"><div class="session-process-tree">
                   <div class="graph-group-tools" role="group" :aria-label="session.name + ' tree zoom'"><button :data-group="session.key" data-zoom="out" aria-label="Zoom this tree out">−</button><span class="graph-zoom-value">100%</span><button :data-group="session.key" data-zoom="in" aria-label="Zoom this tree in">+</button><button :data-group="session.key" data-zoom="fit">Fit this tree</button></div>
                   <div class="group-graph-scroll" :data-group="session.key" tabindex="0" role="region" :aria-label="session.name + ' process tree; scroll to pan'">
                     <svg class="graph-canvas" role="group">
-                      <g class="graph-edges" aria-hidden="true"><for :each="node in session.graph.nodes"><path class="shared-trunk" :data-parent-identity="node.identity"></path><for :each="child in node.childIdentities"><path class="child-branch" :data-parent-identity="node.identity" :data-child-identity="child"></path></for></for></g>
-                      <for :each="node in session.graph.nodes">
+                      <g class="graph-edges" aria-hidden="true"><loop :for="node in session.graph.nodes"><path class="shared-trunk" :data-parent-identity="node.identity"></path><loop :for="child in node.childIdentities"><path class="child-branch" :data-parent-identity="node.identity" :data-child-identity="child"></path></loop></loop></g>
+                      <loop :for="node in session.graph.nodes">
                         <foreignObject class="graph-node-frame"><button class="graph-node session-process-pick" data-process-view="tree" :data-group="session.key" :data-session="session.key" :data-pid="node.pid" :data-started="node.started" :data-identity="node.identity" :data-depth="node.graphDepth" on:click="observatory.selectSessionProcess(session.key, node.pid, node.started)"><strong class="graph-name">{node.name}</strong><span class="graph-identity">PID {node.pid} · parent {node.parent}</span><span class="graph-measurement">CPU {node.cpu} · RSS {node.memory}</span><span class="graph-measurement">{node.networkLabel}</span><span class="graph-measurement">{node.diskLabel}</span><small>{node.edgeLabel}</small></button></foreignObject>
-                      </for>
+                      </loop>
                     </svg>
                   </div>
-                </div></if>
+                </div></logic>
                 <p class="session-resource-note">{session.resourceNotice}</p>
               </w-card>
-            </for>
+            </loop>
           </div>
-          <if :when="observatory.model.resourceSessions.length === 0"><div class="empty">No matching reported sessions.<p>No session resource link is inferred from a shared runtime.</p></div></if>
-          <if :when="observatory.model.selectedSessionProcess"><aside class="session-selected-process" aria-label="Selected session process"><h3>Selected process · {observatory.model.selectedSessionProcess.name}</h3><p>Session key · {observatory.model.selectedSession}<br />PID {observatory.model.selectedSessionProcess.pid} · birth {observatory.model.selectedSessionProcess.started}<br />CPU {observatory.model.selectedSessionProcess.cpu} · RSS {observatory.model.selectedSessionProcess.memory}<br />{observatory.model.selectedSessionProcess.networkLabel}<br />{observatory.model.selectedSessionProcess.diskLabel}</p></aside></if>
+          <logic :if="observatory.model.resourceSessions.length === 0"><div class="empty">No matching reported sessions.<p>No session resource link is inferred from a shared runtime.</p></div></logic>
+          <logic :if="observatory.model.selectedSessionProcess"><aside class="session-selected-process" aria-label="Selected session process"><h3>Selected process · {observatory.model.selectedSessionProcess.name}</h3><p>Session key · {observatory.model.selectedSession}<br />PID {observatory.model.selectedSessionProcess.pid} · birth {observatory.model.selectedSessionProcess.started}<br />CPU {observatory.model.selectedSessionProcess.cpu} · RSS {observatory.model.selectedSessionProcess.memory}<br />{observatory.model.selectedSessionProcess.networkLabel}<br />{observatory.model.selectedSessionProcess.diskLabel}</p></aside></logic>
           <details class="shared-resource-context" open="open">
             <summary>Shared / unassigned local context</summary><p>These groups are not session allocations. Inclusive context may overlap linked command processes.</p>
             <div class="context-resource-grid">
-              <for :each="runtime in observatory.model.sharedResources">
+              <loop :for="runtime in observatory.model.sharedResources">
                 <w-card variant="outlined" :class="'context-resource-card session-process-card graph-group mode-' + observatory.processView" :data-group="'context:' + runtime.id">
                   <h3>{runtime.name}</h3><p>{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel}</p><p>Inclusive group · CPU {runtime.cpu} · RSS {runtime.memory}</p>
-                  <div class="session-process-table"><details class="command-descendants" :data-binding="runtime.id"><summary>{runtime.processCount} individual processes</summary><for :each="process in runtime.tree"><p><strong>{process.name} · PID {process.pid} · parent {process.parent}</strong><br />CPU {process.cpu} · RSS {process.memory}<br />{process.networkLabel} · {process.diskLabel}<br />Birth · {process.started}</p></for></details></div>
-                  <if :when="runtime.graph.nodes.length"><div class="session-process-tree">
+                  <div class="session-process-table"><details class="command-descendants" :data-binding="runtime.id"><summary>{runtime.processCount} individual processes</summary><loop :for="process in runtime.tree"><p><strong>{process.name} · PID {process.pid} · parent {process.parent}</strong><br />CPU {process.cpu} · RSS {process.memory}<br />{process.networkLabel} · {process.diskLabel}<br />Birth · {process.started}</p></loop></details></div>
+                  <logic :if="runtime.graph.nodes.length"><div class="session-process-tree">
                     <div class="graph-group-tools" role="group" :aria-label="runtime.name + ' context tree zoom'"><button :data-group="'context:' + runtime.id" data-zoom="out" aria-label="Zoom this tree out">−</button><span class="graph-zoom-value">100%</span><button :data-group="'context:' + runtime.id" data-zoom="in" aria-label="Zoom this tree in">+</button><button :data-group="'context:' + runtime.id" data-zoom="fit">Fit this tree</button></div>
                     <div class="group-graph-scroll" :data-group="'context:' + runtime.id" tabindex="0" role="region" :aria-label="runtime.name + ' shared process tree; scroll to pan'">
                       <svg class="graph-canvas" role="group">
-                        <g class="graph-edges" aria-hidden="true"><for :each="node in runtime.graph.nodes"><path class="shared-trunk" :data-parent-identity="node.identity"></path><for :each="child in node.childIdentities"><path class="child-branch" :data-parent-identity="node.identity" :data-child-identity="child"></path></for></for></g>
-                        <for :each="node in runtime.graph.nodes"><foreignObject class="graph-node-frame"><article class="graph-node" :data-pid="node.pid" :data-started="node.started" :data-identity="node.identity" :data-depth="node.graphDepth"><strong class="graph-name">{node.name}</strong><span class="graph-identity">PID {node.pid} · parent {node.parent}</span><span class="graph-measurement">CPU {node.cpu} · RSS {node.memory}</span><span class="graph-measurement">{node.networkLabel}</span><span class="graph-measurement">{node.diskLabel}</span><small>{node.edgeLabel}</small></article></foreignObject></for>
+                        <g class="graph-edges" aria-hidden="true"><loop :for="node in runtime.graph.nodes"><path class="shared-trunk" :data-parent-identity="node.identity"></path><loop :for="child in node.childIdentities"><path class="child-branch" :data-parent-identity="node.identity" :data-child-identity="child"></path></loop></loop></g>
+                        <loop :for="node in runtime.graph.nodes"><foreignObject class="graph-node-frame"><article class="graph-node" :data-pid="node.pid" :data-started="node.started" :data-identity="node.identity" :data-depth="node.graphDepth"><strong class="graph-name">{node.name}</strong><span class="graph-identity">PID {node.pid} · parent {node.parent}</span><span class="graph-measurement">CPU {node.cpu} · RSS {node.memory}</span><span class="graph-measurement">{node.networkLabel}</span><span class="graph-measurement">{node.diskLabel}</span><small>{node.edgeLabel}</small></article></foreignObject></loop>
                       </svg>
                     </div>
-                  </div></if>
+                  </div></logic>
                   <p class="session-resource-note">Individual node metrics stay separate from inclusive group totals. No session owner is inferred.</p>
                 </w-card>
-              </for>
+              </loop>
             </div>
           </details>
         </div>
@@ -154,57 +154,57 @@
         </div>
         <div class="history-scroll">
           <div class="history-grid session-history-grid">
-            <for :each="session in observatory.model.resourceSessions">
-              <if :when="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></if>
+            <loop :for="session in observatory.model.resourceSessions">
+              <logic :if="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></logic>
               <w-card variant="outlined" class="session-history-card" :data-session="session.key">
                 <h3 class="session-resource-title">{session.name}</h3><p class="session-resource-provider">{session.family}</p>
-                <if :when="session.id"><p class="session-native-id">Session ID · {session.id}</p></if>
-                <if :when="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></if>
+                <logic :if="session.id"><p class="session-native-id">Session ID · {session.id}</p></logic>
+                <logic :if="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></logic>
                 <p class="session-label-source">Reported label source · {session.source}</p>
-                <if :when="session.model"><p class="session-label-source session-model">Model {session.model}<if :when="session.provider"> · provider {session.provider}</if> · reported by {session.family} (configuration, not measured usage)</p></if>
-                <for :each="runtime in session.commands">
+                <logic :if="session.model"><p class="session-label-source session-model">Model {session.model}<logic :if="session.provider"> · provider {session.provider}</logic> · reported by {session.family} (configuration, not measured usage)</p></logic>
+                <loop :for="runtime in session.commands">
                   <article class="history-card history-command" :data-group="runtime.id"><h4>{runtime.name} · PID {runtime.pid}</h4><p class="runtime-card-scope">Root only; descendants excluded · birth {runtime.started}</p><div class="chart-shell"><canvas class="resource-chart" :data-group="runtime.id" :aria-label="session.name + ' command-root measured history'" role="img"></canvas><div class="chart-empty">Waiting for measured samples.</div></div><p class="chart-caption">Hover for time and value. {runtime.networkNote}.</p></article>
-                </for>
+                </loop>
                 <p class="session-resource-note">{session.resourceNotice}</p>
               </w-card>
-            </for>
+            </loop>
           </div>
-          <if :when="observatory.model.resourceSessions.length === 0"><div class="empty">No matching reported sessions.<p>Unlinked process history stays in the context section below.</p></div></if>
-          <details class="shared-resource-context" open="open"><summary>Shared / unassigned local history</summary><p>Inclusive process-group history below is secondary context. It does not allocate resources to a conversation and may overlap linked roots.</p><div class="history-grid context-history-grid"><for :each="runtime in observatory.model.sharedResources"><w-card variant="outlined" class="history-card" :data-group="runtime.id"><h3>{runtime.name}</h3><p class="runtime-card-scope">{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel} · inclusive group</p><div class="chart-shell"><canvas class="resource-chart" :data-group="runtime.id" :aria-label="runtime.name + ' shared context history'" role="img"></canvas><div class="chart-empty">Waiting for measured samples.</div></div><p class="chart-caption">Hover for time and value. {runtime.networkNote}.</p></w-card></for></div></details>
+          <logic :if="observatory.model.resourceSessions.length === 0"><div class="empty">No matching reported sessions.<p>Unlinked process history stays in the context section below.</p></div></logic>
+          <details class="shared-resource-context" open="open"><summary>Shared / unassigned local history</summary><p>Inclusive process-group history below is secondary context. It does not allocate resources to a conversation and may overlap linked roots.</p><div class="history-grid context-history-grid"><loop :for="runtime in observatory.model.sharedResources"><w-card variant="outlined" class="history-card" :data-group="runtime.id"><h3>{runtime.name}</h3><p class="runtime-card-scope">{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel} · inclusive group</p><div class="chart-shell"><canvas class="resource-chart" :data-group="runtime.id" :aria-label="runtime.name + ' shared context history'" role="img"></canvas><div class="chart-empty">Waiting for measured samples.</div></div><p class="chart-caption">Hover for time and value. {runtime.networkNote}.</p></w-card></loop></div></details>
         </div>
       </section>
       <section class="activity-overview" aria-label="Reported action history">
         <div class="panel-heading"><h2>Activity</h2><p>Sessions with verified running actions come first, newest first; finished work stays below. Only safe action names are collected; full commands and arguments are unavailable. Times are hook receipts, not OS process start times.</p></div>
         <div class="activity-scroll"><div class="activity-grid">
-          <for :each="session in observatory.model.activity">
-            <if :when="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></if>
+          <loop :for="session in observatory.model.activity">
+            <logic :if="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></logic>
             <w-card variant="outlined" class="activity-card" :data-session="session.id">
               <div class="runtime-card-heading"><h3 class="session-resource-title">{session.name}</h3></div><p class="runtime-card-scope">{session.family} · Retained reported session history</p>
-              <if :when="session.session_id"><p class="history-session-identity">Session ID · {session.session_id}</p></if>
-              <if :when="!session.session_id"><p class="history-session-identity">Session ID unavailable · unlinked reported actions</p></if>
-              <if :when="session.source"><p class="session-label-source">Reported label source · {session.source}</p></if>
-              <if :when="!session.source"><p class="session-label-source">Label source unavailable</p></if>
+              <logic :if="session.session_id"><p class="history-session-identity">Session ID · {session.session_id}</p></logic>
+              <logic :if="!session.session_id"><p class="history-session-identity">Session ID unavailable · unlinked reported actions</p></logic>
+              <logic :if="session.source"><p class="session-label-source">Reported label source · {session.source}</p></logic>
+              <logic :if="!session.source"><p class="session-label-source">Label source unavailable</p></logic>
               <div class="action-history-list" :data-session="session.id" :aria-label="session.name + ' session activity'" role="region" tabindex="0">
-              <for :each="record in session.records">
+              <loop :for="record in session.records">
                 <article class="action-history-row" :data-action="record.id" :data-agent="record.agent_id" :data-session="record.session_id || ''" :data-task="record.task_id || ''" :data-family="record.agent_family" :data-source="record.source || ''" :data-status="record.status" :data-running="record.running ? 'true' : 'false'">
                   <div class="action-history-heading"><strong>{record.name}</strong><span :class="'status-pill state-' + record.status">{record.status_label}</span></div>
                   <p class="action-owner">{record.agent_name} · {record.agent_family}</p><p class="history-source">{record.freshness}</p>
-                  <if :when="record.task_name"><p>Task · {record.task_name}</p></if>
-                  <if :when="record.elapsed_label"><p class="action-elapsed">{record.elapsed_label}</p></if>
+                  <logic :if="record.task_name"><p>Task · {record.task_name}</p></logic>
+                  <logic :if="record.elapsed_label"><p class="action-elapsed">{record.elapsed_label}</p></logic>
                   <div class="action-history-times">
-                    <if :when="record.started_label"><p><span>Started · hook receipt</span><strong>{record.started_label}</strong></p></if>
-                    <if :when="record.finished_label"><p><span>Finished · hook receipt</span><strong>{record.finished_label}</strong></p></if>
-                    <if :when="record.duration_label"><p><span>Duration</span><strong>{record.duration_label}</strong></p></if>
-                    <if :when="record.exit_code !== null"><p><span>Exit code</span><strong>{record.exit_code}</strong></p></if>
+                    <logic :if="record.started_label"><p><span>Started · hook receipt</span><strong>{record.started_label}</strong></p></logic>
+                    <logic :if="record.finished_label"><p><span>Finished · hook receipt</span><strong>{record.finished_label}</strong></p></logic>
+                    <logic :if="record.duration_label"><p><span>Duration</span><strong>{record.duration_label}</strong></p></logic>
+                    <logic :if="record.exit_code !== null"><p><span>Exit code</span><strong>{record.exit_code}</strong></p></logic>
                   </div>
-                  <if :when="record.duration_note"><p class="history-source">{record.duration_note}</p></if>
-                  <if :when="record.source"><p class="history-source">Source · {record.source}</p></if>
+                  <logic :if="record.duration_note"><p class="history-source">{record.duration_note}</p></logic>
+                  <logic :if="record.source"><p class="history-source">Source · {record.source}</p></logic>
                 </article>
-              </for>
+              </loop>
               </div>
             </w-card>
-          </for>
-          <if :when="observatory.model.activity.length === 0"><div class="empty">No retained action history.<p>Only explicitly connected hooks supply history. Existing desktop commands are not automatically imported.</p></div></if>
+          </loop>
+          <logic :if="observatory.model.activity.length === 0"><div class="empty">No retained action history.<p>Only explicitly connected hooks supply history. Existing desktop commands are not automatically imported.</p></div></logic>
         </div><p class="activity-retention">Up to 20 actions per agent in the bounded local cache. Earlier or unreported actions are outside this feed; unknown times and links are omitted. Unlinked actions remain separate; a session ID never allocates shared resources. Runtime ownership is not established by a task or session ID.</p></div>
       </section>
     </section>
@@ -212,5 +212,5 @@
   </main>
 </w-container>
 
-</if>
-<if :when="!observatory.model"><main class="overview-loading" aria-busy="true"><h1>Loading local observations.</h1><p>Connecting to the app-owned native core.</p><p role="status">{observatory.problem}</p></main></if>
+</logic>
+<logic :if="!observatory.model"><main class="overview-loading" aria-busy="true"><h1>Loading local observations.</h1><p>Connecting to the app-owned native core.</p><p role="status">{observatory.problem}</p></main></logic>

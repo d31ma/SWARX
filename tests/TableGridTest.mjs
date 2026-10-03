@@ -54,9 +54,9 @@ class TableGridTest {
   /** @param {string} family @param {string} name @returns {string} */
   static card(family, name) {
     const source = readFileSync(new URL('app/client/components/observatory/panel/tac.html', this.ROOT), 'utf8');
-    const marker = '<for :each="group in observatory.model.sessions">';
+    const marker = '<loop :for="group in observatory.model.sessions">';
     const start = source.indexOf(marker) + marker.length;
-    const end = source.indexOf('<if :when="observatory.model.sessionCount === 0">', start);
+    const end = source.indexOf('<logic :if="observatory.model.sessionCount === 0">', start);
     assert.ok(start >= marker.length && end > start, 'find real Table group template');
     return source.slice(start, end)
       .replace(/:class="'session-row ' \+ group.selected"/g, 'class="session-row"')
