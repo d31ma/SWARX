@@ -1,0 +1,22 @@
+{
+  "extends": "../app/client/jsconfig.json",
+  "compilerOptions": {
+    "types": [
+      "node"
+    ],
+    "paths": {
+      "/*": [
+        "../app/client/*"
+      ]
+    }
+  },
+  "include": [
+    "../app/tachyon-env.d.ts",
+    "../app/.tachyon/types/client/**/*.d.ts",
+    "OfflineUiTest.mjs",
+    "NativeCurrentWorkLiveTest.mjs",
+    "../tools/native/NativePreviewReport.js",
+    "NativeActiveTaskLiveTest.mjs",
+    "ActiveTaskProjectionTest.mjs"
+  ]
+}

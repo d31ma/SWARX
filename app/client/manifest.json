@@ -1,0 +1,49 @@
+{
+  "name": "Agent Observatory",
+  "start_url": "/",
+  "tac": {
+    "application": {
+      "id": "ma.del.agent-observatory",
+      "version": "0.1.0",
+      "window": {
+        "width": 1240,
+        "height": 850
+      },
+      "menus": {
+        "file": [
+          {
+            "id": "monitor",
+            "label": "Open Monitor",
+            "route": "/"
+          }
+        ],
+        "help": [
+          {
+            "id": "local-help",
+            "label": "Agent Observatory Help",
+            "route": "/help"
+          }
+        ]
+      }
+    },
+    "styles": [
+      "/shared/styles/app.css"
+    ],
+    "scripts": [],
+    "budgets": {
+      "script": 1800,
+      "style": 1000
+    },
+    "names": {
+      "words": [
+        "cpu",
+        "pid",
+        "ppid",
+        "rss",
+        "inode",
+        "codex",
+        "claude"
+      ]
+    }
+  }
+}

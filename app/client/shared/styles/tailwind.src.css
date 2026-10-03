@@ -1,0 +1,8 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@theme {
+  --spacing-gutter: clamp(1rem, .6rem + 1.4vw, 2.4rem);
+  --color-line: var(--w-border);
+}
+@source "../../components/**/*.html";
+@source "../../services/**/*.ts";

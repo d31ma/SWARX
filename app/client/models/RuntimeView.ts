@@ -1,0 +1,30 @@
+import type { ChartView } from '/models/ChartView.ts';
+import type { GroupSnapshot } from '/models/GroupSnapshot.ts';
+import type { ProcessRow } from '/models/ProcessRow.ts';
+import type { TaskView } from '/models/TaskView.ts';
+import type { TerminalView } from '/models/TerminalView.ts';
+export interface RuntimeView extends GroupSnapshot {
+  charts: ChartView[];
+  selected: string;
+  providerHeader: boolean;
+  cpu: string;
+  memory: string;
+  download: string;
+  upload: string;
+  diskRead: string;
+  diskWrite: string;
+  networkNote: string;
+  scopeLabel: string;
+  hookLabel: string;
+  processCount: number;
+  progress: string;
+  tasks: TaskView[];
+  terminals: TerminalView[];
+  cpuTotal: string;
+  downloadTotal: string;
+  uploadTotal: string;
+  peakMemory: string;
+  tree: ProcessRow[];
+  avatar: string;
+  statusClass: string;
+}

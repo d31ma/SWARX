@@ -1,0 +1,37 @@
+use crate::models::{
+    NativeSessionActivityView, NativeCapabilities, NativeCommandBinding, NativeCommandObservation, NativeGroup, NativeLogicalAgent,
+    NativeLogicalAgentView, NativeResourceTotals, NativeRuntimeView, NativeSessionView,
+};
+
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct NativeSnapshot {
+    pub ready: bool,
+    pub sampled_at: f64,
+    pub started_at: f64,
+    pub interval_seconds: f64,
+    pub platform: String,
+    pub logical_cores: i64,
+    #[serde(skip)]
+    pub groups: Vec<NativeGroup>,
+    #[serde(rename = "groups", default)]
+    pub runtime_views: Vec<NativeRuntimeView>,
+    #[serde(skip)]
+    pub logical_agents: Vec<NativeLogicalAgent>,
+    #[serde(rename = "logical_agents", default)]
+    pub logical_views: Vec<NativeLogicalAgentView>,
+    #[serde(skip)]
+    pub command_observations: Vec<NativeCommandObservation>,
+    #[serde(skip)]
+    pub command_bindings: Vec<NativeCommandBinding>,
+    #[serde(default)]
+    pub session_groups: Vec<NativeSessionView>,
+    pub linked_session_count: i64,
+    pub harness_count: i64,
+    #[serde(default)]
+    pub activity: Vec<NativeSessionActivityView>,
+    pub errors: Vec<String>,
+    pub event_revision: i64,
+    pub totals: NativeResourceTotals,
+    pub capabilities: NativeCapabilities,
+    pub limitations: Vec<String>,
+}

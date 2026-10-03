@@ -1,0 +1,17 @@
+[package]
+name = "observatory-event-tests"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "event_slice"
+
+[[bin]]
+name = "observatory-event"
+path = "src/emitter.rs"
+
+[dependencies]
+libc = "=0.2.189"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
+regex = "=1.13.1"

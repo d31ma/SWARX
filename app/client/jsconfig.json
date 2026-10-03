@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "allowJs": true,
+    "checkJs": true,
+    "experimentalDecorators": true,
+    "target": "ESNext",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "paths": {
+      "/*": ["./*"]
+    },
+    "types": []
+  },
+  "include": [
+    "../tachyon-env.d.ts",
+    "../.tachyon/types/client",
+    "**/*.js",
+    "**/*.ts"
+  ]
+}

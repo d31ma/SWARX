@@ -1,0 +1,14 @@
+{
+  "name": "agent-observatory",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "../build.sh",
+    "open": "../run-local.sh",
+    "typecheck": "tsc --project client/jsconfig.json",
+    "test:ui": "node ../tests/presentation.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  }
+}

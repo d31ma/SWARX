@@ -1,0 +1,19 @@
+use crate::models::{NativeExecutionRecord, NativeSessionLink, NativeTaskRecord};
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct NativeLogicalAgent {
+    pub id: String,
+    pub name: String,
+    pub family: String,
+    pub status: String,
+    pub source: String,
+    pub captured_at: f64,
+    pub feed_mode: String,
+    pub task: Option<NativeTaskRecord>,
+    pub executions: Vec<NativeExecutionRecord>,
+    pub metrics: Option<f64>,
+    pub session: Option<NativeSessionLink>,
+    pub age_seconds: f64,
+    pub stale: bool,
+    pub reported_status: Option<String>,
+}
