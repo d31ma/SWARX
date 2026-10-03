@@ -255,6 +255,8 @@ impl SessionResourceUtils {
             source: session.source.clone(),
             known: session.known,
             captured_at: session.captured_at,
+            model: session.model.clone(),
+            provider: session.provider.clone(),
             source_record_count: session.agents.len() as i64,
             resource_notice: Self::notice(commands.is_empty()),
             command_count: commands.len() as i64,
@@ -262,6 +264,7 @@ impl SessionResourceUtils {
             graph: ProcessGraphUtils::build(&tree),
             tree,
             commands,
+            harness_header: false,
         }
     }
 

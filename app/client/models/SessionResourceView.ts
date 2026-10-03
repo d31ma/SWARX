@@ -11,4 +11,5 @@ export interface SessionResourceView extends Omit<SessionView, 'agents'> {
   resourceNotice: string;
   commandCount: number;
   processCount: number;
+  harnessHeader: boolean;
 }

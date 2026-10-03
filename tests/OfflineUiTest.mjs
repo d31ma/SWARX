@@ -2,7 +2,7 @@ import {QaPathUtils} from './QaPathUtils.mjs';
 import { OverviewFixtureClient } from './OverviewFixtureClient.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import {BrowserBundleProvenanceUtils} from './utils/BrowserBundleProvenanceUtils.mjs';
 const {chromium} = await import(QaPathUtils.file('OBSERVATORY_PLAYWRIGHT_MODULE').href);
 
 /** @typedef {{x: number, y: number, width: number, height: number}} OfflineRectangle */
@@ -69,50 +69,12 @@ class OfflineUiTest {
   /** @returns {void} */
   static sources() {
     mkdirSync(QaPathUtils.evidence(''), {recursive: true});
-    /** @type {{files: Record<string, string>}} */
-    const build = JSON.parse(readFileSync(this.BUILD_SOURCE, 'utf8'));
-    this.report.sources['build-manifest'] = this.hash(this.BUILD_SOURCE);
-    const serviceFiles = ['services/ObservatoryService.js', 'services/SnapshotReaderService.js', 'services/native/monitoring/SnapshotService.js'];
-    for (const file of [...serviceFiles, 'components/observatory/panel/tac.html']) {
-      const actual = readFileSync(new URL('app/client/' + file, this.ROOT));
-      const hash = createHash('sha256').update(actual).digest('hex');
-      assert.equal(hash, build.files['app/client/' + file], 'Qualified native source is stale: ' + file);
-      this.report.sources[file] = hash;
-    }
-    this.report.sources.runtime = this.hash(new URL('tachyon-runtime/tac-client.js', this.EMITTED));
-    this.report.sources.styles = this.hash(new URL('app/client/shared/styles/app.css', this.ROOT));
-    assert.equal(this.report.sources.styles, build.files['app/client/shared/styles/app.css'], 'Qualified CSS source is stale.');
-    for (const name of ['ObservatoryService', 'SnapshotService', 'SnapshotReaderService']) {
-      const file = 'tachyon-runtime/services/' + name + '.js';
-      this.report.sources['emitted:' + file] = this.hash(new URL(file, this.EMITTED));
-    }
-    const scripts = ['GraphRenderer', 'GraphGroupRenderer', 'ViewContinuity', 'ChartRenderer'].map(/** @param {string} name @returns {string} */ name => 'shared/scripts/' + name + '.js');
-    const utilities = ['PresentationUtils', 'DomUtils', 'ScriptUtils'].map(/** @param {string} name @returns {string} */ name => 'utils/' + name + '.js');
-    for (const file of [...scripts, ...utilities]) {
-      const actual = readFileSync(new URL('app/client/' + file, this.ROOT));
-      const emitted = readFileSync(new URL(file, this.EMITTED));
-      assert.ok(actual.equals(emitted), 'Emitted shared script is stale: ' + file);
-      this.report.sources[file] = createHash('sha256').update(actual).digest('hex');
-    }
+    this.report.sources = BrowserBundleProvenanceUtils.inspect(this.ROOT, this.EMITTED, this.BUILD_SOURCE);
   }
-
-  /** @param {URL} path @returns {string} */
-  static hash(path) { return createHash('sha256').update(readFileSync(path)).digest('hex'); }
 
   /** @returns {void} */
   static requireStableSources() {
-    for (const [name, expected] of Object.entries(this.report.sources)) {
-      const path = this.sourcePath(name);
-      assert.equal(this.hash(path), expected, 'Source changed during acceptance run: ' + name);
-    }
-  }
-
-  /** @param {string} name @returns {URL} */
-  static sourcePath(name) {
-    if (name === 'runtime') return new URL('tachyon-runtime/tac-client.js', this.EMITTED);
-    if (name === 'build-manifest') return this.BUILD_SOURCE;
-    if (name.startsWith('emitted:')) return new URL(name.slice('emitted:'.length), this.EMITTED);
-    return new URL(name === 'styles' ? 'app/client/shared/styles/app.css' : 'app/client/' + name, this.ROOT);
+    BrowserBundleProvenanceUtils.requireStable(this.report.sources, this.ROOT, this.EMITTED, this.BUILD_SOURCE);
   }
 
   /** @param {import("playwright").Route} route @returns {Promise<void>} */
@@ -472,7 +434,7 @@ class OfflineUiTest {
   /** @param {import("playwright").Page} page @returns {Promise<void>} */
   static async tree(page) {
     const tree = await page.locator('.graph-group').first().evaluate(/** @param {Element} group @returns {OfflineTree} */ group => ({
-      nodes: [...group.querySelectorAll('.graph-node')].map(/** @param {Element} node @returns {OfflineNode} */ node => {const element=/** @type {HTMLElement} */ (node);return {pid:Number(element.dataset.pid),x:parseFloat(element.style.left),y:parseFloat(element.style.top),text:element.textContent};}),
+      nodes: [...group.querySelectorAll('.graph-node')].map(/** @param {Element} node @returns {OfflineNode} */ node => {const element=/** @type {HTMLElement} */ (node);return {pid:Number(element.dataset.pid),x:Number(element.parentElement?.getAttribute('x')),y:Number(element.parentElement?.getAttribute('y')),text:element.textContent};}),
       edges: [...group.querySelectorAll('.child-branch')].map(/** @param {Element} edge @returns {number[]} */ edge => {const element=/** @type {SVGElement} */ (edge);return [Number(element.dataset.parent),Number(element.dataset.child)];}),
       trunks: group.querySelectorAll('.shared-trunk').length
     }));
@@ -493,7 +455,7 @@ class OfflineUiTest {
   static async adaptive(page) {
     const geometry = /** @returns {Promise<OfflineGraphGeometry>} */ () => page.locator('.graph-group').evaluate(/** @param {Element} group @returns {OfflineGraphGeometry} */ group => ({
       zoom: group.querySelector('.graph-zoom-value')?.textContent ?? null,
-      nodes: [...group.querySelectorAll('.graph-node')].map(/** @param {Element} node @returns {Omit<OfflineNode,'text'>} */ node => {const element=/** @type {HTMLElement} */ (node);return {pid:Number(element.dataset.pid),x:parseFloat(element.style.left),y:parseFloat(element.style.top)};}),
+      nodes: [...group.querySelectorAll('.graph-node')].map(/** @param {Element} node @returns {Omit<OfflineNode,'text'>} */ node => {const element=/** @type {HTMLElement} */ (node);return {pid:Number(element.dataset.pid),x:Number(element.parentElement?.getAttribute('x')),y:Number(element.parentElement?.getAttribute('y'))};}),
       edges: [...group.querySelectorAll('.child-branch')].map(/** @param {Element} edge @returns {(string|undefined)[]} */ edge => {const element=/** @type {SVGElement} */ (edge);return [element.dataset.parent,element.dataset.child];})
     }));
     const before = await geometry();
@@ -547,12 +509,11 @@ class OfflineUiTest {
     await page.locator('[data-zoom="fit"]').click();
     await page.waitForTimeout(200);
     const fit = await page.locator('.group-graph-scroll').evaluate(/** @param {Element} element @returns {{zoom:number,width:number,height:number,availableWidth:number,availableHeight:number}} */ element => {
-      const canvas = /** @type {HTMLElement|null} */ (element.querySelector('.graph-canvas'));
+      const canvas = element.querySelector('.graph-canvas');
       if (!canvas) throw new Error('The active graph canvas is missing.');
-      const matched=canvas.style.transform.match(/scale\((.*)\)/);
-      if (!matched) throw new Error('The active graph scale is missing.');
-      const zoom = Number(matched[1]);
-      return {zoom, width:parseFloat(canvas.style.width)*zoom,height:parseFloat(canvas.style.height)*zoom,availableWidth:element.clientWidth,availableHeight:element.clientHeight};
+      const width = Number(canvas.getAttribute('width'));
+      const zoom = width / Number(canvas.getAttribute('viewBox')?.split(' ')[2]);
+      return {zoom, width, height:Number(canvas.getAttribute('height')),availableWidth:element.clientWidth,availableHeight:element.clientHeight};
     });
     assert.ok(fit.width <= fit.availableWidth && fit.height <= fit.availableHeight, 'Explicit Fit includes the complete tree.');
     const fitted = await value();

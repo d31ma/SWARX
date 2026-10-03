@@ -3,7 +3,7 @@
 /*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
 @layer properties {
   @supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))) {
-    *,:before,:after,::backdrop {
+    *,::before,::after,::backdrop {
       --tw-rotate-x: initial;
       --tw-rotate-y: initial;
       --tw-rotate-z: initial;
@@ -47,7 +47,7 @@
   }
 }
 @layer theme {
-  :root,:host {
+  :root {
     --spacing: .25rem;
     --default-transition-duration: .15s;
     --default-transition-timing-function: cubic-bezier(.4, 0, .2, 1);
@@ -263,10 +263,6 @@
   button {
     cursor: pointer;
     color: inherit;
-  }
-  button:focus-visible,input:focus-visible,summary:focus-visible {
-    outline: 2px solid var(--mint);
-    outline-offset: 4px;
   }
   button {
     border: 0;

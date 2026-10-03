@@ -20,6 +20,9 @@ export class IconPackager {
   private static readonly HEAD_END: string = '</head>';
   private static readonly FAVICON: string = '<link rel="icon" href="/shared/assets/observatory.svg" type="image/svg+xml">';
   private static readonly PLIST_ICON_KEY: string = 'CFBundleIconFile';
+  private static readonly PLIST_DISPLAY_NAME_KEY: string = 'CFBundleDisplayName';
+  private static readonly PLIST_NAME_KEY: string = 'CFBundleName';
+  private static readonly DISPLAY_NAME: string = 'Swarx';
   private static readonly PERMISSION_MASK: number = 0o7777;
   private readonly root: string;
   private readonly artifacts: string;
@@ -118,7 +121,13 @@ export class IconPackager {
 
   private updatePlist(): void {
     const plist: string = path.join(this.app, 'Contents/Info.plist');
-    this.run([IconPackager.PLIST_TOOL, '-replace', IconPackager.PLIST_ICON_KEY, '-string', IconPackager.ICON_NAME, plist]);
+    this.updatePlistName(plist, IconPackager.PLIST_ICON_KEY, IconPackager.ICON_NAME);
+    this.updatePlistName(plist, IconPackager.PLIST_DISPLAY_NAME_KEY, IconPackager.DISPLAY_NAME);
+    this.updatePlistName(plist, IconPackager.PLIST_NAME_KEY, IconPackager.DISPLAY_NAME);
+  }
+
+  private updatePlistName(plist: string, key: string, value: string): void {
+    this.run([IconPackager.PLIST_TOOL, '-replace', key, '-string', value, plist]);
   }
 
   private updateFavicons(): void {

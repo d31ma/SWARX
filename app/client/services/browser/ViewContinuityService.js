@@ -384,6 +384,11 @@ export default class ViewContinuityService {
     if (key.startsWith(ViewContinuityService._GROUP_PREFIX)) {
       return this.#findGroup(key.slice(ViewContinuityService._GROUP_PREFIX.length));
     }
+    return this.#queryScroll(key);
+  }
+
+  /** @param {string} key @returns {HTMLElement | null} */
+  #queryScroll(key) {
     return this.#boundView().querySelector(key);
   }
 
@@ -484,6 +489,11 @@ export default class ViewContinuityService {
     if (!key.startsWith('.')) {
       return null;
     }
+    return this.#queryToggle(key);
+  }
+
+  /** @param {string} key @returns {HTMLDetailsElement | null} */
+  #queryToggle(key) {
     return this.#boundView().querySelector(key);
   }
 
@@ -647,11 +657,16 @@ export default class ViewContinuityService {
 
   /** @param {HTMLElement | null} target @returns {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} */
   #controlFocus(target) {
-    const process = /** @type {HTMLElement | null} */ (target?.closest(ViewContinuityService._PROCESS_FOCUS_SELECTOR) ?? null);
+    const process = /** @type {HTMLElement | null | undefined} */ (target?.closest(ViewContinuityService._PROCESS_FOCUS_SELECTOR));
     const zoom = /** @type {HTMLElement | null} */ (this.#closestZoom(target));
     const processFocus = this.#processFocus(process?.dataset);
     const zoomFocus = this.#zoomFocus(zoom?.dataset);
-    return processFocus ?? zoomFocus;
+    return this.#firstControlFocus(processFocus, zoomFocus);
+  }
+
+  /** @param {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} process @param {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} zoom @returns {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} */
+  #firstControlFocus(process, zoom) {
+    return process ?? zoom;
   }
 
   /** @param {DOMStringMap | undefined} data @returns {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} */

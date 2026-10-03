@@ -26,6 +26,7 @@ main() {
   cache_path="$(_external "$project_root" OBSERVATORY_SWIFT_CACHE_PATH)"
   rust_cache="$(_external "$project_root" OBSERVATORY_RUST_CACHE_PATH)"
   backup_root="$(_external "$project_root" OBSERVATORY_ROLLBACK_ROOT)"
+  node --experimental-strip-types --input-type=module -e 'import {ToolPathUtils} from "./tools/utils/ToolPathUtils.ts"; ToolPathUtils.separate(process.argv.slice(1));' "$artifact_path" "$cache_path" "$rust_cache" "$backup_root"
   [[ -x "$compiler_path" ]] || { print -u2 'TACHYON_COMPILER must name an executable qualified compiler.'; return 1; }
   command -v tsc >/dev/null 2>&1 || { print -u2 'TypeScript compiler is missing. Build requires TypeScript 7.0.2; no installation was attempted.'; return 1; }
   export OBSERVATORY_NATIVE_ARTIFACTS="$artifact_path"

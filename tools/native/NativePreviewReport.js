@@ -6,7 +6,7 @@ class NativePreviewReport {
   /** @type {string} */
   static #TABLE = 'table';
   /** @type {string} */
-  static #TABLE_CARD_SELECTOR = '.table-branch';
+  static #TABLE_CARD_SELECTOR = '.session-process-card';
   /** @type {string} */
   static #TREE = 'tree';
   /** @type {string} */
@@ -19,6 +19,12 @@ class NativePreviewReport {
   static #PROCESSES = 'Processes';
   /** @type {string} */
   static #GRAPH_TAB_SELECTOR = '[role=tab][data-graph-group]';
+  /** @type {string} */
+  static #COORDINATOR_SOURCE = 'Coordinator-reported team roster';
+  /** @type {string} */
+  static #TABLE_PICK_SELECTOR = '.session-process-pick[data-process-view="table"]';
+  /** @type {number} */
+  static #SESSION_SMALL_WIDTH = 1040;
   /** @type {string} */
   static #VIEW_TAB_SELECTOR = '.view-tabs w-btn';
   /** @type {string} */
@@ -95,20 +101,21 @@ class NativePreviewReport {
   /** @type {string} */
   static #SCROLL_SELECTOR = '.group-graph-scroll';
   /** @type {string} */
-  static #TABLE_GRID = '.session-list';
+  static #TABLE_GRID = '.session-process-grid';
   /** @type {string} */
-  static #TABLE_CARD = '.table-branch';
+  static #TABLE_CARD = '.session-process-card';
   /** @type {string} */
-  static #HISTORY_GRID = '.history-grid';
+  static #HISTORY_GRID = '.session-history-grid';
   /** @type {string} */
   static #HISTORY_CARD = '.history-card';
   /** @type {string} */
   static #STALE = 'stale';
 
-  /** @param {{label: string, action: string, section: string, mode: string, width: number, height: number, check: string, actionName?: string, agentRecordId?: string}} input @param {boolean} iconLoaded @returns {Promise<string>} */
+  /** @param {{label: string, action: string, section: string, mode: string, width: number, height: number, check: string, actionName?: string, agentRecordId?: string, sessionId?: string, taskId?: string, actionRecordId?: string}} input @param {boolean} iconLoaded @returns {Promise<string>} */
   static async verify(input, iconLoaded) {
     this.#rememberActionName(input.actionName);
-    this.#rememberAgentId(input.agentRecordId);
+    this.#rememberOwner(input);
+    this.#requireFocusedOwner(input);
     document.body.dataset.nativeQaStage = "navigation";
     await this.#navigation();
     document.body.dataset.nativeQaStage = "baseline";
@@ -124,7 +131,7 @@ class NativePreviewReport {
     await this.#captureInteraction(input.check);
     const report = this.#report(iconLoaded);
     this.#assertReport(report, input);
-    this.#assertTabs(input.check);
+    this.#assertNodeLabels(input.check);
     return JSON.stringify({...report, actionHistory: this.#actionRecords(), verification: {success: true, label: input.label, requested: input}});
   }
 
@@ -133,9 +140,19 @@ class NativePreviewReport {
     document.body.dataset.qaActionName = name ?? 'offline_ui_validation';
   }
 
-  /** @param {string | undefined} value @returns {void} */
-  static #rememberAgentId(value) {
-    if (value !== undefined) document.body.dataset.qaAgentId = value;
+  /** @param {{agentRecordId?: string, sessionId?: string, taskId?: string, actionRecordId?: string}} input @returns {void} */
+  static #rememberOwner(input) {
+    document.body.dataset.qaAgentId = input.agentRecordId ?? this.#EMPTY_TEXT;
+    document.body.dataset.qaSessionId = input.sessionId ?? this.#EMPTY_TEXT;
+    document.body.dataset.qaTaskId = input.taskId ?? this.#EMPTY_TEXT;
+    document.body.dataset.qaExpectedActionId = input.actionRecordId ?? this.#EMPTY_TEXT;
+  }
+
+  /** @param {{check: string, agentRecordId?: string, sessionId?: string, taskId?: string, actionRecordId?: string}} input @returns {void} */
+  static #requireFocusedOwner(input) {
+    const focused = ['current-work-live', 'current-work-hidden', 'current-work-completed', 'current-task-only', 'current-task-polls', this.#ACTION_RUNNING, 'action-progress', 'action-history'].includes(input.check);
+    const supplied = [input.agentRecordId, input.sessionId, input.taskId, input.actionRecordId].every(/** @param {string | undefined} field @returns {boolean} */ field => Boolean(field?.trim()));
+    if ([focused, !supplied].every(Boolean)) throw new Error('Native QA identity requires explicit agent, session, task and action record IDs.');
   }
 
   /** @returns {Promise<void>} */
@@ -175,8 +192,8 @@ class NativePreviewReport {
       case 'owned-table': this.table(); await this.#openOwnedTable(); return;
       case this.#TABLE: this.table(); return;
       case this.#TREE: this.processes(); return;
-      case 'connector-first': await this.connector('codex:61685:1790794014:557775'); return;
-      case 'connector-second': await this.connector('codex:61639:1790794008:120943'); return;
+      case 'connector-first': await this.#connectorAt(0); return;
+      case 'connector-second': await this.#connectorAt(1); return;
       case 'exercise': await this.exercise(); return;
       case 'pause': this.pause(); return;
       case 'resume': this.resume(); return;
@@ -184,7 +201,7 @@ class NativePreviewReport {
       case 'activity': this.section('Activity'); return;
       case 'runtimes': this.section('Runtimes'); return;
       case this.#POLLS: return;
-      case this.#HOLD: return;
+      case this.#HOLD: throw new Error('Unsupported native QA action: ' + action);
       default: throw new Error('Unknown native QA action: ' + action);
     }
   }
@@ -244,22 +261,11 @@ class NativePreviewReport {
   /** @returns {Promise<void>} */
   static async #ownedTree() {
     this.processes();
-    await this.#waitOwnedTab(performance.now());
-    const tab = this.#ownedTab();
-    await this.#selectGroup(tab?.dataset.graphGroup ?? '');
+    await this.#waitOwnedTable(performance.now());
+    const group = this.#ownedGroup();
+    await this.#selectGroup(group?.dataset.group ?? this.#EMPTY_TEXT);
     await this.#waitOwnedNode(performance.now());
     this.#scrollOwner('.graph-node');
-  }
-
-  /** @returns {HTMLElement | undefined} */
-  static #ownedTab() {
-    return /** @type {HTMLElement[]} */ (Array.from(document.querySelectorAll(this.#GRAPH_TAB_SELECTOR))).find(
-      /** @param {HTMLElement} tab @returns {boolean} */ tab => tab.dataset.graphGroup === this.#ownedGroup()?.dataset.group);
-  }
-
-  /** @param {number} started @returns {Promise<void>} */
-  static async #waitOwnedTab(started) {
-    while (this.#ownedTab() === undefined) await this.#waitIteration(started);
   }
 
   /** @returns {HTMLElement | undefined} */
@@ -278,8 +284,9 @@ class NativePreviewReport {
   /** @returns {void} */
   static #pickOwnedTable() {
     const card = this.#ownedGroup();
-    const button = /** @type {HTMLElement | null | undefined} */ (card?.querySelector('.session-row'));
+    const button = /** @type {HTMLElement | null | undefined} */ (card?.querySelector(this.#TABLE_PICK_SELECTOR));
     document.body.dataset.qaTablePid = button?.dataset.pid;
+    document.body.dataset.qaTableStarted = button?.dataset.started;
     document.body.dataset.qaTableGroup = card?.dataset.group;
     this.#press(button ?? null, 'owned runtime Table card');
   }
@@ -292,13 +299,15 @@ class NativePreviewReport {
   /** @returns {boolean} */
   static #selectedTable() {
     const card = this.#ownedGroup();
-    return [Boolean(card?.querySelector('.session-row.selected')),
+    const button = /** @type {HTMLElement | null | undefined} */ (card?.querySelector(this.#TABLE_PICK_SELECTOR + '.selected'));
+    return [Boolean(button), Boolean(button?.dataset.pid), Boolean(button?.dataset.started), button?.dataset.pid === document.body.dataset.qaTablePid,
+      button?.dataset.started === document.body.dataset.qaTableStarted,
       card?.dataset.group === document.body.dataset.qaTableGroup].every(Boolean);
   }
 
   /** @returns {void} */
   static #requireCardsOnly() {
-    const hierarchy = document.querySelector('.table-branch .tree-expansion,.table-branch .tree-node,.table-branch .process-table-rows');
+    const hierarchy = document.querySelector('.session-process-table .tree-expansion,.session-process-table .tree-node,.session-process-table .process-table-rows');
     if (hierarchy !== null) throw new Error('Native Table duplicates the process hierarchy below runtime cards.');
   }
 
@@ -307,38 +316,38 @@ class NativePreviewReport {
     while (this.#ownedGroup() === undefined) await this.#waitIteration(started);
   }
 
+  /** @param {number} index @returns {Promise<void>} */
+  static async #connectorAt(index) {
+    this.processes();
+    await this.#waitConnectorCount(index, performance.now());
+    const identifier = this.#groupIds()[index];
+    await this.connector(identifier);
+  }
+
+  /** @param {number} index @param {number} started @returns {Promise<void>} */
+  static async #waitConnectorCount(index, started) {
+    while (this.#groupIds().length <= index) await this.#waitIteration(started);
+  }
+
   /** @param {string} identifier @returns {Promise<void>} */
   static async connector(identifier) {
     this.processes();
-    await this.#waitConnector(identifier, performance.now());
     await this.#selectGroup(identifier);
-  }
-
-  /** @param {string} identifier @param {number} started @returns {Promise<void>} */
-  static async #waitConnector(identifier, started) {
-    while (!this.#connectorReady(identifier)) await this.#waitIteration(started);
-  }
-
-  /** @param {string} identifier @returns {boolean} */
-  static #connectorReady(identifier) {
-    return Array.from(document.querySelectorAll(this.#GRAPH_TAB_SELECTOR)).some(
-      /** @param {Element} tab @returns {boolean} */
-      tab => /** @type {HTMLElement} */ (tab).dataset.graphGroup === identifier
-    );
   }
 
   /** @returns {void} */
   static pause() {
-    this.#click(this.#STATUS_CONTROL_SELECTOR, 'Pause');
+    throw new Error('Unsupported native QA action: pause');
   }
 
   /** @returns {void} */
   static resume() {
-    this.#click(this.#STATUS_CONTROL_SELECTOR, 'Resume');
+    throw new Error('Unsupported native QA action: resume');
   }
 
   /** @returns {Promise<void>} */
   static async exercise() {
+    await this.#layout();
     const ids = this.#groupIds();
     this.#requireGroups(ids.length);
     const before = await this.#observeGroups(ids);
@@ -356,21 +365,17 @@ class NativePreviewReport {
 
   /** @returns {string[]} */
   static #groupIds() {
-    return Array.from(document.querySelectorAll(this.#GRAPH_TAB_SELECTOR)).slice(0, this.#REQUIRED_GROUPS).map(
-      /** @param {Element} tab @returns {string} */
-      tab => String(/** @type {HTMLElement} */ (tab).dataset.graphGroup)
+    return this.#groups().slice(0, this.#REQUIRED_GROUPS).map(
+      /** @param {Element} group @returns {string} */
+      group => String(/** @type {HTMLElement} */ (group).dataset.group)
     );
   }
 
   /** @param {string} id @returns {Promise<Element>} */
   static async #selectGroup(id) {
-    const tab = Array.from(document.querySelectorAll(this.#GRAPH_TAB_SELECTOR)).find(
-      /** @param {Element} item @returns {boolean} */
-      item => /** @type {HTMLElement} */ (item).dataset.graphGroup === id
-    );
     const started = performance.now();
-    this.#press(tab, 'process group ' + id);
-    await this.#waitGroup(id, started);
+    const group = await this.#waitGroup(id, started);
+    group.scrollIntoView({block: 'nearest', inline: 'nearest'});
     document.body.dataset.nativeQaStage = this.#LAYOUT;
     await this.#layout();
     document.body.dataset.nativeQaStage = this.#ASSERT_READY;
@@ -379,8 +384,19 @@ class NativePreviewReport {
 
   /** @param {string} id @param {number} started @returns {Promise<Element>} */
   static async #waitGroup(id, started) {
-    while (this.#groups().map(/** @param {Element} group @returns {string} */ group => this.#scale(group).id).join() !== id) await this.#waitIteration(started);
-    return this.#groups()[0];
+    while (this.#group(id) === undefined) await this.#waitNamedGroup(id, started);
+    return /** @type {Element} */ (this.#group(id));
+  }
+
+  /** @param {string} id @param {number} started @returns {Promise<void>} */
+  static async #waitNamedGroup(id, started) {
+    if (performance.now() - started >= this.#WAIT_MILLISECONDS) throw new Error('Native QA timed out waiting for process group ' + id);
+    await this.#waitIteration(started);
+  }
+
+  /** @param {string} id @returns {Element | undefined} */
+  static #group(id) {
+    return this.#groups().find(/** @param {Element} group @returns {boolean} */ group => /** @type {HTMLElement} */ (group).dataset.group === id);
   }
 
   /** @param {string[]} ids @returns {Promise<{id: string, scale: string}[]>} */
@@ -425,7 +441,7 @@ class NativePreviewReport {
 
   /** @returns {Element[]} */
   static #groups() {
-    return Array.from(document.querySelectorAll(this.#GROUP_SELECTOR)).slice(0, this.#REQUIRED_GROUPS);
+    return Array.from(document.querySelectorAll(this.#GROUP_SELECTOR)).filter(/** @param {Element} group @returns {boolean} */ group => group.querySelector('.graph-canvas') !== null);
   }
 
   /** @param {number} count @returns {void} */
@@ -454,10 +470,11 @@ class NativePreviewReport {
     return {id: String(/** @type {HTMLElement} */ (group).dataset.group), scale: this.#transform(canvas)};
   }
 
-  /** @param {HTMLElement | null} canvas @returns {string} */
+  /** The SVG canvas zooms by scaled width over its unscaled viewBox width. @param {HTMLElement | null} canvas @returns {string} */
   static #transform(canvas) {
     if (canvas === null) return this.#EMPTY_TEXT;
-    return canvas.style.transform;
+    const base = Number(canvas.getAttribute('viewBox')?.split(' ')[2]);
+    return 'scale(' + Math.round(Number(canvas.getAttribute('width')) / base * 1e6) / 1e6 + ')';
   }
 
   /** @returns {HTMLElement | null} */
@@ -476,7 +493,7 @@ class NativePreviewReport {
 
   /** @param {HTMLElement | null} scroll @returns {void} */
   static #scroll(scroll) {
-    if (scroll === null) return;
+    if (scroll === null) throw new Error('Native QA needs an overflowing real process tree for pan.');
     scroll.scrollTop = Math.min(this.#SCROLL_DISTANCE, scroll.scrollHeight - scroll.clientHeight);
     scroll.scrollLeft = Math.min(this.#SCROLL_DISTANCE, scroll.scrollWidth - scroll.clientWidth);
     scroll.dispatchEvent(new Event('scroll'));
@@ -552,7 +569,7 @@ class NativePreviewReport {
   /** @param {{section: string, mode: string, width: number, height: number, check: string}} input @param {number} before @returns {boolean} */
   static #ready(input, before) {
     const section = this.#text(document.querySelector(this.#SELECTED_NAV_SELECTOR));
-    const mode = this.#class(document.querySelector(this.#TABLE_GRID));
+    const mode = this.#class(document.querySelector(this.#TABLE_CARD_SELECTOR));
     return [section.includes(input.section), this.#modeReady(input.mode, mode),
       this.#viewportReady(input),
       this.#conditionReady(input.check, before)].every(Boolean);
@@ -605,20 +622,29 @@ class NativePreviewReport {
 
   /** @returns {boolean} */
   static #logicalReady() {
-    return this.#logicalRecords().every(this.#freshLogical.bind(this));
+    const records = this.#logicalRecords();
+    return [records.length > this.#EMPTY_COUNT, records.every(this.#freshLogical.bind(this))].every(Boolean);
   }
 
   /** @returns {HTMLElement | undefined} */
   static #currentWorkRow() {
     return /** @type {HTMLElement[]} */ (Array.from(document.querySelectorAll(this.#AGENT_ROW_SELECTOR))).find(
-      /** @param {HTMLElement} row @returns {boolean} */ row => Boolean(document.body.dataset.qaAgentId) && row.dataset.agent === document.body.dataset.qaAgentId);
+      /** @param {HTMLElement} row @returns {boolean} */ row => row.dataset.agent === document.body.dataset.qaAgentId);
+  }
+
+  /** @param {HTMLElement | undefined} row @returns {boolean} */
+  static #currentOwner(row) {
+    return [row !== undefined, row?.dataset.session === document.body.dataset.qaSessionId,
+      row?.dataset.task === document.body.dataset.qaTaskId,
+      row?.dataset.source === this.#COORDINATOR_SOURCE].every(Boolean);
   }
 
   /** @returns {boolean} */
   static #currentWorkVisible() {
     const row = this.#currentWorkRow();
     const action = this.#text(row?.querySelector('.current-action strong') ?? null);
-    return [row !== undefined, action === document.body.dataset.qaActionName].every(Boolean);
+    const status = this.#text(row?.querySelector(this.#STATUS_SELECTOR) ?? null);
+    return [this.#currentOwner(row), ['active', this.#RUNNING].includes(status), action === document.body.dataset.qaActionName].every(Boolean);
   }
 
   /** @returns {boolean} */
@@ -626,42 +652,43 @@ class NativePreviewReport {
     const row = this.#currentWorkRow();
     const status = this.#text(row?.querySelector(this.#STATUS_SELECTOR) ?? null);
     const task = this.#text(row?.querySelector('.assignment strong') ?? null);
-    return [row !== undefined, ['active', this.#RUNNING].includes(status), Boolean(task),
+    return [this.#currentOwner(row), ['active', this.#RUNNING].includes(status), Boolean(task.trim()),
       row?.querySelector('.current-action') === null,
       row?.querySelector(this.#COMMAND_RESOURCE_SELECTOR) === null].every(Boolean);
   }
 
   /** @returns {boolean} */
   static #currentWorkHidden() {
-    const text = this.#text(document.querySelector('.logical-panel'));
-    return [this.#currentWorkRow() === undefined, !text.toLowerCase().includes(this.#STALE)].every(Boolean);
+    return this.#currentWorkRow() === undefined;
   }
 
   /** @param {{id: string, name: string, status: string, source: string, task: string}} record @returns {boolean} */
   static #freshLogical(record) {
-    return [Boolean(record.id), Boolean(record.status), Boolean(record.source),
-      Boolean(record.task), record.status.toLowerCase() !== this.#STALE].every(Boolean);
+    return [Boolean(record.id), ['active', this.#RUNNING].includes(record.status), Boolean(record.source.trim()),
+      Boolean(record.task.trim()), !record.source.toLowerCase().includes('recovered')].every(Boolean);
   }
 
   /** @returns {boolean} */
   static #historyComplete() {
-    const expected = document.body.dataset.qaActionId;
-    const rows = Array.from(document.querySelectorAll(this.#ACTION_ROW_SELECTOR)).filter(/** @param {Element} row @returns {boolean} */ row => this.#expectedAction(row, expected));
-    return rows.some(this.#completedHistory);
+    const rows = Array.from(document.querySelectorAll(this.#ACTION_ROW_SELECTOR));
+    return rows.some(/** @param {Element} row @returns {boolean} */ row => this.#completedHistory(row));
   }
 
-  /** @param {Element} row @param {string | undefined} expected @returns {boolean} */
-  static #expectedAction(row, expected) {
-    if (expected === undefined) return true;
-    return /** @type {HTMLElement} */ (row).dataset.action === expected;
+  /** @param {Element} row @returns {boolean} */
+  static #actionOwner(row) {
+    const data = /** @type {HTMLElement} */ (row).dataset;
+    return [data.agent === document.body.dataset.qaAgentId,
+      data.session === document.body.dataset.qaSessionId, data.task === document.body.dataset.qaTaskId,
+      data.action === document.body.dataset.qaExpectedActionId, data.source === this.#COORDINATOR_SOURCE,
+      this.#text(row.querySelector(this.#ACTION_NAME_SELECTOR)) === document.body.dataset.qaActionName].every(Boolean);
   }
 
   /** @returns {HTMLElement | undefined} */
   static #runningAction() {
     return Array.from(document.querySelectorAll(this.#ACTION_ROW_SELECTOR), /** @param {Element} row @returns {HTMLElement} */ row => /** @type {HTMLElement} */ (row)).find(
       /** @param {HTMLElement} row @returns {boolean} */
-      row => [this.#text(row.querySelector(this.#ACTION_NAME_SELECTOR)) === document.body.dataset.qaActionName,
-        this.#text(row.querySelector(this.#STATUS_SELECTOR)) === this.#RUNNING, row.querySelector(this.#ELAPSED_SELECTOR) !== null].every(Boolean)
+      row => [this.#actionOwner(row), row.dataset.status === this.#RUNNING,
+        row.dataset.running === 'true', row.querySelector(this.#ELAPSED_SELECTOR) !== null].every(Boolean)
     );
   }
 
@@ -672,23 +699,25 @@ class NativePreviewReport {
       this.#text(row?.querySelector(this.#ELAPSED_SELECTOR) ?? null) !== document.body.dataset.qaActionElapsed].every(Boolean);
   }
 
-  /** @returns {{id: string | undefined, agent: string | undefined, name: string, status: string, elapsed: string, text: string}[]} */
+  /** @returns {{id: string | undefined, agent: string | undefined, sessionId: string | undefined, taskId: string | undefined, source: string | undefined, running: boolean, name: string, status: string, elapsed: string, text: string}[]} */
   static #actionRecords() {
-    return Array.from(document.querySelectorAll(this.#ACTION_ROW_SELECTOR), /** @param {Element} row @returns {{id: string | undefined, agent: string | undefined, name: string, status: string, elapsed: string, text: string}} */ row => ({
-      id: /** @type {HTMLElement} */ (row).dataset.action,
-      agent: /** @type {HTMLElement} */ (row).dataset.agent,
-      name: this.#text(row.querySelector(this.#ACTION_NAME_SELECTOR)),
-      status: this.#text(row.querySelector(this.#STATUS_SELECTOR)), elapsed: this.#text(row.querySelector(this.#ELAPSED_SELECTOR)), text: this.#text(row)
-    }));
+    return Array.from(document.querySelectorAll(this.#ACTION_ROW_SELECTOR), this.#actionRecord.bind(this));
+  }
+
+  /** @param {Element} row @returns {{id: string | undefined, agent: string | undefined, sessionId: string | undefined, taskId: string | undefined, source: string | undefined, running: boolean, name: string, status: string, elapsed: string, text: string}} */
+  static #actionRecord(row) {
+    const data = /** @type {HTMLElement} */ (row).dataset;
+    return {id: data.action, agent: data.agent, sessionId: data.session, taskId: data.task,
+      source: data.source, running: data.running === 'true',
+      name: this.#text(row.querySelector(this.#ACTION_NAME_SELECTOR)), status: data.status ?? this.#EMPTY_TEXT,
+      elapsed: this.#text(row.querySelector(this.#ELAPSED_SELECTOR)), text: this.#text(row)};
   }
 
   /** @param {Element} row @returns {boolean} */
   static #completedHistory(row) {
-    const text = String(row.textContent);
-    return [String(document.body.dataset.qaActionName), 'completed', 'Measured by the reporting caller'].every(
-      /** @param {string} value @returns {boolean} */
-      value => text.includes(value)
-    );
+    const data = /** @type {HTMLElement} */ (row).dataset;
+    return [this.#actionOwner(row), data.status === 'completed', data.running === 'false',
+      this.#text(row).includes('Measured by the reporting caller')].every(Boolean);
   }
 
   /** @param {boolean} ready @param {string} section @returns {void} */
@@ -729,7 +758,7 @@ class NativePreviewReport {
     document.body.dataset.qaPausedSamples = String(this.#samples());
   }
 
-  /** @param {boolean} iconLoaded @returns {{commandResources: {binding: string | undefined, text: string}[], qaStage: string | undefined, qaBefore: string | undefined, capturedAt: string, native: string | undefined, section: string, samples: string, sampleCount: number, width: number, height: number, horizontalOverflow: boolean, documentScroll: boolean, live: string, groups: number, graphGroups: number, graphNodes: number, graphTabBounds: {id: string, height: number, textTop: number, textBottom: number, top: number, bottom: number, lineHeight: string, appearance: string}[], tableLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, historyLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, interaction: {baseline: {before: {id: string, scale: string}[], after: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null}, current: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null} | null, chartPoints: number | null, chartUnit: string | null, sessionContainers: number, flatAgentCards: number, historyCards: number, runtimeCards: number, activityCards: number, sidebarOverflow: boolean, summaryBounds: {text: string, top: number, bottom: number, textTop: number, textBottom: number, height: number, lineHeight: string, overflow: string}[], logicalRecords: {id: string, name: string, status: string, source: string, task: string}[], logicalRows: number, appIconLoaded: boolean}} */
+  /** @param {boolean} iconLoaded @returns {{commandResources: {binding: string | undefined, text: string}[], qaStage: string | undefined, qaBefore: string | undefined, capturedAt: string, native: string | undefined, section: string, samples: string, sampleCount: number, width: number, height: number, horizontalOverflow: boolean, documentScroll: boolean, live: string, groups: number, graphGroups: number, graphNodes: number, graphTabBounds: {id: string, height: number, textTop: number, textBottom: number, top: number, bottom: number, lineHeight: string, appearance: string}[], tableLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, historyLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, contextTableLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, contextHistoryLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, interaction: {baseline: {before: {id: string, scale: string}[], after: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null}, current: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null} | null, chartPoints: number | null, chartUnit: string | null, sessionContainers: number, flatAgentCards: number, historyCards: number, runtimeCards: number, activityCards: number, sidebarOverflow: boolean, summaryBounds: {text: string, top: number, bottom: number, textTop: number, textBottom: number, height: number, lineHeight: string, overflow: string}[], logicalRecords: {id: string, name: string, status: string, source: string, task: string}[], logicalRows: number, appIconLoaded: boolean}} */
   static #report(iconLoaded) {
     const canvas = document.querySelector('.resource-chart');
     return {capturedAt: new Date().toISOString(), native: document.body.dataset.platform,
@@ -739,9 +768,9 @@ class NativePreviewReport {
       samples: this.#text(document.querySelector(this.#SAMPLE_SELECTOR)), sampleCount: this.#samples(),
       width: innerWidth, height: innerHeight, horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
       documentScroll: document.documentElement.scrollHeight > innerHeight, live: this.#live(),
-      groups: document.querySelectorAll('.session-row').length,
+      groups: document.querySelectorAll('.session-process-pick').length,
       graphGroups: document.querySelectorAll(this.#GROUP_SELECTOR).length, graphNodes: document.querySelectorAll(this.#GRAPH_NODE_SELECTOR).length, graphTabBounds: this.#tabBounds(),
-      tableLayout: this.#grid(this.#TABLE_GRID, this.#TABLE_CARD), historyLayout: this.#grid(this.#HISTORY_GRID, this.#HISTORY_CARD),
+      tableLayout: this.#grid(this.#TABLE_GRID, this.#TABLE_CARD), contextTableLayout: this.#grid('.context-resource-grid', this.#TABLE_CARD), historyLayout: this.#grid(this.#HISTORY_GRID, '.session-history-card'), contextHistoryLayout: this.#grid('.context-history-grid', this.#HISTORY_CARD),
       interaction: this.#interaction(), chartPoints: this.#points(canvas), chartUnit: this.#chartUnit(canvas),
       sessionContainers: document.querySelectorAll('.session-card').length, flatAgentCards: document.querySelectorAll('.agent-grid > .logical-agent-row').length,
       historyCards: document.querySelectorAll(this.#HISTORY_CARD).length, runtimeCards: document.querySelectorAll('.runtime-card').length,
@@ -761,15 +790,22 @@ class NativePreviewReport {
   }
 
   /** @param {string} check @returns {void} */
-  static #assertTabs(check) {
+  static #assertNodeLabels(check) {
     if (check !== this.#TREE) return;
-    this.#requireTabs(this.#tabBounds());
+    this.#requireNodeLabels(this.#nodeLabelBounds());
   }
 
-  /** @param {{height: number, textTop: number, textBottom: number, top: number, bottom: number}[]} tabs @returns {void} */
-  static #requireTabs(tabs) {
-    const ready = tabs.every(/** @param {{height: number, textTop: number, textBottom: number, top: number, bottom: number}} tab @returns {boolean} */ tab => [tab.height >= this.#MINIMUM_TAB_HEIGHT, tab.textTop >= tab.top, tab.textBottom <= tab.bottom].every(Boolean));
-    if (!ready) throw new Error('Native QA process tab text is clipped or its button is too short.');
+  /** @returns {{top: number, bottom: number, textTop: number, textBottom: number}[]} */
+  static #nodeLabelBounds() {
+    return Array.from(document.querySelectorAll(this.#GRAPH_NODE_SELECTOR)).map(
+      /** @param {Element} node @returns {Element | null} */ node => node.querySelector('.graph-name')
+    ).filter(/** @param {Element | null} label @returns {label is Element} */ label => label !== null).map(this.#elementTextBound.bind(this));
+  }
+
+  /** @param {{top: number, bottom: number, textTop: number, textBottom: number}[]} labels @returns {void} */
+  static #requireNodeLabels(labels) {
+    const ready = [labels.length > this.#EMPTY_COUNT, labels.every(/** @param {{top: number, bottom: number, textTop: number, textBottom: number}} label @returns {boolean} */ label => [label.textTop >= label.top, label.textBottom <= label.bottom].every(Boolean))].every(Boolean);
+    if (!ready) throw new Error('Native QA process node titles are missing or clipped.');
   }
 
   /** @returns {{text: string, top: number, bottom: number, textTop: number, textBottom: number, height: number, lineHeight: string, overflow: string}[]} */
@@ -793,14 +829,19 @@ class NativePreviewReport {
       textTop: text.top, textBottom: text.bottom, height: rectangle.height, lineHeight: style.lineHeight};
   }
 
-  /** @returns {{id: string, name: string, status: string, source: string, task: string}[]} */
+  /** @returns {{id: string, name: string, status: string, source: string, task: string, sessionId: string | undefined, taskId: string | undefined, currentAction: string, commandResourceCount: number}[]} */
   static #logicalRecords() {
-    return Array.from(document.querySelectorAll(this.#AGENT_ROW_SELECTOR)).map(
-      /** @param {Element} row @returns {{id: string, name: string, status: string, source: string, task: string}} */
-      row => ({id: this.#attribute(row, this.#AGENT_ATTRIBUTE) ?? this.#attribute(row.querySelector('[data-agent]'), this.#AGENT_ATTRIBUTE) ?? this.#EMPTY_TEXT,
-        name: this.#text(row.querySelector('h3')), status: this.#text(row.querySelector(this.#STATUS_SELECTOR)),
-        source: this.#text(row.querySelector('.feed-time')), task: this.#text(row.querySelector('.assignment strong'))})
-    );
+    return Array.from(document.querySelectorAll(this.#AGENT_ROW_SELECTOR)).map(this.#logicalRecord.bind(this));
+  }
+
+  /** @param {Element} row @returns {{id: string, name: string, status: string, source: string, task: string, sessionId: string | undefined, taskId: string | undefined, currentAction: string, commandResourceCount: number}} */
+  static #logicalRecord(row) {
+    const data = /** @type {HTMLElement} */ (row).dataset;
+    return {id: data.agent ?? this.#EMPTY_TEXT, name: this.#text(row.querySelector('h3')),
+      status: this.#text(row.querySelector(this.#STATUS_SELECTOR)), source: data.source ?? this.#text(row.querySelector('.feed-time')),
+      task: this.#text(row.querySelector('.assignment strong')), sessionId: data.session, taskId: data.task,
+      currentAction: this.#text(row.querySelector('.current-action strong')),
+      commandResourceCount: row.querySelectorAll(this.#COMMAND_RESOURCE_SELECTOR).length};
   }
 
   /** @param {string} gridSelector @param {string} cardSelector @returns {{columns: number[], cards: {x: number, y: number, width: number, height: number}[]}} */
@@ -847,7 +888,7 @@ class NativePreviewReport {
     return {baseline, current: JSON.parse(document.body.dataset.qaCurrent ?? '[]'), scroll: this.#scrollRecord(this.#element(scroll))};
   }
 
-  /** @param {{horizontalOverflow: boolean, documentScroll: boolean, sidebarOverflow: boolean, tableLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, historyLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, interaction: {baseline: {before: {id: string, scale: string}[], after: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null}, current: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null} | null, sampleCount: number, live: string}} report @param {{check: string, width: number}} input @returns {void} */
+  /** @param {{horizontalOverflow: boolean, documentScroll: boolean, sidebarOverflow: boolean, tableLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, historyLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, contextTableLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, contextHistoryLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, interaction: {baseline: {before: {id: string, scale: string}[], after: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null}, current: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null} | null, sampleCount: number, live: string}} report @param {{check: string, width: number}} input @returns {void} */
   static #assertReport(report, input) {
     const value = report;
     this.#requirePage([!value.horizontalOverflow, !value.documentScroll, !value.sidebarOverflow].every(Boolean));
@@ -859,12 +900,12 @@ class NativePreviewReport {
     if (!success) throw new Error('Native QA found page or sidebar overflow.');
   }
 
-  /** @param {{horizontalOverflow: boolean, documentScroll: boolean, sidebarOverflow: boolean, tableLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, historyLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, interaction: {baseline: {before: {id: string, scale: string}[], after: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null}, current: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null} | null, sampleCount: number, live: string}} report @param {{check: string, width: number}} input @returns {void} */
+  /** @param {{horizontalOverflow: boolean, documentScroll: boolean, sidebarOverflow: boolean, tableLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, historyLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, contextTableLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, contextHistoryLayout: {columns: number[], cards: {x: number, y: number, width: number, height: number}[]}, interaction: {baseline: {before: {id: string, scale: string}[], after: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null}, current: {id: string, scale: string}[], scroll: {id: string, top: number, left: number} | null} | null, sampleCount: number, live: string}} report @param {{check: string, width: number}} input @returns {void} */
   static #assertCheck(report, input) {
     switch (input.check) {
       case 'current-work-completed': this.#requireHistoryLabels(); return;
-      case this.#TABLE: this.#requireCardsOnly(); this.#requireGrid(report.tableLayout, this.#tableColumns(input.width)); return;
-      case this.#HISTORY: this.#requireGrid(report.historyLayout, this.#expectedColumns(input.width)); return;
+      case this.#TABLE: this.#requireCardsOnly(); this.#requireSessionGrids(report.tableLayout, report.contextTableLayout, input.width); return;
+      case this.#HISTORY: this.#requireSessionGrids(report.historyLayout, report.contextHistoryLayout, input.width); return;
       case 'activity-layout': this.#requireActivityGrid(this.#grid('.activity-grid', this.#ACTIVITY_CARD_SELECTOR), this.#tableColumns(input.width)); return;
       case this.#ZOOM: this.#requireZoom(report.interaction); return;
       case this.#POLLS: this.#requireZoom(report.interaction); this.#requireScroll(report.interaction); return;
@@ -875,8 +916,32 @@ class NativePreviewReport {
 
   /** @returns {void} */
   static #requireHistoryLabels() {
-    const text = this.#text(document.querySelector('.activity-overview'));
-    if (text.toLowerCase().includes(this.#STALE)) throw new Error('Activity still displays stale terminology.');
+    if (!this.#historyComplete()) throw new Error('Native QA completion no longer matches its exact reported action.');
+  }
+
+  /** @param {{columns: number[], cards: {width: number}[]}} sessions @param {{columns: number[], cards: {width: number}[]}} context @param {number} width @returns {void} */
+  static #requireSessionGrids(sessions, context, width) {
+    const expected = this.#sessionColumns(width);
+    this.#requireSessionCapacity(sessions, expected);
+    this.#requireSessionCapacity(context, expected);
+    this.#requireMeasuredCards(sessions.cards.length + context.cards.length);
+  }
+
+  /** @param {{columns: number[], cards: {width: number}[]}} grid @param {number} expected @returns {void} */
+  static #requireSessionCapacity(grid, expected) {
+    const ready = [grid.columns.length === expected, this.#cardsFitColumns(grid)].every(Boolean);
+    this.#requireLayout(ready, expected, grid.columns.length);
+  }
+
+  /** @param {number} count @returns {void} */
+  static #requireMeasuredCards(count) {
+    if (count === this.#EMPTY_COUNT) throw new Error('Native QA needs actual session or context cards for this view.');
+  }
+
+  /** @param {number} width @returns {number} */
+  static #sessionColumns(width) {
+    if (width <= this.#SESSION_SMALL_WIDTH) return this.#SINGLE_COLUMN;
+    return this.#REQUIRED_GROUPS;
   }
 
   /** @param {{columns: number[], cards: {x: number, y: number, width: number, height: number}[]}} layout @param {number} expected @returns {void} */

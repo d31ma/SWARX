@@ -1,10 +1,12 @@
 use crate::models::{
     NativeGroupMetrics, NativeLogicalAgentView, NativeOverviewView, NativeProcessMetrics,
     NativeProcessOwner, NativeProcessRow, NativeResourceTotals, NativeRuntimeView,
-    NativeSessionLink, NativeSessionResourceView, NativeSnapshot, NativeTaskRecord, NativeTaskView,
-    NativeViewSelection,
+    NativeSessionActivityView, NativeSessionLink, NativeSessionResourceView, NativeSnapshot,
+    NativeTaskRecord, NativeTaskView, NativeViewSelection,
 };
-use crate::utils::{LogicalViewUtils, MetricFormatUtils, SessionResourceUtils, TimeFormatUtils};
+use crate::utils::{
+    LogicalViewUtils, MetricFormatUtils, SessionResourceUtils, SessionViewUtils, TimeFormatUtils,
+};
 use std::cmp::Ordering;
 
 pub struct OverviewViewUtils;
@@ -59,8 +61,9 @@ impl OverviewViewUtils {
             SessionResourceUtils::build(&snapshot.session_groups, now);
         let all_contexts: Vec<NativeRuntimeView> =
             SessionResourceUtils::contexts(&groups, &all_resource_sessions);
-        let resource_sessions: Vec<NativeSessionResourceView> =
-            SessionResourceUtils::filtered(&all_resource_sessions, &selection.query);
+        let resource_sessions: Vec<NativeSessionResourceView> = Self::harness_sessions(
+            SessionResourceUtils::filtered(&all_resource_sessions, &selection.query),
+        );
         let shared_resources: Vec<NativeRuntimeView> =
             Self::filtered(&all_contexts, &selection.query);
         let chart_resources: Vec<NativeRuntimeView> =
@@ -85,7 +88,10 @@ impl OverviewViewUtils {
                 Self::RECOVERED_FEED,
             ),
             logical,
-            activity: snapshot.activity.clone(),
+            activity: Self::harness_activity(SessionViewUtils::named_activity(
+                snapshot.activity.clone(),
+                &snapshot.harness_sessions,
+            )),
             logical_count,
             logical_feed: Self::feed(logical_count),
             logical_notice: Self::notice(logical_count),
@@ -173,6 +179,57 @@ impl OverviewViewUtils {
             "Claude" => Self::CLAUDE_ORDER,
             _ => Self::OTHER_ORDER,
         }
+    }
+
+    fn harness_sessions(
+        sessions: Vec<NativeSessionResourceView>,
+    ) -> Vec<NativeSessionResourceView> {
+        Self::by_harness(sessions, Self::session_family, Self::session_header)
+    }
+
+    fn harness_activity(
+        sessions: Vec<NativeSessionActivityView>,
+    ) -> Vec<NativeSessionActivityView> {
+        Self::by_harness(sessions, Self::activity_family, Self::activity_header)
+    }
+
+    fn by_harness<T>(
+        mut items: Vec<T>,
+        family: fn(&T) -> &str,
+        header: fn(&mut T, bool) -> (),
+    ) -> Vec<T> {
+        items.sort_by(|left: &T, right: &T| -> Ordering {
+            Self::harness_order(family(left), family(right))
+        });
+        let mut previous: Option<String> = None;
+        for item in &mut items {
+            let current: String = family(item).to_owned();
+            header(item, previous.as_deref() != Some(current.as_str()));
+            previous = Some(current);
+        }
+        items
+    }
+
+    fn session_family(session: &NativeSessionResourceView) -> &str {
+        &session.family
+    }
+
+    fn session_header(session: &mut NativeSessionResourceView, header: bool) -> () {
+        session.harness_header = header;
+    }
+
+    fn activity_family(session: &NativeSessionActivityView) -> &str {
+        &session.family
+    }
+
+    fn activity_header(session: &mut NativeSessionActivityView, header: bool) -> () {
+        session.harness_header = header;
+    }
+
+    fn harness_order(left: &str, right: &str) -> Ordering {
+        Self::provider_order(left)
+            .cmp(&Self::provider_order(right))
+            .then_with(|| -> Ordering { left.cmp(right) })
     }
 
     fn resident(group: &NativeRuntimeView) -> i64 {

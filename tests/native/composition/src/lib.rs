@@ -3,14 +3,16 @@ include!(concat!(env!("OUT_DIR"), "/utils.rs"));
 mod clock { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../app/client/shared/native/ObservationClock.rs")); }
 mod metrics { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../app/client/shared/native/MetricSource.rs")); }
 mod events { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../app/client/shared/native/EventSource.rs")); }
-pub use {clock::*, metrics::*, events::*};
+mod harness_source { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../app/client/shared/native/HarnessSessionSource.rs")); }
+pub use {clock::*, metrics::*, events::*, harness_source::*};
 #[allow(non_snake_case)]
 pub mod TachyonRustServices {
     pub use crate::utils::{ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionViewUtils, TimeFormatUtils, MetricFormatUtils, ProcessGraphUtils, ProcessTreeUtils, RuntimeViewUtils};
-    mod monitor { use super::ActivityHistoryService; include!(concat!(env!("OUT_DIR"), "/MonitorService.rs")); }
+    mod monitor { use super::{ActivityHistoryService, HarnessSessionService}; include!(concat!(env!("OUT_DIR"), "/MonitorService.rs")); }
     mod transport { include!(concat!(env!("OUT_DIR"), "/NativeSnapshotTransportService.rs")); }
     mod activity { include!(concat!(env!("OUT_DIR"), "/ActivityHistoryService.rs")); }
-    pub use {monitor::*, transport::*, activity::*};
+    mod sessions { include!(concat!(env!("OUT_DIR"), "/HarnessSessionService.rs")); }
+    pub use {monitor::*, transport::*, activity::*, sessions::*};
 }
 #[cfg(test)]
 mod monitor_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../MonitorTests.rs")); }

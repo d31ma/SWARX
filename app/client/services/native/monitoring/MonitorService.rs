@@ -1,7 +1,7 @@
 use crate::models::{NativeCapabilities, NativeGroup, NativeRuntimeView, NativeSnapshot};
 use crate::utils::{
     ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, ProcessGraphUtils,
-    ProcessTreeUtils, ProcessOwnerUtils, RuntimeViewUtils, SessionViewUtils,
+    ProcessOwnerUtils, ProcessTreeUtils, RuntimeViewUtils, SessionViewUtils,
 };
 use crate::{EventSource, MetricSource, ObservationClock};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -17,6 +17,7 @@ pub struct MonitorService {
     sampling: Mutex<Option<thread::JoinHandle<()>>>,
     activity: ActivityHistoryService,
     clock: Arc<dyn ObservationClock>,
+    sessions: HarnessSessionService,
 }
 
 impl MonitorService {
@@ -58,7 +59,13 @@ impl MonitorService {
             sampling: Mutex::new(Some(sampling)),
             activity,
             clock,
+            sessions: HarnessSessionService::new(Vec::new()),
         }
+    }
+
+    pub fn with_sessions(mut self, sessions: HarnessSessionService) -> Self {
+        self.sessions = sessions;
+        self
     }
 
     pub fn read(&self) -> NativeSnapshot {
@@ -88,7 +95,12 @@ impl MonitorService {
         Self::add_process_rows(&mut result.groups);
         result.runtime_views = Self::runtime_views(&result.groups);
         ChartDataUtils::present(&mut result.runtime_views, now);
-        result.session_groups = SessionViewUtils::sessions(&result.logical_views);
+        result.harness_sessions = self.sessions.sessions();
+        result.session_groups = SessionViewUtils::named(
+            SessionViewUtils::sessions(&result.logical_views),
+            &result.harness_sessions,
+            now,
+        );
         result.linked_session_count = SessionViewUtils::linked_count(&result.session_groups);
         result.harness_count = SessionViewUtils::harness_count(&result.session_groups);
         result.activity = self.activity.view(&result.logical_agents, now);

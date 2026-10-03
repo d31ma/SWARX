@@ -20,7 +20,7 @@
         "help": [
           {
             "id": "local-help",
-            "label": "Agent Observatory Help",
+            "label": "Swarx Help",
             "route": "/help"
           }
         ]
@@ -29,7 +29,31 @@
     "styles": [
       "/shared/styles/app.css"
     ],
-    "scripts": [],
+    "scripts": [
+      "/shared/assets/duvay/duvay-wc.min.js",
+      "/shared/assets/duvay/duvay.min.js",
+      "/shared/assets/chartjs/chart.umd.min.js"
+    ],
+    "scriptSources": {
+      "/shared/assets/duvay/duvay-wc.min.js": {
+        "package": "DuVay",
+        "version": "26.35.01",
+        "license": "MIT",
+        "sha256": "bd252fed5bb8a90f4c4f9eb1ac8d948e8b5c9dcf88e35ccfe30915ba9d2960de"
+      },
+      "/shared/assets/duvay/duvay.min.js": {
+        "package": "DuVay",
+        "version": "26.35.01",
+        "license": "MIT",
+        "sha256": "50ca0fd49f2232e3520f9e3d1fe8efa1fec1948a69e1076d43ed649a09b80d5b"
+      },
+      "/shared/assets/chartjs/chart.umd.min.js": {
+        "package": "Chart.js",
+        "version": "4.5.1",
+        "license": "MIT",
+        "sha256": "48444a82d4edcb5bec0f1965faacdde18d9c17db3063d042abada2f705c9f54a"
+      }
+    },
     "budgets": {
       "script": 1800,
       "style": 1000
@@ -42,8 +66,23 @@
         "rss",
         "inode",
         "codex",
-        "claude"
+        "claude",
+        "qwen",
+        "pi",
+        "goose",
+        "opencode",
+        "gemini"
       ]
+    },
+    "metadata": {
+      "defaults": {
+        "title": "Swarx Agent Observatory"
+      },
+      "routes": {
+        "/help": {
+          "title": "Swarx Help"
+        }
+      }
     }
   }
 }

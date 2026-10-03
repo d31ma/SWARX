@@ -7,6 +7,7 @@ import { ToolPathUtils } from './utils/ToolPathUtils.ts';
 export class NativeHostCustomizer {
   private static readonly FILE_ENCODING: BufferEncoding = 'utf8';
   private static readonly FRAMEWORK_FLAG: string = '-framework';
+  private static readonly SQLITE_LIBRARY_FLAG: string = '-lsqlite3';
   private static readonly SOURCE_PATH: string = 'macos/project/TachyonHost.swift';
   private static readonly COMPANION_PATH: string = 'macos/project/libtachyoncompanion.a';
   private static readonly EXECUTABLE_PATH: string = 'macos/AgentObservatory.app/Contents/MacOS/AgentObservatory';
@@ -20,6 +21,10 @@ export class NativeHostCustomizer {
   private static readonly REPORT_MARKER: string = '"__NATIVE_REPORT_SCRIPT__"';
   private static readonly MINIMUM_OLD: string = 'window.contentMinSize = NSSize(width: 0, height: 0)';
   private static readonly MINIMUM_NEW: string = 'window.contentMinSize = NSSize(width: 900, height: 640)';
+  private static readonly WINDOW_TITLE_OLD: string = 'window.title = "Agent Observatory"';
+  private static readonly WINDOW_TITLE_NEW: string = 'window.title = "Swarx Agent Observatory"';
+  private static readonly MENU_NAME_OLD: string = 'menus.install(NSApplication.shared, window, "Agent Observatory", menuNavigation)';
+  private static readonly MENU_NAME_NEW: string = 'menus.install(NSApplication.shared, window, "Swarx", menuNavigation)';
   private static readonly ACTIVATION: string = '        NSApplication.shared.activate(ignoringOtherApps: true)';
   private static readonly ACTIVE: string = '        Telemetry.shared.record("controller.active")';
   private static readonly ICON_CALL: string = '        NativeApplicationIcon.applyIcon()\n';
@@ -66,7 +71,8 @@ export class NativeHostCustomizer {
     NativeHostCustomizer.requireAnchor(source, NativeHostCustomizer.ACTIVATION);
     NativeHostCustomizer.requireAnchor(source, NativeHostCustomizer.ACTIVE);
     const minimum: string = source.replaceAll(NativeHostCustomizer.MINIMUM_OLD, NativeHostCustomizer.MINIMUM_NEW);
-    const icon: string = NativeHostCustomizer.insertIcon(minimum);
+    const branded: string = NativeHostCustomizer.applyBranding(minimum);
+    const icon: string = NativeHostCustomizer.insertIcon(branded);
     const qa: string = NativeHostCustomizer.insertQa(icon);
     return NativeHostCustomizer.insertLifetime(qa);
   }
@@ -84,7 +90,7 @@ export class NativeHostCustomizer {
       this.source, path.join(this.artifacts, NativeHostCustomizer.COMPANION_PATH),
       path.join(this.root, NativeHostCustomizer.NATIVE_SOURCE, NativeHostCustomizer.ICON_SOURCE), this.verifier,
       path.join(this.root, NativeHostCustomizer.QA_SOURCE, NativeHostCustomizer.LIFETIME_SOURCE),
-      NativeHostCustomizer.FRAMEWORK_FLAG, 'AppKit', NativeHostCustomizer.FRAMEWORK_FLAG, 'WebKit', '-o', path.join(this.artifacts, NativeHostCustomizer.EXECUTABLE_PATH)];
+      NativeHostCustomizer.FRAMEWORK_FLAG, 'AppKit', NativeHostCustomizer.FRAMEWORK_FLAG, 'WebKit', NativeHostCustomizer.SQLITE_LIBRARY_FLAG, '-o', path.join(this.artifacts, NativeHostCustomizer.EXECUTABLE_PATH)];
   }
 
   removeLegacyCollector(): void {
@@ -121,6 +127,23 @@ export class NativeHostCustomizer {
 
   private static embedScript(template: string, literal: string): string {
     return template.replaceAll(NativeHostCustomizer.REPORT_MARKER, (): string => literal);
+  }
+
+  private static applyBranding(source: string): string {
+    const windowPresent: boolean = NativeHostCustomizer.brandingPresent(source, NativeHostCustomizer.WINDOW_TITLE_OLD, NativeHostCustomizer.WINDOW_TITLE_NEW);
+    NativeHostCustomizer.requireBranding(windowPresent);
+    const menuPresent: boolean = NativeHostCustomizer.brandingPresent(source, NativeHostCustomizer.MENU_NAME_OLD, NativeHostCustomizer.MENU_NAME_NEW);
+    NativeHostCustomizer.requireBranding(menuPresent);
+    const window: string = source.replaceAll(NativeHostCustomizer.WINDOW_TITLE_OLD, NativeHostCustomizer.WINDOW_TITLE_NEW);
+    return window.replaceAll(NativeHostCustomizer.MENU_NAME_OLD, NativeHostCustomizer.MENU_NAME_NEW);
+  }
+
+  private static brandingPresent(source: string, previous: string, current: string): boolean {
+    return source.includes(previous) || source.includes(current);
+  }
+
+  private static requireBranding(found: boolean): void {
+    if (!found) throw new Error('Native application branding anchor is missing. Review the generated host before customizing it.');
   }
 
   private static insertIcon(source: string): string {

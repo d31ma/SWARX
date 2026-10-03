@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { test } from 'node:test';
 
 /** @typedef {{dataset: {observatory?: string}, src?: string, defer?: boolean}} FixtureScript */
-/** @typedef {{load: () => void, scripts: FixtureScript[], attributes: Map<string, string>, writes: [string, string][]}} BrowserFixture */
+/** @typedef {{load: () => void, scripts: FixtureScript[], attributes: Map<string, string>, writes: [string, string][], created: string[]}} BrowserFixture */
 
 class ScriptUtilsTest {
   /** @param {string | null} [stored] @param {string} [failure] @returns {BrowserFixture} */
@@ -15,13 +15,15 @@ class ScriptUtilsTest {
     const attributes = new Map();
     /** @type {[string, string][]} */
     const writes = [];
+    /** @type {string[]} */
+    const created = [];
     const context = vm.createContext({
       URL,
       document: {
         /** @param {string} selector @returns {FixtureScript | undefined} */
         querySelector(selector) { return scripts.find(/** @param {FixtureScript} script @returns {boolean} */ script => selector.includes('"' + script.dataset.observatory + '"')); },
-        /** @returns {FixtureScript} */
-        createElement() { return { dataset: {} }; },
+        /** @param {string} tag @returns {FixtureScript} */
+        createElement(tag) { created.push(tag); return { dataset: {} }; },
         head: {
           /** @param {FixtureScript} script @returns {void} */
           append(script) { scripts.push(script); }
@@ -43,29 +45,18 @@ class ScriptUtilsTest {
     const source = readFileSync(url, 'utf8').replace('export ', ' '.repeat('export '.length))
       .replaceAll('import.meta.url', 'assetModuleUrl'.padEnd('import.meta.url'.length));
     vm.runInContext(source + '\nglobalThis.Scripts = ScriptUtils;', context, { filename: url.href });
-    return { load: /** @returns {void} */ () => (/** @type {{load: () => void}} */ (context.Scripts)).load(), scripts, attributes, writes };
+    return { load: /** @returns {void} */ () => (/** @type {{load: () => void}} */ (context.Scripts)).load(), scripts, attributes, writes, created };
   }
 
-  /** @param {BrowserFixture} browser @param {number} index @returns {string} */
-  static scriptSource(browser, index) {
-    const source = browser.scripts[index].src;
-    assert.ok(source);
-    return source;
-  }
 }
 
-test('local vendor scripts load once with deferred execution', /** @returns {void} */ () => {
+test('repeated load preserves the saved theme without manually injecting vendor scripts', /** @returns {void} */ () => {
   const browser = ScriptUtilsTest.browser('light');
   browser.load();
   browser.load();
-  assert.deepEqual(browser.scripts.map(/** @param {FixtureScript} script @returns {string | undefined} */ script => script.dataset.observatory), ['wc', 'behaviours', 'charts']);
-  assert.equal(browser.scripts[0].defer, true);
-  assert.equal(browser.scripts[1].defer, true);
-  assert.equal(browser.scripts[2].defer, true);
-  assert.match(ScriptUtilsTest.scriptSource(browser, 0), /^file:.*\/shared\/assets\/duvay\//);
-  assert.match(ScriptUtilsTest.scriptSource(browser, 1), /^file:.*\/shared\/assets\/duvay\//);
-  assert.match(ScriptUtilsTest.scriptSource(browser, 2), /^file:.*\/shared\/assets\/chartjs\//);
   assert.equal(browser.attributes.get('w-theme'), 'light');
+  assert.deepEqual(browser.created, []);
+  assert.deepEqual(browser.scripts, []);
 });
 
 test('absent theme defaults to dark while an explicit empty theme is preserved', /** @returns {void} */ () => {
@@ -82,7 +73,8 @@ test('unavailable theme storage read still applies the dark fallback', /** @retu
   const browser = ScriptUtilsTest.browser('light', 'read');
   browser.load();
   assert.equal(browser.attributes.get('w-theme'), 'dark');
-  assert.equal(browser.scripts.length, 3);
+  assert.deepEqual(browser.scripts, []);
+  assert.deepEqual(browser.created, []);
   assert.deepEqual(browser.writes, []);
 });
 
@@ -90,6 +82,26 @@ test('unavailable theme storage write still applies the dark fallback', /** @ret
   const browser = ScriptUtilsTest.browser('light', 'write');
   browser.load();
   assert.equal(browser.attributes.get('w-theme'), 'dark');
-  assert.equal(browser.scripts.length, 3);
+  assert.deepEqual(browser.scripts, []);
+  assert.deepEqual(browser.created, []);
   assert.deepEqual(browser.writes, []);
+});
+
+
+test('an explicit automatic theme stays selected and stored', /** @returns {void} */ () => {
+  const browser = ScriptUtilsTest.browser('auto');
+  browser.load();
+  assert.equal(browser.attributes.get('w-theme'), 'auto');
+  assert.deepEqual(browser.writes, [['w-theme', 'auto']]);
+});
+
+test('fresh repeated load leaves the same dark theme without adding script nodes', /** @returns {void} */ () => {
+  const browser = ScriptUtilsTest.browser();
+  browser.load();
+  const first = browser.attributes.get('w-theme');
+  browser.load();
+  assert.equal(first, 'dark');
+  assert.equal(browser.attributes.get('w-theme'), first);
+  assert.deepEqual(browser.created, []);
+  assert.deepEqual(browser.scripts, []);
 });

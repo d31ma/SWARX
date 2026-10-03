@@ -7,9 +7,9 @@ import {userInfo} from 'node:os';
 
 class NativeMenusTest {
   /** @type {string} */
-  static APP_NAME = 'Agent Observatory';
+  static APP_NAME = 'Swarx';
   /** @type {string} */
-  static HELP_LABEL = 'Agent Observatory Help';
+  static HELP_LABEL = 'Swarx Help';
   /** @type {string} */
   static EVENT_SOCKET = '/tmp/agent-observatory-' + userInfo().uid + '/hooks-native.sock';
   /** @type {number} */

@@ -9,6 +9,10 @@ pub struct NativeSessionResourceView {
     pub source: String,
     pub known: bool,
     pub captured_at: Option<f64>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub provider: Option<String>,
     #[serde(rename = "sourceRecordCount")]
     pub source_record_count: i64,
     pub commands: Vec<NativeRuntimeView>,
@@ -20,4 +24,6 @@ pub struct NativeSessionResourceView {
     pub command_count: i64,
     #[serde(rename = "processCount")]
     pub process_count: i64,
+    #[serde(rename = "harnessHeader", default)]
+    pub harness_header: bool,
 }

@@ -10,5 +10,9 @@ pub struct NativeSessionView {
     #[serde(default)]
     pub captured_at: Option<f64>,
     pub known: bool,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub provider: Option<String>,
     pub agents: Vec<NativeLogicalAgentView>,
 }

@@ -7,5 +7,7 @@ export interface SessionView {
   source: string;
   captured_at: number | null;
   known: boolean;
+  model: string | null;
+  provider: string | null;
   agents: LogicalAgentView[];
 }

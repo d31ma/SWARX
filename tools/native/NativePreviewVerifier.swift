@@ -235,12 +235,19 @@ final class NativePreviewVerifier {
     private func evaluate(_ step: (label: String, action: String, section: String, mode: String, size: NSSize, check: String)) async throws -> Any {
         let input: [String: Any] = [Self.labelKey: step.label, Self.actionKey: step.action, "section": step.section,
                                   "mode": step.mode, Self.widthKey: step.size.width, Self.heightKey: step.size.height,
-                                  "check": step.check, "agentRecordId": ProcessInfo.processInfo.environment["OBSERVATORY_QA_AGENT_RECORD_ID"] ?? "", "actionName": ProcessInfo.processInfo.environment["OBSERVATORY_QA_ACTION_NAME"] ?? "offline_ui_validation"]
+                                  "check": step.check, "agentRecordId": Self.environmentValue("OBSERVATORY_QA_AGENT_RECORD_ID", fallback: Self.emptyText), "actionName": Self.environmentValue("OBSERVATORY_QA_ACTION_NAME", fallback: "offline_ui_validation"),
+                                  "sessionId": Self.environmentValue("OBSERVATORY_QA_SESSION_ID", fallback: Self.emptyText),
+                                  "taskId": Self.environmentValue("OBSERVATORY_QA_TASK_ID", fallback: Self.emptyText),
+                                  "actionRecordId": Self.environmentValue("OBSERVATORY_QA_ACTION_RECORD_ID", fallback: Self.emptyText)]
         let script: String = Self.reportScript + "\nreturn await NativePreviewReport.verify(input, iconLoaded);"
         return try await operation { (completion: @escaping @MainActor @Sendable (Result<Any, Error>) -> Void) -> Void in
             self.view.callAsyncJavaScript(script, arguments: ["input": input, Self.iconLoadedKey: NativeApplicationIcon.isLoaded()],
                                           in: nil, in: .page, completionHandler: completion)
         }
+    }
+
+    private static func environmentValue(_ name: String, fallback: String) -> String {
+        return ProcessInfo.processInfo.environment[name] ?? fallback
     }
 
     private func snapshot() async throws -> NSImage {

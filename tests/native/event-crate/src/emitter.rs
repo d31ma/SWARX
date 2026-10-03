@@ -1,4 +1,4 @@
-use event_slice::{ProcessIdentityReader, models, services};
+use event_slice::{ClaudeHookAdapter, ProcessIdentityReader, models, services};
 mod entry {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),

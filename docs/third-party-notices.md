@@ -23,8 +23,10 @@ inventory. No compiler or runtime distribution is prepared here.
 
 Rust dependencies and development-only packages are separate from these bundled
 browser assets. Their transitive notices must be checked against the actual
-resolved dependencies for any future binary distribution. This preparation has
-no JavaScript dependency lockfile and does not claim that audit is complete.
+resolved dependencies for any future binary distribution. The authentic
+`app/package-lock.json` now records TypeScript7.0.2 and its optional platform
+packages; lock provenance and frozen dry-runs do not complete a future binary
+or transitive-license audit. See [setup](setup.md) for its verified scope.
 
 No project-wide application license was invented. Public hosting policy and any
 license choice remain separate from preserving mandatory third-party notices.

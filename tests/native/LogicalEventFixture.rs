@@ -1,7 +1,7 @@
 use super::TestClock;
-use event_slice::EventSource;
 use event_slice::models::NativeLogicalReceipt;
 use event_slice::services::{LogicalEventClientService, LogicalEventService};
+use event_slice::EventSource;
 use std::fs;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;

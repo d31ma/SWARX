@@ -5,19 +5,23 @@ import test from 'node:test';
 
 /** @typedef {{x: number, y: number, width: number, height: number}} QaRectangle */
 /** @typedef {QaRectangle & {top: number, bottom: number}} QaBounds */
-/** @typedef {{id: string, name: string, status: string, source: string, task: string, action?: string}} QaLogicalRecord */
-/** @typedef {{columns?: number, logicalRows?: QaLogicalRecord[], navigationDelay?: number, noGroups?: boolean, activityCards?: number, overflow?: boolean, width?: number, height?: number, nativeFailure?: boolean, advanceSamples?: boolean, advancePaused?: boolean, replaceOnLayout?: boolean}} QaOptions */
+/** @typedef {{id: string, name: string, status: string, source: string, task: string, action?: string, sessionId?: string, taskId?: string, provider?: string, rawSource?: string}} QaLogicalRecord */
+/** @typedef {{id: string, agent: string, sessionId: string, taskId: string, name: string, status: string, source: string, running: boolean}} QaActionRecord */
+/** @typedef {{logicalText?: string, activityText?: string, overflowScroll?: boolean, actions?: QaActionRecord[], columns?: number, logicalRows?: QaLogicalRecord[], navigationDelay?: number, noGroups?: boolean, activityCards?: number, overflow?: boolean, width?: number, height?: number, nativeFailure?: boolean, advanceSamples?: boolean, advancePaused?: boolean, replaceOnLayout?: boolean}} QaOptions */
 /** @typedef {{section: string, mode: string, samples: number, live: string, clock: number, columns: number, activeGroup: number, groupClicks: number, groupPending: boolean, groupDropped: boolean}} QaState */
 /** @typedef {{dataset: Record<string, string | undefined>}} QaBody */
-/** @typedef {{label: string, action: string, check: string, section: string, mode: string, width: number, height: number, actionName?: string, agentRecordId?: string}} QaInput */
+/** @typedef {{label: string, action: string, check: string, section: string, mode: string, width: number, height: number, actionName?: string, agentRecordId?: string, sessionId?: string, taskId?: string, actionRecordId?: string}} QaInput */
 /** @typedef {{verify: (input: QaInput, iconLoaded: boolean) => Promise<string>}} QaReporter */
 /** @typedef {{selected: QaElement | null, selectNodeContents: (element: QaElement) => void, getBoundingClientRect: () => QaBounds}} QaRange */
 /** @typedef {{body: QaBody, documentElement: {scrollWidth: number, scrollHeight: number}, createRange: () => QaRange, querySelectorAll: (selector: string) => QaElement[], querySelector: (selector: string) => QaElement | null}} QaDocument */
-/** @typedef {{report: QaReporter, state: QaState, body: QaBody, graphCanvases: QaElement[], graphTabs: QaElement[], scrolls: QaElement[], graphs: QaElement[], context: import('node:vm').Context}} QaEnvironment */
+/** @typedef {{report: QaReporter, state: QaState, body: QaBody, graphCanvases: QaElement[], scrolls: QaElement[], graphs: QaElement[], context: import('node:vm').Context}} QaEnvironment */
 /** @typedef {{id: string, scale: string}} QaScale */
 /** @typedef {{id: string, top: number, left: number}} QaOffset */
 /** @typedef {{baseline: {before: QaScale[], after: QaScale[], scroll: QaOffset | null}, current: QaScale[], scroll: QaOffset | null}} QaInteraction */
 /** @typedef {{verification: {success: boolean}, logicalRecords: QaLogicalRecord[], interaction: QaInteraction | null, section: string, width: number, height: number, tableLayout: {columns: number[], cards: QaRectangle[]}, historyLayout: {columns: number[], cards: QaRectangle[]}, sampleCount: number, live: string, chartPoints: number, chartUnit: string}} QaResult */
+
+/** Mirrors GraphService: width is the unscaled viewBox width times zoom. @param {QaElement} canvas @param {number} zoom @returns {void} */
+function zoomCanvas(canvas,zoom){canvas.attributes.viewBox='0 0 100 100';canvas.attributes.width=String(100*zoom);}
 
 class QaElement {
   /** @param {string} name @param {QaRectangle} [rect] */
@@ -55,8 +59,14 @@ class QaElement {
   getBoundingClientRect(){return {...this.rect,top:this.rect.y,bottom:this.rect.y+this.rect.height};}
   /** @param {string} name @returns {string | null} */
   getAttribute(name){return this.attributes[name]??null;}
+  /** @param {string} name @returns {boolean} */
+  hasAttribute(name){return Object.hasOwn(this.attributes,name);}
+  /** @returns {void} */
+  scrollIntoView(){}
   /** @param {string} selector @returns {QaElement | null} */
   querySelector(selector){return this.query(selector);}
+  /** @param {string} selector @returns {QaElement[]} */
+  querySelectorAll(selector){const element=this.query(selector);return element===null?[]:[element];}
   /** @returns {boolean} */
   dispatchEvent(){return true;}
 }
@@ -76,6 +86,10 @@ function environment(options={}) {
     const row=new QaElement('agent');
     row.attributes['data-agent']=record.id;
     row.dataset.agent=record.id;
+    row.dataset.session=record.sessionId??'00000000-0000-4000-8000-000000000001';
+    row.dataset.task=record.taskId??'fixture-task';
+    row.dataset.family=record.provider??'Codex';
+    row.dataset.source=record.rawSource??record.source;
     row.query=/** @param {string} selector @returns {QaElement | null} */ selector=>{
       const fields=/** @type {Record<string, string>} */ ({h3:record.name,'.status-pill':record.status,'.feed-time':record.source,'.assignment strong':record.task});
       if(selector==='.current-action'||selector==='.current-action strong')return record.action?new QaElement(record.action):null;
@@ -83,26 +97,37 @@ function environment(options={}) {
     };
     return row;
   });
+  const actionRows=(options.actions??[]).map(/** @param {QaActionRecord} record @returns {QaElement} */ record=>{
+    const row=new QaElement(record.name+' '+record.status+' Measured by the reporting caller');
+    row.dataset={action:record.id,agent:record.agent,session:record.sessionId,task:record.taskId,source:record.source,status:record.status,running:String(record.running)};
+    row.query=/** @param {string} selector @returns {QaElement | null} */ selector=>{
+      if(selector==='.action-history-heading strong')return new QaElement(record.name);
+      if(selector==='.status-pill')return new QaElement(record.status);
+      if(selector==='.action-elapsed'&&record.running)return new QaElement('Elapsed 1s');
+      return null;
+    };
+    return row;
+  });
   canvas.attributes['data-points']='12';
   const scrolls=[new QaElement('scroll'),new QaElement('scroll')];
-  scrolls[0].scrollHeight=600;
+  scrolls[0].scrollHeight=options.overflowScroll===false?200:600;
   scrolls[0].dataset.group='fixture-a';
   scrolls[1].dataset.group='fixture-b';
   const graphs=[new QaElement('graph'),new QaElement('graph')];
   const graphCanvases=[new QaElement('canvas'),new QaElement('canvas')];
-  graphCanvases[0].style.transform='scale(1)';
-  graphCanvases[1].style.transform='scale(1)';
+  zoomCanvas(graphCanvases[0],1);
+  zoomCanvas(graphCanvases[1],1);
   graphs[0].dataset.group='fixture-a';
   graphs[1].dataset.group='fixture-b';
   graphs.forEach(/** @param {QaElement} graph @param {number} index @returns {void} */ (graph,index)=>{
     graph.query=/** @param {string} selector @returns {QaElement} */ selector=>{
       if(selector==='.graph-canvas')return graphCanvases[index];
+      if(selector==='.graph-name')return new QaElement('Fixture process');
       const button=new QaElement('zoom');
-      button.click=/** @returns {void} */ ()=>{graphCanvases[index].style.transform='scale(1.1)';};
+      button.click=/** @returns {void} */ ()=>{zoomCanvas(graphCanvases[index],1.1);};
       return button;
     };
   });
-  const graphTabs=graphs.map(/** @param {QaElement} graph @param {number} index @returns {QaElement} */ (graph,index)=>{const tab=new QaElement('group '+index);tab.dataset.graphGroup=graph.dataset.group;tab.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.activeGroup=index;state.groupClicks++;});return tab;});
   const navigation=["What's running",'Processes','Resource history','Activity'].map(/** @param {string} name @returns {QaElement} */ name=>{
     const element=new QaElement(name);
     element.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.section=name;});
@@ -113,21 +138,21 @@ function environment(options={}) {
     element.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.mode=name.toLowerCase();});
     return element;
   });
-  const statusButtons=/** @returns {QaElement[]} */ ()=>{
-    const button=new QaElement(state.live==='Paused'?'Resume':'Pause');
-    button.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.live=state.live==='Paused'?'Live':'Paused';});
-    return [button];
-  };
   const queryAll=/** @param {string} selector @returns {QaElement[]} */ selector=>{
     if(selector==='.logical-agent-row')return logicalRows;
+    if(selector==='.action-history-row')return actionRows;
     if(selector==='.nav-item')return state.clock >= (options.navigationDelay ?? 0) ? navigation : [];
     if(selector==='.view-tabs w-btn')return tabButtons;
-    if(selector==='.status-controls w-btn')return statusButtons();
-    if(selector==='[role=tab][data-graph-group]')return options.noGroups?[]:graphTabs;
-    if(selector==='.graph-group')return options.noGroups||state.groupPending?[]:[graphs[state.activeGroup]];
-    if(selector==='.group-graph-scroll')return [scrolls[state.activeGroup]];
-    if(selector==='.session-list .table-branch')return cards;
-    if(selector==='.history-grid .history-card')return cards;
+    if(selector==='.status-controls w-btn')return [];
+    if(selector==='[role=tab][data-graph-group]')return [];
+    if(selector==='.session-process-card')return options.noGroups?[]:graphs;
+    if(selector==='.session-process-pick')return cards;
+    if(selector==='.graph-group')return options.noGroups||state.groupPending?[]:graphs;
+    if(selector==='.group-graph-scroll')return scrolls;
+    if(selector==='.session-process-grid .session-process-card')return cards;
+    if(selector==='.context-resource-grid .session-process-card')return cards;
+    if(selector==='.session-history-grid .session-history-card')return cards;
+    if(selector==='.context-history-grid .history-card')return cards;
     if(selector==='.activity-grid .activity-card')return cards.slice(0, options.activityCards ?? 1);
     if(selector==='.history-card')return cards;
     if(selector==='.graph-node')return graphs;
@@ -147,8 +172,11 @@ function environment(options={}) {
     querySelectorAll:queryAll,
     querySelector:/** @param {string} selector @returns {QaElement | null} */ selector=>{
       if(selector==='.nav-item.selected')return new QaElement(state.section);
-      if(selector==='.session-list'){table.className='session-list mode-'+state.mode;return table;}
-      if(selector==='.history-grid')return history;
+      if(selector==='.logical-panel')return new QaElement(options.logicalText??'');
+      if(selector==='.activity-overview')return new QaElement(options.activityText??'');
+      if(selector==='.session-process-card'){table.className='session-process-card mode-'+state.mode;return table;}
+      if(selector==='.session-process-grid'||selector==='.context-resource-grid')return table;
+      if(selector==='.session-history-grid'||selector==='.context-history-grid')return history;
       if(selector==='.activity-grid')return history;
       if(selector==='.sidebar')return sidebar;
       if(selector==='.live-state')return new QaElement(state.live);
@@ -161,12 +189,12 @@ function environment(options={}) {
     innerWidth:options.width??1240,innerHeight:options.height??850,
     getComputedStyle:/** @returns {{gridTemplateColumns: string}} */ ()=>({gridTemplateColumns:Array.from({length:state.columns},/** @returns {string} */ ()=> '400px').join(' ')}),
     performance:{now:/** @returns {number} */ ()=>state.clock},Event,
-    setTimeout:/** @param {() => void} callback @param {number} milliseconds @returns {number} */ (callback,milliseconds)=>{queueMicrotask(/** @returns {void} */ ()=>{state.clock+=milliseconds;if(options.advanceSamples&&(state.live!=='Paused'||options.advancePaused))state.samples++;state.groupPending=false;if(options.replaceOnLayout&&state.groupClicks===1&&!state.groupDropped){state.groupPending=true;state.groupDropped=true;}callback();});return 1;},
+    setTimeout:/** @param {() => void} callback @param {number} milliseconds @returns {number} */ (callback,milliseconds)=>{queueMicrotask(/** @returns {void} */ ()=>{state.clock+=milliseconds;if(options.advanceSamples&&(state.live!=='Paused'||options.advancePaused))state.samples++;state.groupPending=false;if(options.replaceOnLayout&&!state.groupDropped){state.groupPending=true;state.groupDropped=true;}callback();});return 1;},
     requestAnimationFrame:/** @param {() => void} callback @returns {number} */ callback=>{queueMicrotask(callback);return 1;}});
   const source=fs.readFileSync(new URL('../tools/native/NativePreviewReport.js',import.meta.url),'utf8');
   /** @type {QaReporter} */
   const report=vm.runInContext(source+'\nNativePreviewReport;',context);
-  return {report,state,body,graphCanvases,graphTabs,scrolls,graphs,context};
+  return {report,state,body,graphCanvases,scrolls,graphs,context};
 }
 
 /** @param {string} [action] @param {string} [check] @param {number} [width] @param {number} [height] @returns {QaInput} */
@@ -214,7 +242,7 @@ test('missing roster provenance does not satisfy fresh roster verification',/** 
   await assert.rejects(context.report.verify(request,true),/timed out/);
 });
 
-test('zoom verification waits through a poll replacing the active graph',/** @returns {Promise<void>} */ async()=>{
+test('zoom verification waits through a poll replacing the current graph',/** @returns {Promise<void>} */ async()=>{
   const context=environment({replaceOnLayout:true,advanceSamples:true});
   await tree(context);
   const report=parse(await context.report.verify(input('exercise','zoom'),true));
@@ -287,53 +315,51 @@ test('independent zoom and group pan survive three externally observed sample up
   assert.equal(scroll(next).top,120);
 });
 
-test('live tab reordering preserves verification of the original groups and scrolled selection', /** @returns {Promise<void>} */ async () => {
+test('live grid reordering preserves verification of the original groups and scrolled selection', /** @returns {Promise<void>} */ async () => {
   const context=environment({advanceSamples:true});
   await tree(context);
   const baseline=parse(await context.report.verify(input('exercise','zoom'),true));
-  context.graphTabs.reverse();
+  context.graphs.reverse();
   const report=parse(await context.report.verify(input('polls','polls'),true));
   assert.deepEqual(interaction(report).current,interaction(baseline).baseline.after);
   assert.deepEqual(interaction(report).scroll,interaction(baseline).baseline.scroll);
-  assert.equal(context.state.activeGroup,0);
+  assert.equal(context.graphs[0].dataset.group,'fixture-b');
 });
 
 test('missing original group fails instead of verifying a replacement position', /** @returns {Promise<void>} */ async () => {
   const context=environment({advanceSamples:true});
   await tree(context);
   await context.report.verify(input('exercise','zoom'),true);
-  context.graphTabs.shift();
+  context.graphs.shift();
   await assert.rejects(context.report.verify(input('polls','polls'),true),/process group fixture-a/);
 });
 
 test('changed birth-keyed group identity cannot substitute for the baseline group', /** @returns {Promise<void>} */ async () => {
   const context=environment({advanceSamples:true});
-  context.graphTabs[0].dataset.graphGroup='codex:41:100:7';
   context.graphs[0].dataset.group='codex:41:100:7';
   context.scrolls[0].dataset.group='codex:41:100:7';
   await tree(context);
   await context.report.verify(input('exercise','zoom'),true);
-  context.graphTabs[0].dataset.graphGroup='codex:41:101:7';
   context.graphs[0].dataset.group='codex:41:101:7';
   context.scrolls[0].dataset.group='codex:41:101:7';
   await assert.rejects(context.report.verify(input('polls','polls'),true),/process group codex:41:100:7/);
 });
 
-test('lost original group zoom still fails after tab reordering', /** @returns {Promise<void>} */ async () => {
+test('lost original group zoom still fails after grid reordering', /** @returns {Promise<void>} */ async () => {
   const context=environment({advanceSamples:true});
   await tree(context);
   await context.report.verify(input('exercise','zoom'),true);
-  context.graphTabs.reverse();
-  context.graphCanvases[0].style.transform='scale(1)';
+  context.graphs.reverse();
+  zoomCanvas(context.graphCanvases[0],1);
   await assert.rejects(context.report.verify(input('polls','polls'),true),/independent zoom or zoom preservation/);
 });
 
-test('other original group zoom change still fails after tab reordering', /** @returns {Promise<void>} */ async () => {
+test('other original group zoom change still fails after grid reordering', /** @returns {Promise<void>} */ async () => {
   const context=environment({advanceSamples:true});
   await tree(context);
   await context.report.verify(input('exercise','zoom'),true);
-  context.graphTabs.reverse();
-  context.graphCanvases[1].style.transform='scale(1.2)';
+  context.graphs.reverse();
+  zoomCanvas(context.graphCanvases[1],1.2);
   await assert.rejects(context.report.verify(input('polls','polls'),true),/independent zoom or zoom preservation/);
 });
 
@@ -345,24 +371,12 @@ test('lost original group pan still fails when zoom is preserved', /** @returns 
   await assert.rejects(context.report.verify(input('polls','polls'),true),/group pan changed/);
 });
 
-test('pause holds sample count and resume waits for an externally supplied new sample',/** @returns {Promise<void>} */ async()=>{
-  const context=environment({advanceSamples:true});
-  await tree(context);
-  const paused=parse(await context.report.verify(input('pause','paused'),true));
-  const held=parse(await context.report.verify(input('hold','hold'),true));
-  const resumed=parse(await context.report.verify(input('resume','resumed'),true));
-  assert.equal(held.sampleCount,paused.sampleCount);
-  assert.equal(held.live,'Paused');
-  assert.ok(resumed.sampleCount>held.sampleCount);
-  assert.equal(resumed.live,'Live');
-});
-
-test('sample movement during paused hold is reported as a failure',/** @returns {Promise<void>} */ async()=>{
-  const context=environment({advanceSamples:true,advancePaused:true});
-  await tree(context);
-  await context.report.verify(input('pause','paused'),true);
-  await assert.rejects(context.report.verify(input('hold','hold'),true),/paused sample count changed/);
-});
+for(const action of ['pause','resume','hold']) {
+  test('unsupported '+action+' fails without claiming a native control exists',/** @returns {Promise<void>} */ async()=>{
+    const context=environment({advanceSamples:true});
+    await assert.rejects(context.report.verify(input(action,action),true),/Unsupported native QA action/);
+  });
+}
 
 test('history report records real DOM chart values and equal columns',/** @returns {Promise<void>} */ async()=>{
   const context=environment();
@@ -382,7 +396,7 @@ test('native startup waits for asynchronous navigation before pressing a control
   assert.ok(context.state.clock >= 400);
 });
 
-test('wide table verifies four actual equal tracks',/** @returns {Promise<void>} */ async()=>{const context=environment({width:1680,columns:4});const report=parse(await context.report.verify(input('table','table',1680,850),true));assert.equal(report.tableLayout.columns.length,4);assert.equal(report.tableLayout.cards.length,4);});
+test('wide session table preserves two readable tracks',/** @returns {Promise<void>} */ async()=>{const context=environment({width:1680,columns:2});const report=parse(await context.report.verify(input('table','table',1680,850),true));assert.equal(report.tableLayout.columns.length,2);assert.equal(report.tableLayout.cards.length,4);});
 
 test('agent capture observes live updates without requiring process tree zoom state', /** @returns {Promise<void>} */ async () => {
   const context = environment({advanceSamples:true});
@@ -404,52 +418,122 @@ test('capture follows the actual user window size while fixed viewport checks st
 });
 
 test('current-work check accepts the verified session-qualified coordinator ID', /** @returns {Promise<void>} */ async () => {
-  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'/root',status:'running',source:'fixture only',task:'fixture task',action:'current_validation'}]});
-  const request={...input('running','current-work-live'),section:"What's running",mode:'',actionName:'current_validation'};
+  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'/root',status:'running',source:'Coordinator-reported team roster',task:'fixture task',action:'current_validation'}]});
+  const request={...focusedInput('current-work-live'),section:"What's running",mode:'',actionName:'current_validation'};
   const report=parse(await context.report.verify(request,true));
   assert.equal(report.verification.success,true);
   assert.equal(report.logicalRecords[0].id,'coord:00000000-0000-4000-8000-000000000001:/root');
 });
 
 test('current-work check does not claim an unqualified same-name coordinator', /** @returns {Promise<void>} */ async () => {
-  const context=environment({logicalRows:[{id:'/root',name:'/root',status:'running',source:'fixture only',task:'fixture task',action:'current_validation'}]});
-  const request={...input('running','current-work-hidden'),section:"What's running",mode:'',actionName:'current_validation'};
+  const context=environment({logicalRows:[{id:'/root',name:'/root',status:'running',source:'Coordinator-reported team roster',task:'fixture task',action:'current_validation'}]});
+  const request={...focusedInput('current-work-hidden'),section:"What's running",mode:'',actionName:'current_validation'};
   const report=parse(await context.report.verify(request,true));
   assert.equal(report.verification.success,true);
 });
 
 test('task-only check accepts an active assignment without command fields', /** @returns {Promise<void>} */ async () => {
-  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'/root',status:'active',source:'fixture only',task:'fixture task'}]});
-  const request={...input('running','current-task-only'),section:"What's running",mode:''};
+  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'/root',status:'active',source:'Coordinator-reported team roster',task:'fixture task'}]});
+  const request={...focusedInput('current-task-only'),section:"What's running",mode:''};
   const report=parse(await context.report.verify(request,true));
   assert.equal(report.verification.success,true);
   assert.equal(report.logicalRecords[0].status,'active');
 });
 
 test('task-only check rejects a row without an assigned task', /** @returns {Promise<void>} */ async () => {
-  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'/root',status:'active',source:'fixture only',task:''}]});
-  const request={...input('running','current-task-only'),section:"What's running",mode:''};
+  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'/root',status:'active',source:'Coordinator-reported team roster',task:''}]});
+  const request={...focusedInput('current-task-only'),section:"What's running",mode:''};
   await assert.rejects(context.report.verify(request,true),/timed out/);
 });
 
 test('task-only check rejects a card still showing a command', /** @returns {Promise<void>} */ async () => {
-  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'/root',status:'running',source:'fixture only',task:'fixture task',action:'reported_action'}]});
-  const request={...input('running','current-task-only'),section:"What's running",mode:''};
+  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'/root',status:'running',source:'Coordinator-reported team roster',task:'fixture task',action:'reported_action'}]});
+  const request={...focusedInput('current-task-only'),section:"What's running",mode:''};
   await assert.rejects(context.report.verify(request,true),/timed out/);
 });
 
 test('current-work verifier matches explicitly supplied session-qualified identity', /** @returns {Promise<void>} */ async () => {
   const explicit='coord:00000000-0000-4000-8000-000000000002:/root/fixture_worker';
-  const context=environment({logicalRows:[{id:explicit,name:'Fixture worker',status:'running',source:'synthetic fixture only',task:'fixture task',action:'fixture_action'}]});
-  const request={...input('running','current-work-live'),section:"What's running",mode:'',actionName:'fixture_action',agentRecordId:explicit};
+  const context=environment({logicalRows:[{id:explicit,sessionId:'00000000-0000-4000-8000-000000000002',name:'Fixture worker',status:'running',source:'Coordinator-reported team roster',task:'fixture task',action:'fixture_action'}]});
+  const request={...focusedInput('current-work-live'),section:"What's running",mode:'',actionName:'fixture_action',agentRecordId:explicit,sessionId:'00000000-0000-4000-8000-000000000002'};
   const report=parse(await context.report.verify(request,true));
   assert.equal(report.verification.success,true);
   assert.equal(report.logicalRecords[0].id,explicit);
 });
 
 test('current-work verifier refuses an unconfigured coordinator identity', /** @returns {Promise<void>} */ async () => {
-  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'Fixture worker',status:'running',source:'synthetic fixture only',task:'fixture task',action:'fixture_action'}]});
+  const context=environment({logicalRows:[{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'Fixture worker',status:'running',source:'Coordinator-reported team roster',task:'fixture task',action:'fixture_action'}]});
   delete context.body.dataset.qaAgentId;
   const request={...input('running','current-work-live'),section:"What's running",mode:'',actionName:'fixture_action'};
-  await assert.rejects(context.report.verify(request,true), /timed out/);
+  delete request.agentRecordId;
+  await assert.rejects(context.report.verify(request,true), /identity|timed out/);
+});
+
+/** @param {string} check @returns {QaInput} */
+function focusedInput(check) {
+  return {...input('running',check),section:"What's running",mode:'',agentRecordId:'coord:00000000-0000-4000-8000-000000000001:/root',sessionId:'00000000-0000-4000-8000-000000000001',taskId:'fixture-task',actionRecordId:'fixture-action',actionName:'fixture_action'};
+}
+
+for(const changed of /** @type {('agent'|'sessionId'|'taskId'|'id'|'source'|'status')[]} */ (['agent','sessionId','taskId','id','source','status'])) {
+  test('completed history cannot be satisfied by a different '+changed,/** @returns {Promise<void>} */ async()=>{
+    const action={id:'fixture-action',agent:'coord:00000000-0000-4000-8000-000000000001:/root',sessionId:'00000000-0000-4000-8000-000000000001',taskId:'fixture-task',name:'fixture_action',status:'completed',source:'Coordinator-reported team roster',running:false};
+    action[changed]='other-fixture';
+    const context=environment({actions:[action]});
+    const request={...focusedInput('current-work-completed'),action:'activity',section:'Activity'};
+    await assert.rejects(context.report.verify(request,true),/timed out/);
+  });
+}
+
+test('completed history accepts only the caller-supplied agent session task and execution',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({actions:[{id:'fixture-action',agent:'coord:00000000-0000-4000-8000-000000000001:/root',sessionId:'00000000-0000-4000-8000-000000000001',taskId:'fixture-task',name:'fixture_action',status:'completed',source:'Coordinator-reported team roster',running:false}]});
+  const request={...focusedInput('current-work-completed'),action:'activity',section:'Activity'};
+  const report=parse(await context.report.verify(request,true));
+  assert.equal(report.verification.success,true);
+});
+
+for(const changed of /** @type {('sessionId'|'taskId'|'rawSource')[]} */ (['sessionId','taskId','rawSource'])) {
+  test('task-only report refuses mismatched '+changed,/** @returns {Promise<void>} */ async()=>{
+    const record={id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'Fixture agent',status:'active',source:'Coordinator-reported team roster',task:'Fixture task',sessionId:'00000000-0000-4000-8000-000000000001',taskId:'fixture-task',rawSource:'Coordinator-reported team roster'};
+    record[changed]='';
+    const context=environment({logicalRows:[record]});
+    await assert.rejects(context.report.verify(focusedInput('current-task-only'),true),/timed out/);
+  });
+}
+
+test('unfinished historical running action is not a current running execution',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({actions:[{id:'fixture-action',agent:'coord:00000000-0000-4000-8000-000000000001:/root',sessionId:'00000000-0000-4000-8000-000000000001',taskId:'fixture-task',name:'fixture_action',status:'running',source:'Coordinator-reported team roster',running:false}]});
+  const request={...focusedInput('action-running'),action:'activity',section:'Activity'};
+  await assert.rejects(context.report.verify(request,true),/timed out/);
+});
+
+test('verified current running action records exact ownership',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({actions:[{id:'fixture-action',agent:'coord:00000000-0000-4000-8000-000000000001:/root',sessionId:'00000000-0000-4000-8000-000000000001',taskId:'fixture-task',name:'fixture_action',status:'running',source:'Coordinator-reported team roster',running:true}]});
+  const request={...focusedInput('action-running'),action:'activity',section:'Activity'};
+  const report=parse(await context.report.verify(request,true));
+  assert.equal(report.verification.success,true);
+});
+
+test('pan verification requires a real overflowing process viewport',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({overflowScroll:false,advanceSamples:true});
+  await tree(context);
+  await assert.rejects(context.report.verify(input('exercise','zoom'),true),/overflowing real process tree/);
+});
+
+test('hidden owned task does not reject another caller label containing stale',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({logicalText:'Another active task: stale_cleanup',logicalRows:[{id:'other-fixture',name:'Other fixture',status:'active',source:'Coordinator-reported team roster',task:'stale_cleanup'}]});
+  const report=parse(await context.report.verify(focusedInput('current-work-hidden'),true));
+  assert.equal(report.verification.success,true);
+});
+
+test('genuine completed stale_cleanup label is preserved without a false freshness failure',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({activityText:'Retained action: stale_cleanup',actions:[{id:'fixture-action',agent:'coord:00000000-0000-4000-8000-000000000001:/root',sessionId:'00000000-0000-4000-8000-000000000001',taskId:'fixture-task',name:'stale_cleanup',status:'completed',source:'Coordinator-reported team roster',running:false}]});
+  const request={...focusedInput('current-work-completed'),action:'activity',section:'Activity',actionName:'stale_cleanup'};
+  const report=parse(await context.report.verify(request,true));
+  assert.equal(report.verification.success,true);
+});
+
+test('actual stale action status still cannot prove completion',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({actions:[{id:'fixture-action',agent:'coord:00000000-0000-4000-8000-000000000001:/root',sessionId:'00000000-0000-4000-8000-000000000001',taskId:'fixture-task',name:'fixture_action',status:'stale',source:'Coordinator-reported team roster',running:false}]});
+  const request={...focusedInput('current-work-completed'),action:'activity',section:'Activity'};
+  await assert.rejects(context.report.verify(request,true),/timed out/);
 });

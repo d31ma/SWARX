@@ -20,6 +20,14 @@ export default class GraphService {
   static _ZOOM_STEP = 0.1;
   /** @type {number} */
   static _MAXIMUM_SETTINGS = 256;
+  /** @type {number} */
+  static _SINGLE_ROW = 1;
+  /** @type {number} */
+  static _PADDING_SIDE_COUNT = 2;
+  /** @type {number} */
+  static _MIDPOINT_DIVISOR = 2;
+  /** @type {Map<string, number>} */
+  #zooms = new Map();
   /** @type {string} */
   static _GROUP_SELECTOR = '.graph-group';
   /** @type {string} */
@@ -28,8 +36,26 @@ export default class GraphService {
   static _VIEWPORT_SELECTOR = '.group-graph-scroll';
   /** @type {string} */
   static _EMPTY = '';
-  /** @type {Map<string, number>} */
-  #zooms = new Map();
+  /** @type {string} */
+  static _SVG_COORDINATE_SEPARATOR = ' ';
+  /** @type {string} */
+  static _SVG_MOVE_COMMAND = 'M ';
+  /** @type {string} */
+  static _SVG_HORIZONTAL_COMMAND = ' H ';
+  /** @type {string} */
+  static _SVG_VERTICAL_COMMAND = ' V ';
+  /** @type {string} */
+  static _SVG_QUADRATIC_COMMAND = ' Q ';
+  /** @type {string} */
+  static _CHILD_BRANCH_SELECTOR = '.child-branch';
+  /** @type {string} */
+  static _PATH_ATTRIBUTE = 'd';
+  /** @type {string} */
+  static _WIDTH_ATTRIBUTE = 'width';
+  /** @type {string} */
+  static _HEIGHT_ATTRIBUTE = 'height';
+  /** @type {string} */
+  static _SELECTED_CLASS = 'selected';
 
   /** @param {HTMLElement} view @param {import('/models/ViewSelection.ts').ViewSelection} selection @param {boolean} _force @returns {void} */
   draw(view, selection, _force = false) {
@@ -43,7 +69,7 @@ export default class GraphService {
     for (const element of view.querySelectorAll('.session-process-table .session-process-pick')) {
       const node = /** @type {HTMLElement} */ (element);
       const selected = [node.dataset.session === selection.session, Number(node.dataset.pid) === selection.sessionPid, node.dataset.started === selection.sessionStarted].every(Boolean);
-      node.classList.toggle('selected', selected);
+      node.classList.toggle(GraphService._SELECTED_CLASS, selected);
     }
   }
 
@@ -90,7 +116,15 @@ export default class GraphService {
   /** @param {HTMLElement} group @returns {{width: number, height: number}} */
   #viewport(group) {
     const viewport = /** @type {HTMLElement | null} */ (group.querySelector(GraphService._VIEWPORT_SELECTOR));
-    return {width: viewport?.clientWidth ?? 0, height: viewport?.clientHeight ?? 0};
+    return this.#viewportSize(viewport);
+  }
+
+  /** @param {HTMLElement | null} viewport @returns {{width: number, height: number}} */
+  #viewportSize(viewport) {
+    if (viewport === null) {
+      return {width: 0, height: 0};
+    }
+    return {width: viewport.clientWidth, height: viewport.clientHeight};
   }
 
   /** @param {HTMLElement} group @param {import('/models/ViewSelection.ts').ViewSelection} selection @returns {void} */
@@ -105,10 +139,11 @@ export default class GraphService {
 
   /** @param {HTMLElement} group @returns {import('/models/GraphLayout.ts').GraphLayout} */
   #layout(group) {
-    const width = Math.max(1, this.#viewport(group).width - GraphService._PADDING * 2);
+    const width = Math.max(1, this.#viewport(group).width - GraphService._PADDING * GraphService._PADDING_SIDE_COUNT);
     const nodes = /** @type {HTMLElement[]} */ (Array.from(group.querySelectorAll(GraphService._NODE_SELECTOR)));
-    const columns = Math.max(1, Math.floor((width + GraphService._GAP) / (GraphService._CARD_WIDTH + GraphService._GAP)));
-    const cardWidth = Math.min(GraphService._CARD_WIDTH, width);
+    const contentWidth = Math.max(1, width - GraphService._PADDING * GraphService._PADDING_SIDE_COUNT);
+    const columns = Math.max(1, Math.floor((contentWidth + GraphService._GAP) / (GraphService._CARD_WIDTH + GraphService._GAP)));
+    const cardWidth = Math.min(GraphService._CARD_WIDTH, contentWidth);
     this.#nodeWidths(nodes, cardWidth);
     const levels = this.#levels(nodes);
     return this.#placeLevels(levels, {width, columns, cardWidth});
@@ -117,7 +152,8 @@ export default class GraphService {
   /** @param {HTMLElement[]} nodes @param {number} width @returns {void} */
   #nodeWidths(nodes, width) {
     for (const node of nodes) {
-      node.style.width = width + 'px';
+      node.parentElement?.setAttribute(GraphService._WIDTH_ATTRIBUTE, String(width));
+      node.parentElement?.setAttribute(GraphService._HEIGHT_ATTRIBUTE, '0');
     }
   }
 
@@ -126,12 +162,22 @@ export default class GraphService {
     /** @type {Map<number, HTMLElement[]>} */
     const levels = new Map();
     for (const node of nodes) {
-      const depth = Number(node.dataset.depth);
-      const level = levels.get(depth) ?? [];
-      level.push(node);
-      levels.set(depth, level);
+      this.#addLevel(levels, node);
     }
     return levels;
+  }
+
+  /** @param {Map<number, HTMLElement[]>} levels @param {HTMLElement} node @returns {void} */
+  #addLevel(levels, node) {
+    const depth = Number(node.dataset.depth);
+    const level = this.#levelNodes(levels.get(depth));
+    level.push(node);
+    levels.set(depth, level);
+  }
+
+  /** @param {HTMLElement[] | undefined} nodes @returns {HTMLElement[]} */
+  #levelNodes(nodes) {
+    return nodes ?? [];
   }
 
   /** @param {Map<number, HTMLElement[]>} levels @param {{width: number, columns: number, cardWidth: number}} size @returns {import('/models/GraphLayout.ts').GraphLayout} */
@@ -159,7 +205,7 @@ export default class GraphService {
   /** @param {HTMLElement[]} row @param {{width: number, cardWidth: number}} size @param {import('/models/GraphLayout.ts').GraphLayout} layout @returns {void} */
   #placeRow(row, size, layout) {
     const width = row.length * size.cardWidth + (row.length - 1) * GraphService._GAP;
-    const left = (size.width - width) / 2;
+    const left = (size.width - width) / GraphService._MIDPOINT_DIVISOR;
     const height = Math.max(GraphService._CARD_HEIGHT, ...row.map(
       /** @param {HTMLElement} node @returns {number} */ node => node.offsetHeight
     ));
@@ -170,36 +216,29 @@ export default class GraphService {
   /** @param {HTMLElement[]} row @param {{left: number, top: number, width: number, height: number}} position @param {import('/models/GraphLayout.ts').GraphLayout} layout @returns {void} */
   #rowBoxes(row, position, layout) {
     for (let index = 0; index < row.length; index += 1) {
-      const element = row[index];
-      const identity = element.dataset.identity ?? GraphService._EMPTY;
-      layout.boxes.set(identity, {element, identity, left: position.left + index * (position.width + GraphService._GAP), top: position.top, width: position.width, height: position.height});
+      this.#rowBox(row[index], index, position, layout);
     }
+  }
+
+  /** @param {HTMLElement} element @param {number} index @param {{left: number, top: number, width: number, height: number}} position @param {import('/models/GraphLayout.ts').GraphLayout} layout @returns {void} */
+  #rowBox(element, index, position, layout) {
+    const identity = this.#identifier(element.dataset.identity);
+    layout.boxes.set(identity, {element, identity, left: position.left + index * (position.width + GraphService._GAP), top: position.top, width: position.width, height: position.height});
+  }
+
+  /** @param {string | undefined} identifier @returns {string} */
+  #identifier(identifier) {
+    return identifier ?? GraphService._EMPTY;
   }
 
   /** @param {HTMLElement} group @param {import('/models/GraphLayout.ts').GraphLayout} layout @param {number} zoom @returns {void} */
   #size(group, layout, zoom) {
-    const canvas = /** @type {HTMLElement | null} */ (group.querySelector('.graph-canvas'));
-    const size = /** @type {HTMLElement | null} */ (group.querySelector('.group-graph-size'));
-    const svg = /** @type {SVGElement | null} */ (group.querySelector('.graph-edges'));
+    const svg = group.querySelector('.graph-canvas');
     const label = group.querySelector('.graph-zoom-value');
-    this.#canvasSize(canvas, layout, zoom);
-    this.#scaledSize(size, layout, zoom);
-    svg?.setAttribute('viewBox', '0 0 ' + layout.width + ' ' + layout.height);
-    svg?.setAttribute('width', String(layout.width));
-    svg?.setAttribute('height', String(layout.height));
+    svg?.setAttribute('viewBox', '0 0 ' + layout.width + GraphService._SVG_COORDINATE_SEPARATOR + layout.height);
+    svg?.setAttribute(GraphService._WIDTH_ATTRIBUTE, String(layout.width * zoom));
+    svg?.setAttribute(GraphService._HEIGHT_ATTRIBUTE, String(layout.height * zoom));
     this.#zoomLabel(label, zoom);
-  }
-
-  /** @param {HTMLElement | null} canvas @param {import('/models/GraphLayout.ts').GraphLayout} layout @param {number} zoom @returns {void} */
-  #canvasSize(canvas, layout, zoom) {
-    if (!canvas) return;
-    Object.assign(canvas.style, {width: layout.width + 'px', height: layout.height + 'px', transform: 'scale(' + zoom + ')'});
-  }
-
-  /** @param {HTMLElement | null} element @param {import('/models/GraphLayout.ts').GraphLayout} layout @param {number} zoom @returns {void} */
-  #scaledSize(element, layout, zoom) {
-    if (!element) return;
-    Object.assign(element.style, {width: layout.width * zoom + 'px', height: layout.height * zoom + 'px'});
   }
 
   /** @param {Element | null} element @param {number} zoom @returns {void} */
@@ -211,8 +250,10 @@ export default class GraphService {
   /** @param {HTMLElement} group @param {import('/models/GraphLayout.ts').GraphLayout} layout @param {import('/models/ViewSelection.ts').ViewSelection} selection @returns {void} */
   #placeNodes(group, layout, selection) {
     for (const box of layout.boxes.values()) {
-      Object.assign(box.element.style, {left: box.left + 'px', top: box.top + 'px', minHeight: box.height + 'px'});
-      box.element.classList.toggle('selected', this.#selected(group, box.element, selection));
+      box.element.parentElement?.setAttribute('x', String(box.left));
+      box.element.parentElement?.setAttribute('y', String(box.top));
+      box.element.parentElement?.setAttribute(GraphService._HEIGHT_ATTRIBUTE, String(box.height));
+      box.element.classList.toggle(GraphService._SELECTED_CLASS, this.#selected(group, box.element, selection));
     }
   }
 
@@ -230,74 +271,137 @@ export default class GraphService {
 
   /** @param {SVGElement} path @param {HTMLElement} group @param {import('/models/GraphLayout.ts').GraphLayout} layout @returns {void} */
   #trunk(path, group, layout) {
-    const parent = layout.boxes.get(path.dataset.parentIdentity ?? GraphService._EMPTY);
+    const parent = layout.boxes.get(this.#identifier(path.dataset.parentIdentity));
     const children = this.#children(group, path.dataset.parentIdentity, layout);
     const available = [parent !== undefined, children.length > 0].every(Boolean);
-    const value = this.#trunkPath(parent, children, available);
-    path.setAttribute('d', value);
+    const value = this.#trunkPath(parent, children, {width: layout.width}, available);
+    path.setAttribute(GraphService._PATH_ATTRIBUTE, value);
   }
 
   /** @param {HTMLElement} group @param {string | undefined} identity @param {import('/models/GraphLayout.ts').GraphLayout} layout @returns {import('/models/GraphLayoutBox.ts').GraphLayoutBox[]} */
   #children(group, identity, layout) {
-    const paths = /** @type {SVGElement[]} */ (Array.from(group.querySelectorAll('.child-branch')));
+    const paths = /** @type {SVGElement[]} */ (Array.from(group.querySelectorAll(GraphService._CHILD_BRANCH_SELECTOR)));
     return paths.filter(/** @param {SVGElement} path @returns {boolean} */ path => path.dataset.parentIdentity === identity)
-      .map(/** @param {SVGElement} path @returns {import('/models/GraphLayoutBox.ts').GraphLayoutBox | undefined} */ path => layout.boxes.get(path.dataset.childIdentity ?? GraphService._EMPTY))
+      .map(/** @param {SVGElement} path @returns {import('/models/GraphLayoutBox.ts').GraphLayoutBox | undefined} */ path => layout.boxes.get(this.#identifier(path.dataset.childIdentity)))
       .filter(/** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox | undefined} box @returns {box is import('/models/GraphLayoutBox.ts').GraphLayoutBox} */ box => box !== undefined);
   }
 
-  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox | undefined} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox[]} children @param {boolean} available @returns {string} */
-  #trunkPath(parent, children, available) {
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox | undefined} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox[]} children @param {{width: number}} size @param {boolean} available @returns {string} */
+  #trunkPath(parent, children, size, available) {
     if (!available) return GraphService._EMPTY;
-    const root = /** @type {import('/models/GraphLayoutBox.ts').GraphLayoutBox} */ (parent);
-    const centers = children.map(/** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} box @returns {number} */ box => this.#branchStart(root, box));
-    const x = root.left + root.width / 2;
-    const y = root.top + root.height;
-    const branch = y + GraphService._DEPTH_GAP / 2;
-    return 'M ' + x + ' ' + y + ' V ' + branch + ' M ' + Math.min(x, ...centers) + ' ' + branch + ' H ' + Math.max(x, ...centers);
+    return this.#trunkRouting(/** @type {import('/models/GraphLayoutBox.ts').GraphLayoutBox} */ (parent), children, size);
+  }
+
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox[]} children @param {{width: number}} size @returns {string} */
+  #trunkRouting(parent, children, size) {
+    const route = this.#route(parent, children, size);
+    return this.#trunkShape(parent, children, route);
+  }
+
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox[]} children @param {{width: number}} size @returns {{side: boolean, x: number, last: number}} */
+  #route(parent, children, size) {
+    const tops = children.map(/** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} box @returns {number} */ box => box.top);
+    const rows = new Set(tops);
+    const distant = Math.min(...tops) - parent.top - parent.height > GraphService._GAP + GraphService._DEPTH_GAP;
+    const side = [rows.size > GraphService._SINGLE_ROW, distant].some(Boolean);
+    return {side, x: Math.min(GraphService._PADDING / GraphService._MIDPOINT_DIVISOR, size.width / GraphService._MIDPOINT_DIVISOR), last: Math.max(...tops) - GraphService._CURVE};
+  }
+
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox[]} children @param {{side: boolean, x: number, last: number}} route @returns {string} */
+  #trunkShape(parent, children, route) {
+    if (route.side) return this.#sideTrunk(parent, route);
+    return this.#flatTrunk(parent, children);
+  }
+
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} parent @param {{x: number, last: number}} route @returns {string} */
+  #sideTrunk(parent, route) {
+    const x = parent.left + parent.width / GraphService._MIDPOINT_DIVISOR;
+    const y = parent.top + parent.height;
+    const turn = y + GraphService._GAP / GraphService._MIDPOINT_DIVISOR;
+    return GraphService._SVG_MOVE_COMMAND + x + GraphService._SVG_COORDINATE_SEPARATOR + y + GraphService._SVG_VERTICAL_COMMAND + turn + GraphService._SVG_HORIZONTAL_COMMAND + route.x + GraphService._SVG_VERTICAL_COMMAND + route.last;
+  }
+
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox[]} children @returns {string} */
+  #flatTrunk(parent, children) {
+    const centers = children.map(/** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} box @returns {number} */ box => this.#branchStart(parent, box));
+    const x = parent.left + parent.width / GraphService._MIDPOINT_DIVISOR;
+    const y = parent.top + parent.height;
+    const branch = y + GraphService._DEPTH_GAP / GraphService._MIDPOINT_DIVISOR;
+    return GraphService._SVG_MOVE_COMMAND + x + GraphService._SVG_COORDINATE_SEPARATOR + y + GraphService._SVG_VERTICAL_COMMAND + branch + ' M ' + Math.min(x, ...centers) + GraphService._SVG_COORDINATE_SEPARATOR + branch + GraphService._SVG_HORIZONTAL_COMMAND + Math.max(x, ...centers);
   }
 
   /** @param {HTMLElement} group @param {import('/models/GraphLayout.ts').GraphLayout} layout @returns {void} */
   #branches(group, layout) {
-    for (const path of group.querySelectorAll('.child-branch')) {
-      this.#branch(/** @type {SVGElement} */ (path), layout);
+    for (const path of group.querySelectorAll(GraphService._CHILD_BRANCH_SELECTOR)) {
+      this.#branch(/** @type {SVGElement} */ (path), group, layout);
     }
   }
 
-  /** @param {SVGElement} path @param {import('/models/GraphLayout.ts').GraphLayout} layout @returns {void} */
-  #branch(path, layout) {
-    const parent = layout.boxes.get(path.dataset.parentIdentity ?? GraphService._EMPTY);
-    const child = layout.boxes.get(path.dataset.childIdentity ?? GraphService._EMPTY);
+  /** @param {SVGElement} path @param {HTMLElement} group @param {import('/models/GraphLayout.ts').GraphLayout} layout @returns {void} */
+  #branch(path, group, layout) {
+    const parent = layout.boxes.get(this.#identifier(path.dataset.parentIdentity));
+    const child = layout.boxes.get(this.#identifier(path.dataset.childIdentity));
     const available = [parent !== undefined, child !== undefined].every(Boolean);
-    path.setAttribute('d', this.#branchPath(parent, child, available));
+    const children = this.#children(group, path.dataset.parentIdentity, layout);
+    path.setAttribute(GraphService._PATH_ATTRIBUTE, this.#branchPath(parent, child, {children, width: layout.width}, available));
   }
 
-  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox | undefined} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox | undefined} child @param {boolean} available @returns {string} */
-  #branchPath(parent, child, available) {
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox | undefined} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox | undefined} child @param {{children: import('/models/GraphLayoutBox.ts').GraphLayoutBox[], width: number}} family @param {boolean} available @returns {string} */
+  #branchPath(parent, child, family, available) {
     if (!available) return GraphService._EMPTY;
-    const root = /** @type {import('/models/GraphLayoutBox.ts').GraphLayoutBox} */ (parent);
-    const target = /** @type {import('/models/GraphLayoutBox.ts').GraphLayoutBox} */ (child);
-    const x = target.left + target.width / 2;
-    const y = root.top + root.height + GraphService._DEPTH_GAP / 2;
-    const start = this.#branchStart(root, target);
+    return this.#branchRouting(/** @type {import('/models/GraphLayoutBox.ts').GraphLayoutBox} */ (parent),
+      /** @type {import('/models/GraphLayoutBox.ts').GraphLayoutBox} */ (child), family);
+  }
+
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} child @param {{children: import('/models/GraphLayoutBox.ts').GraphLayoutBox[], width: number}} family @returns {string} */
+  #branchRouting(parent, child, family) {
+    const route = this.#route(parent, family.children, family);
+    return this.#branchShape(parent, child, route);
+  }
+
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} child @param {{side: boolean, x: number}} route @returns {string} */
+  #branchShape(parent, child, route) {
+    if (route.side) return this.#sideBranch(child, route);
+    return this.#flatBranch(parent, child);
+  }
+
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} child @param {{x: number}} route @returns {string} */
+  #sideBranch(child, route) {
+    const x = child.left + child.width / GraphService._MIDPOINT_DIVISOR;
+    const y = child.top - GraphService._CURVE;
+    return GraphService._SVG_MOVE_COMMAND + route.x + GraphService._SVG_COORDINATE_SEPARATOR + y + GraphService._SVG_HORIZONTAL_COMMAND + (x - GraphService._CURVE) + GraphService._SVG_QUADRATIC_COMMAND + x + GraphService._SVG_COORDINATE_SEPARATOR + y + GraphService._SVG_COORDINATE_SEPARATOR + x + GraphService._SVG_COORDINATE_SEPARATOR + child.top;
+  }
+
+  /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} child @returns {string} */
+  #flatBranch(parent, child) {
+    const x = child.left + child.width / GraphService._MIDPOINT_DIVISOR;
+    const y = parent.top + parent.height + GraphService._DEPTH_GAP / GraphService._MIDPOINT_DIVISOR;
+    const start = this.#branchStart(parent, child);
     const curve = Math.abs(start - x);
-    return 'M ' + start + ' ' + y + ' Q ' + x + ' ' + y + ' ' + x + ' ' + (y + curve) + ' V ' + target.top;
+    return GraphService._SVG_MOVE_COMMAND + start + GraphService._SVG_COORDINATE_SEPARATOR + y + GraphService._SVG_QUADRATIC_COMMAND + x + GraphService._SVG_COORDINATE_SEPARATOR + y + GraphService._SVG_COORDINATE_SEPARATOR + x + GraphService._SVG_COORDINATE_SEPARATOR + (y + curve) + GraphService._SVG_VERTICAL_COMMAND + child.top;
   }
 
   /** @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} parent @param {import('/models/GraphLayoutBox.ts').GraphLayoutBox} child @returns {number} */
   #branchStart(parent, child) {
-    const x = child.left + child.width / 2;
-    const distance = parent.left + parent.width / 2 - x;
+    const x = child.left + child.width / GraphService._MIDPOINT_DIVISOR;
+    const distance = parent.left + parent.width / GraphService._MIDPOINT_DIVISOR - x;
     return x + Math.sign(distance) * Math.min(GraphService._CURVE, Math.abs(distance));
   }
 
   /** @param {string | undefined} identifier @returns {number} */
   #zoom(identifier) {
-    return this.#zooms.get(identifier ?? GraphService._EMPTY) ?? 1;
+    const key = this.#identifier(identifier);
+    return this.#storedZoom(this.#zooms.get(key));
+  }
+
+  /** @param {number | undefined} zoom @returns {number} */
+  #storedZoom(zoom) {
+    return zoom ?? 1;
   }
 
   /** @param {HTMLElement} group @param {string} action @returns {void} */
   #changeZoom(group, action) {
-    const identifier = group.dataset.group ?? GraphService._EMPTY;
+    const identifier = this.#identifier(group.dataset.group);
     const current = this.#zoom(identifier);
     const fit = this.#fit(group);
     const zoom = this.#chosenZoom(action, current, fit);

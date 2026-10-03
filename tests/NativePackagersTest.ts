@@ -18,7 +18,7 @@ test('Rust packaging appends current exports, builds offline and copies library/
   packager.build();
   const body = fs.readFileSync(source, 'utf8');
   assert.ok(body.includes('pub use crate::TachyonRustServices::models;'));
-  assert.ok(body.includes('ObservationClock, ProcessReader, ProcessIdentityReader, NetworkReader, MetricSource, EventSource, NativeMachTimebase'));
+  assert.ok(body.includes('ObservationClock, ProcessReader, ProcessIdentityReader, NetworkReader, MetricSource, EventSource, HarnessSessionSource, NativeMachTimebase, ClaudeHookAdapter, ClaudeHookMapper, ClaudeHookEventFactory'));
   assert.ok(body.includes('LogicalEventClientService, LogicalEventWireService, LogicalSocketService'));
   assert.ok(body.includes('SnapshotTransportTests.rs'));
   assert.deepEqual(fixture.commands[0], ['cargo', 'build', '--offline', '--manifest-path', path.join(fixture.rustCache, 'Cargo.toml'), '--target-dir', path.join(fixture.rustCache, 'target'), '--lib', '--bin', 'observatory-event', '--jobs', '2']);
@@ -27,6 +27,7 @@ test('Rust packaging appends current exports, builds offline and copies library/
   assert.ok(manifest.includes('crate-type = ["staticlib", "rlib"]'));
   assert.ok(manifest.includes('libc = "=0.2.189"'));
   assert.ok(fs.readFileSync(path.join(fixture.rustCache, 'emitter.rs'), 'utf8').includes('EventEmitterMain::run()'));
+  assert.ok(fs.readFileSync(path.join(fixture.rustCache, 'emitter.rs'), 'utf8').includes('use observatory_native::{models, services, ProcessIdentityReader, ClaudeHookAdapter};'));
   assert.equal(fs.readFileSync(path.join(fixture.artifacts, 'macos/project/libtachyoncompanion.a'), 'utf8'), 'fixture static library');
   const emitter = path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/MacOS/observatory-event');
   assert.equal(fs.statSync(emitter).mode & 0o777, 0o755);
@@ -98,6 +99,7 @@ test('Host builds with static companion and preserves literal embedded report ch
   assert.deepEqual(fixture.commands[0], customizer.compilerCommand());
   assert.ok(fixture.commands[0]?.includes(path.join(fixture.artifacts, 'macos/project/libtachyoncompanion.a')));
   assert.ok(fixture.commands[0]?.includes('-module-cache-path'));
+  assert.ok(fixture.commands[0]?.includes('-lsqlite3'), 'The host links the system SQLite library used by the local Codex title reader.');
 });
 
 test('Host refuses non-directory Collector resource without deleting it', (context: TestContext): void => {
@@ -218,4 +220,22 @@ test('Cargo artifacts reject a relative source target', (context: TestContext): 
   process.env.CARGO_TARGET_DIR = 'target';
   assert.throws((): string => ToolPathUtils.cargoTarget(fixture.root, fixture.rustCache), /outside the source project/);
   assert.equal(fs.existsSync(path.join(fixture.root, 'target')), false);
+});
+
+
+test('Unset Cargo target uses the explicit external cache without creating output', (context: TestContext): void => {
+  const fixture: NativePackagerFixture = new NativePackagerFixture();
+  context.after((): void => fixture.close());
+  delete process.env.CARGO_TARGET_DIR;
+  const target: string = path.join(fixture.rustCache, 'target');
+  assert.equal(ToolPathUtils.cargoTarget(fixture.root, fixture.rustCache), target);
+  assert.equal(fs.existsSync(target), false);
+});
+
+test('An explicitly blank Cargo target is rejected instead of selecting a fallback', (context: TestContext): void => {
+  const fixture: NativePackagerFixture = new NativePackagerFixture();
+  context.after((): void => fixture.close());
+  process.env.CARGO_TARGET_DIR = ' \t';
+  assert.throws((): string => ToolPathUtils.cargoTarget(fixture.root, fixture.rustCache), /CARGO_TARGET_DIR requires an explicitly supplied value/);
+  assert.equal(fs.existsSync(fixture.rustCache), false);
 });

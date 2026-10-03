@@ -1,6 +1,7 @@
 use crate::models::{
-    NativeSessionActivityView, NativeCapabilities, NativeCommandBinding, NativeCommandObservation, NativeGroup, NativeLogicalAgent,
-    NativeLogicalAgentView, NativeResourceTotals, NativeRuntimeView, NativeSessionView,
+    NativeCapabilities, NativeCommandBinding, NativeCommandObservation, NativeGroup,
+    NativeHarnessSession, NativeLogicalAgent, NativeLogicalAgentView, NativeResourceTotals,
+    NativeRuntimeView, NativeSessionActivityView, NativeSessionView,
 };
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -23,6 +24,8 @@ pub struct NativeSnapshot {
     pub command_observations: Vec<NativeCommandObservation>,
     #[serde(skip)]
     pub command_bindings: Vec<NativeCommandBinding>,
+    #[serde(default)]
+    pub harness_sessions: Vec<NativeHarnessSession>,
     #[serde(default)]
     pub session_groups: Vec<NativeSessionView>,
     pub linked_session_count: i64,

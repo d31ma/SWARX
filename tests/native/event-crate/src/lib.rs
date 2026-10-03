@@ -29,7 +29,28 @@ mod timebase {
         "/../../../app/client/shared/native/NativeMachTimebase.rs"
     ));
 }
-pub use {clock::*, identity_reader::*, process_reader::*, source::*, timebase::*};
+mod claude_hook_event_factory {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../app/client/shared/native/ClaudeHookEventFactory.rs"
+    ));
+}
+mod claude_hook_mapper {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../app/client/shared/native/ClaudeHookMapper.rs"
+    ));
+}
+mod claude_hook_adapter {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../app/client/shared/native/ClaudeHookAdapter.rs"
+    ));
+}
+pub use {
+    claude_hook_adapter::*, claude_hook_event_factory::*, claude_hook_mapper::*, clock::*,
+    identity_reader::*, process_reader::*, source::*, timebase::*,
+};
 pub mod utils {
     mod context {
         include!(concat!(

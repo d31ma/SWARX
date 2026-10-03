@@ -7,7 +7,7 @@ import { BrowserServiceTestUtils } from './BrowserServiceTestUtils.mjs';
 /** @typedef {import('../app/client/models/NativeViewSelection.ts').NativeViewSelection} NativeSelection */
 /** @typedef {Pick<import('../app/client/models/ObservatoryModel.ts').ObservatoryModel, 'selected' | 'liveStatus' | 'detail' | 'selectedSession' | 'selectedSessionProcess'>} TestResponse */
 /** @typedef {{selection: NativeSelection, resolve: (value: TestResponse | PromiseLike<TestResponse>) => void, reject: (reason?: unknown) => void}} PendingRequest */
-/** @typedef {{model?: TestResponse, query: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, select: (event: object, identifier: string) => void, selectSessionProcess: (event: object, session: string, pid: number, started: string) => void}} FixtureController */
+/** @typedef {{model?: TestResponse, series: string, section: string, processView: string, query: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, session: string, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, setSection: (event: object, section: string) => void, setProcessView: (event: object, mode: string) => void}} FixtureController */
 /** @typedef {{controller: FixtureController, requests: PendingRequest[], poll: (() => void) | null}} RequestFrame */
 /** @typedef {Omit<RequestFrame, 'controller'> & {controller: FixtureController | null}} PreparingFrame */
 
@@ -102,6 +102,38 @@ class OverviewRequestTest {
     await pending;
   }
 
+  /** @returns {Promise<RequestFrame>} */
+  static async selectedFrame() {
+    const frame = OverviewRequestTest.frame();
+    frame.controller.query = 'retained query';
+    frame.controller.initialize();
+    await OverviewRequestTest.flush();
+    frame.requests[0].resolve({...OverviewRequestTest.response('selected-runtime'),
+      selectedSession: 'Codex:actual-id', selectedSessionProcess: OverviewRequestTest.selectedProcess()});
+    await OverviewRequestTest.flush();
+    return frame;
+  }
+
+  /** @returns {import('../app/client/models/ProcessRow.ts').ProcessRow} */
+  static selectedProcess() {
+    return {pid: 42, parent: 1, started: 'actual-birth', name: 'boundary-process',
+      cpu_percent: null, resident_bytes: null, received_per_second: null, sent_per_second: null,
+      disk_read_per_second: null, disk_write_per_second: null, depth: 0, indentClass: '',
+      memory: 'Unavailable', cpu: 'Unavailable', networkLabel: 'Unavailable', diskLabel: 'Unavailable', relationship: 'Reported root'};
+  }
+
+  /** @param {RequestFrame} frame @returns {Promise<void>} */
+  static async assertRetainedSelection(frame) {
+    assert.equal(frame.requests.length, 1);
+    assert.ok(frame.poll);
+    frame.poll();
+    await OverviewRequestTest.flush();
+    assert.equal(frame.requests.length, 2);
+    assert.deepEqual({...frame.requests[1].selection}, {
+      selected: 'selected-runtime', query: 'retained query', pid: 0,
+      selectedSession: 'Codex:actual-id', sessionPid: 42, sessionStarted: 'actual-birth'});
+  }
+
   /** @param {string} selected @returns {TestResponse} */
   static response(selected) {
     return { selected, liveStatus: 'Live', detail: null, selectedSession: '', selectedSessionProcess: null };
@@ -117,10 +149,27 @@ class RequestView {
   addEventListener(type, listener) {this.listeners.set(type, listener);}
   /** @param {string} type @returns {void} */
   removeEventListener(type) {this.listeners.delete(type);}
+  /** @param {string} group @param {number} pid @returns {void} */
+  pick(group, pid) {
+    const listener = this.listeners.get('click');
+    assert.ok(listener);
+    const target = new RequestProcessTarget(group, pid);
+    listener(/** @type {Event} */ (/** @type {unknown} */ ({target, defaultPrevented: false})));
+  }
   /** @returns {Element[]} */
   querySelectorAll() {return [];}
   /** @returns {null} */
   querySelector() {return null;}
+}
+
+class RequestProcessTarget extends RequestView {
+  /** @param {string} group @param {number} pid */
+  constructor(group, pid) {super(); this.dataset = {group, pid: String(pid)};}
+  /** @param {string} selector @returns {Element | null} */
+  closest(selector) {
+    if (selector === '.process-pick') return /** @type {Element} */ (/** @type {unknown} */ (this));
+    return null;
+  }
 }
 
 class RequestObserver {
@@ -150,7 +199,7 @@ test('latest search replaces queued requests and rejects an older response', /**
   frame.controller.query = 'first';
   frame.controller.search();
   frame.controller.query = 'latest';
-  frame.controller.select({}, 'selected-runtime');
+  frame.controller.view.pick('selected-runtime', 42);
   assert.equal(frame.requests.length, 1);
   frame.requests[0].resolve(OverviewRequestTest.response('stale-runtime'));
   await OverviewRequestTest.flush();
@@ -251,5 +300,60 @@ test('an unavailable session process is cleared before the next poll', /** @retu
   assert.equal(frame.requests[2].selection.selectedSession, 'Codex:actual-id');
   assert.equal(frame.requests[2].selection.sessionPid, null);
   assert.equal(frame.requests[2].selection.sessionStarted, null);
+  frame.controller.dispose();
+});
+
+
+test('series changes preserve the verified selection and query through the next poll', /** @returns {Promise<void>} */ async () => {
+  const frame = await OverviewRequestTest.selectedFrame();
+  frame.controller.setSeries({}, 'network');
+  await OverviewRequestTest.flush();
+  assert.equal(frame.controller.series, 'network');
+  assert.equal(frame.controller.section, 'running');
+  assert.equal(frame.controller.processView, 'table');
+  assert.equal(OverviewRequestTest.acceptedModel(frame).selectedSessionProcess?.started, 'actual-birth');
+  await OverviewRequestTest.assertRetainedSelection(frame);
+  frame.controller.dispose();
+});
+
+test('section changes preserve the active series and verified process through the next poll', /** @returns {Promise<void>} */ async () => {
+  const frame = await OverviewRequestTest.selectedFrame();
+  frame.controller.setSection({}, 'history');
+  await OverviewRequestTest.flush();
+  assert.equal(frame.controller.section, 'history');
+  assert.equal(frame.controller.series, 'cpu');
+  assert.equal(frame.controller.processView, 'table');
+  assert.equal(OverviewRequestTest.acceptedModel(frame).selectedSession, 'Codex:actual-id');
+  await OverviewRequestTest.assertRetainedSelection(frame);
+  frame.controller.dispose();
+});
+
+test('Tree changes preserve the section and exact process identity through the next poll', /** @returns {Promise<void>} */ async () => {
+  const frame = await OverviewRequestTest.selectedFrame();
+  frame.controller.setProcessView({}, 'tree');
+  await OverviewRequestTest.flush();
+  assert.equal(frame.controller.processView, 'tree');
+  assert.equal(frame.controller.section, 'running');
+  assert.equal(frame.controller.series, 'cpu');
+  assert.equal(OverviewRequestTest.acceptedModel(frame).selectedSessionProcess?.pid, 42);
+  await OverviewRequestTest.assertRetainedSelection(frame);
+  frame.controller.dispose();
+});
+
+
+test('a bound process click selects runtime and PID without exposing an internal selector', /** @returns {Promise<void>} */ async () => {
+  const frame = OverviewRequestTest.frame();
+  frame.controller.initialize();
+  await OverviewRequestTest.flush();
+  assert.equal('select' in frame.controller, false);
+  frame.controller.view.pick('runtime:actual-root', 42);
+  frame.requests[0].resolve(OverviewRequestTest.response('previous'));
+  await OverviewRequestTest.flush();
+  assert.equal(frame.requests.length, 2);
+  assert.equal(frame.requests[1].selection.selected, 'runtime:actual-root');
+  assert.equal(frame.requests[1].selection.pid, 42);
+  frame.requests[1].resolve(OverviewRequestTest.response('runtime:actual-root'));
+  await OverviewRequestTest.flush();
+  assert.equal(OverviewRequestTest.acceptedModel(frame).selected, 'runtime:actual-root');
   frame.controller.dispose();
 });

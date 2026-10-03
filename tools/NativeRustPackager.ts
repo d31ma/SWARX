@@ -10,8 +10,11 @@ export class NativeRustPackager {
   private static readonly SOURCE_PATH: string = 'macos/project/companion.rs';
   private static readonly CLIENT_PATH: string = 'app/client';
   private static readonly CRATE_NAME: string = 'observatory_native';
-  private static readonly TRAITS: readonly string[] = ['ObservationClock', 'ProcessReader', 'ProcessIdentityReader', 'NetworkReader', 'MetricSource', 'EventSource'];
+  private static readonly TRAITS: readonly string[] = ['ObservationClock', 'ProcessReader', 'ProcessIdentityReader', 'NetworkReader', 'MetricSource', 'EventSource', 'HarnessSessionSource'];
   private static readonly SDK_TYPES: readonly string[] = ['NativeMachTimebase'];
+  private static readonly HOOK_ADAPTER: string = 'ClaudeHookAdapter';
+  private static readonly HOOK_TYPES: readonly string[] = [NativeRustPackager.HOOK_ADAPTER, 'ClaudeHookMapper', 'ClaudeHookEventFactory'];
+  private static readonly EMITTER_TYPES: readonly string[] = ['ProcessIdentityReader', NativeRustPackager.HOOK_ADAPTER];
   private static readonly MARKER: string = '\npub mod services {\n';
   private static readonly LIBRARY_NAME: string = 'libobservatory_native.a';
   private static readonly EMITTER_NAME: string = 'observatory-event';
@@ -63,7 +66,7 @@ export class NativeRustPackager {
   }
 
   boundaryExports(): string {
-    const names: string = [...NativeRustPackager.TRAITS, ...NativeRustPackager.SDK_TYPES].join(', ');
+    const names: string = [...NativeRustPackager.TRAITS, ...NativeRustPackager.SDK_TYPES, ...NativeRustPackager.HOOK_TYPES].join(', ');
     return `\npub use crate::TachyonRustServices::models;\npub use crate::TachyonRustServices::{${names}};\n`
       + `\n#[cfg(any(test, feature = "${NativeRustPackager.FIXTURE_FEATURE}"))]\npub mod fixture_utils {\n`
       + 'pub use crate::TachyonRustServices::{ChartDataUtils, CommandResourceViewUtils, OverviewViewUtils, LogicalViewUtils, ProcessGraphUtils, ProcessOwnerUtils, ProcessTreeUtils, RuntimeViewUtils, SessionViewUtils};\n}\n'
@@ -86,7 +89,7 @@ export class NativeRustPackager {
 
   private writeEmitter(): void {
     const source: string = path.join(this.root, NativeRustPackager.CLIENT_PATH, 'shared/native/EventEmitterMain.rs');
-    const body: string = 'use observatory_native::{models, services, ProcessIdentityReader};\n'
+    const body: string = `use observatory_native::{models, services, ${NativeRustPackager.EMITTER_TYPES.join(', ')}};\n`
       + `mod entry {include!(${JSON.stringify(source)});\n${this.emitterTests()}\n}\n`
       + 'fn main() {std::process::exit(entry::EventEmitterMain::run());}\n';
     fs.writeFileSync(path.join(this.cache, 'emitter.rs'), body);

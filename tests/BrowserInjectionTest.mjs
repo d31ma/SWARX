@@ -1,8 +1,8 @@
 import {QaPathUtils} from './QaPathUtils.mjs';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
 import vm from 'node:vm';
+import {BrowserBundleProvenanceUtils} from './utils/BrowserBundleProvenanceUtils.mjs';
 
 /** @typedef {import('../app/client/models/ObservatoryModel.ts').ObservatoryModel} ObservatoryModel */
 /** @typedef {import('../app/client/models/NativeViewSelection.ts').NativeViewSelection} NativeSelection */
@@ -10,7 +10,7 @@ import vm from 'node:vm';
 /** @typedef {import('../app/client/models/SnapshotPage.ts').SnapshotPage} SnapshotPage */
 /** @typedef {import('../app/client/services/ObservatoryService.js').default} Observatory */
 /** @typedef {import('../app/client/services/native/monitoring/SnapshotService.js').default} Snapshot */
-/** @typedef {{ObservatoryService: {default: typeof import('../app/client/services/ObservatoryService.js').default}, SnapshotService: {default: typeof import('../app/client/services/native/monitoring/SnapshotService.js').default}, SnapshotReaderService: {default: typeof import('../app/client/services/SnapshotReaderService.js').default}}} EmittedModules */
+/** @typedef {{ObservatoryService: {default: typeof import('../app/client/services/ObservatoryService.js').default}, SnapshotService: {default: typeof import('../app/client/services/native/monitoring/SnapshotService.js').default}, SnapshotReaderService: {default: typeof import('../app/client/services/SnapshotReaderService.js').default}, PresentationService: {default: typeof import('../app/client/services/browser/PresentationService.js').default}, GraphService: {default: typeof import('../app/client/services/browser/GraphService.js').default}, ChartService: {default: typeof import('../app/client/services/browser/ChartService.js').default}, ViewContinuityService: {default: typeof import('../app/client/services/browser/ViewContinuityService.js').default}}} EmittedModules */
 /** @typedef {{default: new () => object}} BrowserModule */
 /** @typedef {{open: number, page: number, release: number}} BoundaryCalls */
 /** @typedef {{view?: HTMLElement, taskScheduler?: TacTaskScheduler, lifecycle?: AbortSignal}} RuntimeOwner */
@@ -23,64 +23,109 @@ class BrowserInjectionTest {
   static ROOT = QaPathUtils.directory('OBSERVATORY_WEB_BUNDLE');
   /** @type {URL} */
   static BUILD_SOURCE = QaPathUtils.file('OBSERVATORY_BUILD_SOURCE');
+  /** @type {{observed: number, disconnected: number}} */
+  static observerCalls = {observed: 0, disconnected: 0};
 
   /** @returns {Promise<void>} */
   static async run() {
-    this.requireCurrentSources();
+    const sources = BrowserBundleProvenanceUtils.inspect(new URL('../', import.meta.url), this.ROOT, this.BUILD_SOURCE);
+    const restore = this.observers();
+    try {
+      await this.check();
+      BrowserBundleProvenanceUtils.requireStable(sources, new URL('../', import.meta.url), this.ROOT, this.BUILD_SOURCE);
+    } finally {
+      restore();
+    }
+  }
+
+  /** @returns {Promise<void>} */
+  static async check() {
     const modules = await this.modules();
     const calls = this.nativeBoundary(modules.SnapshotReaderService.default);
     const resolver = this.resolver(modules);
     const observatory = await resolver('observatory');
     try {
-      assert.ok(observatory.snapshot instanceof modules.SnapshotService.default,
-        'Observatory must receive the paging SnapshotService through the snapshot catalog entry.');
-      assert.ok(observatory.snapshot.snapshotReader instanceof modules.SnapshotReaderService.default,
-        'SnapshotService must receive the native reader through snapshotReader.');
+      assert.ok(observatory.snapshot instanceof modules.SnapshotService.default);
+      assert.ok(observatory.snapshot.snapshotReader instanceof modules.SnapshotReaderService.default);
+      const presentation = observatory.presentation;
+      assert.ok(presentation instanceof modules.PresentationService.default);
+      assert.ok(presentation.graph instanceof modules.GraphService.default);
+      assert.ok(presentation.chart instanceof modules.ChartService.default);
+      assert.ok(presentation.viewContinuity instanceof modules.ViewContinuityService.default);
+      assert.equal(presentation.viewContinuity.graph, presentation.graph);
+      assert.equal(presentation.viewContinuity.chart, presentation.chart);
+      assert.ok(observatory.view);
+      assert.ok(observatory.lifecycle);
+      presentation.watch(observatory.view, observatory.lifecycle, this.viewSelection);
+      assert.equal(this.observerCalls.observed, 2);
       observatory.search();
       await this.settled();
-      assert.ok(observatory.view);
       assert.equal(observatory.problem, '', observatory.view.dataset.nativeFailure);
       assert.ok(observatory.model);
       assert.equal(observatory.model.ready, true);
       assert.equal(observatory.model.samples, 17);
-      assert.equal(calls.open, 1);
-      assert.equal(calls.page, 2);
-      assert.equal(calls.release, 1);
+      assert.deepEqual(calls, {open: 1, page: 2, release: 1});
       await this.concurrent(observatory.snapshot, calls);
-      console.log('PASS: accepted compiler-emitted Observatory -> Snapshot -> native Reader resolves through actual browser singleton injection; public search and paged Overview read use a synthetic native boundary; concurrent reads reject without disturbing the pinned transfer.');
     } finally {
       observatory.dispose();
+      assert.equal(this.observerCalls.disconnected, 2);
     }
+    console.log('PASS: seven actual emitted Services resolve through the compiler catalog, including shared transitive graph/chart identity. Public search, paging, empty-DOM render, watch and disposal pass with explicit synthetic native/observer boundaries. This is not actual WKWebView or startup acceptance.');
   }
 
   /** @returns {Promise<EmittedModules>} */
   static async modules() {
+    const paths = BrowserBundleProvenanceUtils.modules(this.ROOT);
     return {
-      ObservatoryService: await import(new URL('tachyon-runtime/services/ObservatoryService.js', this.ROOT).href),
-      SnapshotService: await import(new URL('tachyon-runtime/services/SnapshotService.js', this.ROOT).href),
-      SnapshotReaderService: await import(new URL('tachyon-runtime/services/SnapshotReaderService.js', this.ROOT).href)
+      ObservatoryService: await import(paths.ObservatoryService.href),
+      SnapshotService: await import(paths.SnapshotService.href),
+      SnapshotReaderService: await import(paths.SnapshotReaderService.href),
+      PresentationService: await import(paths.PresentationService.href),
+      GraphService: await import(paths.GraphService.href),
+      ChartService: await import(paths.ChartService.href),
+      ViewContinuityService: await import(paths.ViewContinuityService.href)
     };
   }
 
-  /** @returns {void} */
-  static requireCurrentSources() {
-    /** @type {{files: Record<string, string>}} */
-    const build = JSON.parse(readFileSync(this.BUILD_SOURCE, 'utf8'));
-    const project = new URL('../', import.meta.url);
-    for (const file of ['services/ObservatoryService.js', 'services/SnapshotReaderService.js',
-      'services/native/monitoring/SnapshotService.js']) {
-      const relative = 'app/client/' + file;
-      const hash = createHash('sha256').update(readFileSync(new URL(relative, project))).digest('hex');
-      assert.equal(hash, build.files[relative], 'The accepted native build must match the current browser service source: ' + file);
+  /** @returns {() => void} */
+  static observers() {
+    const descriptors = Object.getOwnPropertyDescriptors(globalThis);
+    /** @param {ResizeObserverCallback | MutationCallback} _callback @returns {ResizeObserver | MutationObserver} */
+    function observer(_callback) {
+      return /** @type {ResizeObserver | MutationObserver} */ (/** @type {unknown} */ ({
+        /** @returns {void} */ observe() { BrowserInjectionTest.observerCalls.observed += 1; },
+        /** @returns {void} */ disconnect() { BrowserInjectionTest.observerCalls.disconnected += 1; }
+      }));
     }
+    Object.defineProperty(globalThis, 'ResizeObserver', {value: observer, configurable: true});
+    Object.defineProperty(globalThis, 'MutationObserver', {value: observer, configurable: true});
+    return /** @returns {void} */ () => {
+      for (const name of ['ResizeObserver', 'MutationObserver']) {
+        if (descriptors[name]) Object.defineProperty(globalThis, name, descriptors[name]);
+        else Reflect.deleteProperty(globalThis, name);
+      }
+    };
+  }
+
+  /** @returns {import('../app/client/models/ViewSelection.ts').ViewSelection} */
+  static viewSelection() {
+    return {group: null, mode: 'cpu', model: undefined, pid: 0, graphGroup: '', session: '', sessionPid: null, sessionStarted: null,
+      /** @returns {void} */ showGraph() {}, /** @returns {void} */ pick() {}};
+  }
+
+  /** @returns {HTMLElement} */
+  static browserView() {
+    return /** @type {HTMLElement} */ (/** @type {unknown} */ (Object.assign(new EventTarget(), {
+      dataset: {}, /** @returns {Element[]} */ querySelectorAll() { return []; }
+    })));
   }
 
   /** @returns {NativeSelection} */
-  static selection() { return {selected: '', query: '', pid: 0}; }
+  static selection() { return {selected: '', query: '', pid: 0, selectedSession: '', sessionPid: null, sessionStarted: null}; }
 
   /** @returns {ObservatoryModel} */
   static overview() {
-    return {sessionGroups: [], linkedSessionCount: 0, harnessCount: 0, eventSourceCount: 0,
+    return {sessionGroups: [], resourceSessions: [], sharedResources: [], chartResources: [], selectedSession: '', selectedSessionProcess: null, linkedSessionCount: 0, harnessCount: 0, eventSourceCount: 0,
       snapshotSourceCount: 0, recoveredSourceCount: 0, sessions: [], runtimes: [], shared: [], logical: [],
       activity: [], logicalCount: 0, logicalFeed: 'No linked task events', logicalNotice: '', detail: null,
       selected: '', errors: [], limitations: [], cpuTotal: 'Unavailable', resident: 'Unavailable', peak: 'Unavailable',
@@ -120,7 +165,7 @@ class BrowserInjectionTest {
     assert.ok(matched);
     /** @type {ClientPlan} */
     const plan = JSON.parse(matched[1]);
-    assert.deepEqual(Object.keys(plan.services).sort(), ['observatory', 'snapshot', 'snapshotReader']);
+    assert.deepEqual(Object.keys(plan.services).sort(), ['chart', 'graph', 'observatory', 'presentation', 'snapshot', 'snapshotReader', 'viewContinuity']);
     /** @type {ResolverContext} */
     const context = {
       ClientView: {plan}, AbortController, location: {pathname: '/'},
@@ -136,7 +181,7 @@ class BrowserInjectionTest {
       },
       nativeHost: /** @returns {boolean} */ () => false,
       attachRuntime: /** @param {RuntimeOwner} instance @returns {void} */ instance => {
-        instance.view = /** @type {HTMLElement} */ (/** @type {unknown} */ ({dataset: {}, /** @returns {Element[]} */ querySelectorAll() { return []; }}));
+        instance.view = BrowserInjectionTest.browserView();
         instance.taskScheduler = /** @type {TacTaskScheduler} */ (/** @type {unknown} */ ({render: /** @returns {Promise<void>} */ async () => {}}));
         instance.lifecycle = new AbortController().signal;
       }

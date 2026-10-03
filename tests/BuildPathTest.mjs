@@ -23,13 +23,13 @@ class BuildPathTest {
     return {root, project, caller, compiler, capture:path.join(root, 'chosen-project.txt'), artifacts:path.join(root, 'external output with spaces')};
   }
 
-  /** @param {BuildFixture} fixture @param {string} artifacts @returns {import('node:child_process').SpawnSyncReturns<string>} */
-  static invoke(fixture, artifacts) {
+  /** @param {BuildFixture} fixture @param {string} artifacts @param {Record<string, string>} overrides @returns {import('node:child_process').SpawnSyncReturns<string>} */
+  static invoke(fixture, artifacts, overrides = {}) {
     return spawnSync('/bin/zsh', [path.join(fixture.project, 'build.sh')], {
       cwd:fixture.caller,
       env:{...process.env, PATH:fixture.root + path.delimiter + process.env.PATH, TACHYON_COMPILER:fixture.compiler, OBSERVATORY_TEST_CAPTURE:fixture.capture,
         OBSERVATORY_NATIVE_ARTIFACTS:artifacts, OBSERVATORY_SWIFT_CACHE_PATH:path.join(fixture.root, 'swift cache'),
-        OBSERVATORY_RUST_CACHE_PATH:path.join(fixture.root, 'rust cache'), OBSERVATORY_ROLLBACK_ROOT:path.join(fixture.root, 'rollback')},
+        OBSERVATORY_RUST_CACHE_PATH:path.join(fixture.root, 'rust cache'), OBSERVATORY_ROLLBACK_ROOT:path.join(fixture.root, 'rollback'), ...overrides},
       encoding:'utf8'
     });
   }
@@ -54,4 +54,33 @@ test('build rejects a configured source output before compiler invocation', /** 
   assert.match(result.stderr, /outside the source project/);
   assert.equal(fs.existsSync(fixture.capture), false);
   assert.equal(fs.existsSync(path.join(fixture.project, 'app/dist')), false);
+});
+
+
+test('build rejects a rollback below the promoted native output before copying or invoking the compiler', /** @param {import('node:test').TestContext} context @returns {void} */ context => {
+  const fixture = BuildPathTest.fixture();
+  context.after(/** @returns {void} */ () => fs.rmSync(fixture.root, {recursive:true}));
+  const bundle = path.join(fixture.artifacts, 'macos/AgentObservatory.app');
+  fs.mkdirSync(bundle, {recursive:true});
+  fs.writeFileSync(path.join(bundle, 'preserved.txt'), 'last accepted app');
+  const rollback = path.join(fixture.artifacts, 'macos/rollback');
+  const result = BuildPathTest.invoke(fixture, fixture.artifacts, {OBSERVATORY_ROLLBACK_ROOT:rollback});
+  assert.notEqual(result.status, 37);
+  assert.match(result.stderr, /separate/);
+  assert.equal(fs.existsSync(fixture.capture), false);
+  assert.equal(fs.existsSync(rollback), false);
+  assert.equal(fs.readFileSync(path.join(bundle, 'preserved.txt'), 'utf8'), 'last accepted app');
+});
+
+test('build rejects cache paths that physically alias each other before invoking the compiler', /** @param {import('node:test').TestContext} context @returns {void} */ context => {
+  const fixture = BuildPathTest.fixture();
+  context.after(/** @returns {void} */ () => fs.rmSync(fixture.root, {recursive:true}));
+  const cache = path.join(fixture.root, 'shared cache');
+  const alias = path.join(fixture.root, 'cache alias');
+  fs.mkdirSync(cache);
+  fs.symlinkSync(cache, alias, 'dir');
+  const result = BuildPathTest.invoke(fixture, fixture.artifacts, {OBSERVATORY_RUST_CACHE_PATH:cache, OBSERVATORY_SWIFT_CACHE_PATH:alias});
+  assert.notEqual(result.status, 37);
+  assert.match(result.stderr, /separate/);
+  assert.equal(fs.existsSync(fixture.capture), false);
 });

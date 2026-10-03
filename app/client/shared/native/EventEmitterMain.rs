@@ -1,4 +1,7 @@
-use crate::models::{NativeCommandIdentity, NativeLogicalReceipt, NativeProcess};
+use crate::models::{
+    NativeCommandIdentity, NativeHookDialect, NativeLogicalReceipt, NativeProcess,
+};
+use crate::ClaudeHookAdapter;
 use crate::ProcessIdentityReader;
 use std::io::{Read, Write};
 
@@ -7,7 +10,16 @@ pub struct EventEmitterMain {}
 impl EventEmitterMain {
     const INVALID_PROCESS_ID: i32 = 0;
     const IDENTITY_FLAG: &'static str = "--identity";
-    const USAGE: &'static str = "Usage: observatory-event [--socket /absolute/private/path] < event.json; or observatory-event --identity <positive-decimal-pid>";
+    const HOOK_MODES: [(&'static str, NativeHookDialect); 7] = [
+        ("--claude-hook", ClaudeHookAdapter::CLAUDE),
+        ("--codex-hook", ClaudeHookAdapter::CODEX),
+        ("--qwen-hook", ClaudeHookAdapter::QWEN),
+        ("--pi-hook", ClaudeHookAdapter::PI),
+        ("--goose-hook", ClaudeHookAdapter::GOOSE),
+        ("--gemini-hook", ClaudeHookAdapter::GEMINI),
+        ("--opencode-hook", ClaudeHookAdapter::OPENCODE),
+    ];
+    const USAGE: &'static str = "Usage: observatory-event [--socket /absolute/private/path] < event.json; or observatory-event --claude-hook|--codex-hook|--qwen-hook|--pi-hook|--goose-hook|--gemini-hook|--opencode-hook [--socket /absolute/private/path] < hook.json; or observatory-event --identity <positive-decimal-pid>";
     const INVALID_PID: &'static str = "Identity query requires a positive decimal PID.";
     const UNSUPPORTED: &'static str =
         "Process identity query unavailable: this target is not supported; macOS is required.";
@@ -21,10 +33,42 @@ impl EventEmitterMain {
     }
 
     fn handler(arguments: &[String]) -> fn(Vec<String>) -> i32 {
-        match arguments.first().map(String::as_str) {
-            Some(Self::IDENTITY_FLAG) => Self::identity_result,
+        let flag: Option<&str> = arguments.first().map(String::as_str);
+        match (flag, Self::hook_dialect(flag)) {
+            (Some(Self::IDENTITY_FLAG), _) => Self::identity_result,
+            (_, Some(_dialect)) => Self::hook_result,
             _ => Self::event_result,
         }
+    }
+
+    fn hook_dialect(flag: Option<&str>) -> Option<NativeHookDialect> {
+        Self::HOOK_MODES
+            .iter()
+            .find(|(name, _): &&(&str, NativeHookDialect)| -> bool { Some(*name) == flag })
+            .map(|(_, dialect): &(&str, NativeHookDialect)| -> NativeHookDialect { *dialect })
+    }
+
+    fn hook_result(arguments: Vec<String>) -> i32 {
+        let dialect: Option<NativeHookDialect> =
+            Self::hook_dialect(arguments.first().map(String::as_str));
+        let endpoint: Option<String> = Self::hook_endpoint(arguments).ok();
+        Self::deliver_hook(endpoint.zip(dialect))
+    }
+
+    fn hook_endpoint(arguments: Vec<String>) -> Result<String, String> {
+        let options: Vec<String> = arguments.into_iter().skip(1).collect();
+        Self::selected_endpoint(options)
+    }
+
+    fn deliver_hook(selection: Option<(String, NativeHookDialect)>) -> i32 {
+        let _delivery: Option<()> = selection.map(Self::read_hook);
+        Self::SUCCESS_CODE
+    }
+
+    fn read_hook(selection: (String, NativeHookDialect)) -> () {
+        let (endpoint, dialect): (String, NativeHookDialect) = selection;
+        let mut input: std::io::StdinLock<'static> = std::io::stdin().lock();
+        ClaudeHookAdapter::new(endpoint, dialect).deliver(&mut input)
     }
 
     fn event_result(arguments: Vec<String>) -> i32 {

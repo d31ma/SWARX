@@ -80,7 +80,7 @@ export default class ObservatoryService {
     }
 
     /** @param {Event} _event @param {string} identifier @returns {void} */
-    select(_event, identifier) {
+    #select(_event, identifier) {
         this.#selected = identifier;
         this.search();
     }
@@ -167,7 +167,7 @@ export default class ObservatoryService {
     #selectProcess(event, group, identifier) {
         this.#selectedProcessNumber = identifier;
         this.#graphGroup = group;
-        this.select(event, group);
+        this.#select(event, group);
     }
 
     /** @returns {void} */
@@ -235,15 +235,30 @@ export default class ObservatoryService {
         if (revision !== this.#revision) {
             return;
         }
+        this.#acceptCurrent(model);
+    }
+
+    /** @param {import('/models/ObservatoryModel.ts').ObservatoryModel} model @returns {void} */
+    #acceptCurrent(model) {
         this.model = model;
         this.#selected = model.selected;
         this.#selectedSession = model.selectedSession;
-        this.#sessionProcessNumber = model.selectedSessionProcess?.pid ?? null;
-        this.#sessionProcessStarted = model.selectedSessionProcess?.started ?? null;
+        this.#sessionProcessNumber = this.#processPid(model.selectedSessionProcess);
+        this.#sessionProcessStarted = this.#processStart(model.selectedSessionProcess);
         this.status = model.liveStatus;
         this.problem = ObservatoryService._EMPTY_TEXT;
         delete this.#element().dataset.nativeFailure;
         void this.#renderCharts().catch(/** @param {unknown} error @returns {void} */ error => this.#chartFailure(error));
+    }
+
+    /** @param {import('/models/ProcessRow.ts').ProcessRow | null | undefined} process @returns {number | null} */
+    #processPid(process) {
+        return process?.pid ?? null;
+    }
+
+    /** @param {import('/models/ProcessRow.ts').ProcessRow | null | undefined} process @returns {string | null} */
+    #processStart(process) {
+        return process?.started ?? null;
     }
 
     /** @param {unknown} error @param {number} revision @returns {void} */

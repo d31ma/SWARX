@@ -1,5 +1,6 @@
 import {userInfo} from 'node:os';
 import {QaPathUtils} from './QaPathUtils.mjs';
+import {NativeLiveQaReportUtils} from './NativeLiveQaReportUtils.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -42,16 +43,21 @@ class NativeActiveTaskLiveTest {
   static previousReports = new Set();
   /** @type {number} */
   static EXIT_TIMEOUT = 10000;
+  /** @type {string | undefined} */
+  static reportDirectory;
+  /** @type {number} */
+  static startedAt = 0;
 
   /** @returns {Promise<void>} */
   static async run() {
+    this.startedAt = Date.now();
     this.previousReports = new Set(fs.readdirSync(path.join(this.ROOT, 'evidence')));
     assert.equal(fs.existsSync(this.SOCKET), false, 'Quit the owned monitor before starting native QA.');
     fs.rmSync(this.STATUS, {force:true});
     const log = fs.openSync(path.join(this.ROOT,'evidence/active-task-native-app.txt'),'w');
     const app = spawn(path.join(this.BUNDLE,'Contents/MacOS/AgentObservatory'),[],{
       env:{...process.env,OBSERVATORY_QA:'1',OBSERVATORY_QA_FOCUS:'active-task',
-        OBSERVATORY_QA_ACTION_NAME:this.ACTION,OBSERVATORY_QA_AGENT_RECORD_ID:`coord:${this.SESSION}:${this.AGENT}`,OBSERVATORY_ROOT:this.ROOT,OBSERVATORY_LIFETIME_QA:''},
+        OBSERVATORY_QA_ACTION_NAME:this.ACTION,OBSERVATORY_QA_ACTION_RECORD_ID:this.EXECUTION,OBSERVATORY_QA_AGENT_RECORD_ID:`coord:${this.SESSION}:${this.AGENT}`,OBSERVATORY_ROOT:this.ROOT,OBSERVATORY_LIFETIME_QA:''},
       stdio:['ignore',log,log]
     });
     fs.closeSync(log);
@@ -78,10 +84,9 @@ class NativeActiveTaskLiveTest {
     await this.waitStage('native-task-between-commands-report.json');
     this.report('completed');
     await this.waitStage('native-task-completed-history-report.json');
+    await this.waitStage('native-task-completed-hidden-report.json');
     await this.waitPath(this.STATUS);
-    const status=JSON.parse(fs.readFileSync(this.STATUS,'utf8'));
-    assert.equal(status.success,true,'Actual active-task native check failed');
-    assert.equal(status.completedSteps,7);
+    const status=NativeLiveQaReportUtils.status(this.STATUS,this.reportDirectory??'',7);
     fs.writeFileSync(path.join(this.ROOT,'evidence/active-task-native-status.json'),JSON.stringify(status,null,2)+'\n');
     const quit=spawnSync('/usr/bin/osascript',['-e','tell application id "ma.del.agent-observatory" to quit'],{
       encoding:'utf8',timeout:this.EVENT_TIMEOUT
@@ -122,9 +127,12 @@ class NativeActiveTaskLiveTest {
     const deadline=Date.now()+this.STAGE_TIMEOUT;
     for(;;) {
       this.requireNoFailure();
-      const names=fs.readdirSync(path.join(this.ROOT,'evidence'));
-      const found=names.filter(name=>name.startsWith('native-qa-') && !this.previousReports.has(name)).map(name=>path.join(this.ROOT,'evidence',name,filename)).find(name=>fs.existsSync(name));
-      if(found) return found;
+      const found=NativeLiveQaReportUtils.findStage(path.join(this.ROOT,'evidence'),this.previousReports,this.reportDirectory,filename);
+      if(found) {
+        NativeLiveQaReportUtils.stage(found,{agentRecordId:`coord:${this.SESSION}:${this.AGENT}`,sessionId:this.SESSION,taskId:this.TASK,actionRecordId:this.EXECUTION,actionName:this.ACTION,startedAt:this.startedAt});
+        this.reportDirectory=path.dirname(found);
+        return found;
+      }
       assert.ok(Date.now()<deadline,'Native stage did not finish: '+filename);
       await this.pause();
     }

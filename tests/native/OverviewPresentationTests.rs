@@ -824,6 +824,8 @@ fn native_session_links_and_counts_are_preserved() -> () {
         known: true,
         captured_at: None,
         agents: Vec::new(),
+        model: None,
+        provider: None,
     }];
     snapshot.linked_session_count = 1;
     snapshot.harness_count = 2;
@@ -1035,4 +1037,123 @@ fn failed_metrics_leave_reported_work_visible() -> () {
     assert_eq!(view.logical.len(), 1);
     assert_eq!(view.live_status, "Metrics unavailable");
     assert_eq!(view.event_source_count, 1);
+}
+
+#[test]
+fn session_pages_group_by_harness_and_keep_order_within_each() -> () {
+    let session = |key: &str, family: &str| -> NativeSessionView {
+        NativeSessionView {
+            key: key.to_owned(),
+            id: Some(key.to_owned()),
+            name: key.to_owned(),
+            family: family.to_owned(),
+            source: "Explicit binding".to_owned(),
+            known: true,
+            captured_at: None,
+            agents: Vec::new(),
+            model: None,
+            provider: None,
+        }
+    };
+    let mut snapshot: NativeSnapshot = OverviewPresentationTests::snapshot(Vec::new());
+    snapshot.session_groups = vec![
+        session("claude-new", "Claude"),
+        session("local", "Local harness"),
+        session("codex-a", "Codex"),
+        session("claude-old", "Claude"),
+        session("codex-b", "Codex"),
+    ];
+    let view: NativeOverviewView = OverviewPresentationTests::view(&snapshot);
+    let keys: Vec<&str> = view
+        .resource_sessions
+        .iter()
+        .map(|session: &crate::models::NativeSessionResourceView| -> &str { session.key.as_str() })
+        .collect();
+    assert_eq!(keys, ["codex-a", "codex-b", "claude-new", "claude-old", "local"]);
+    let headers: Vec<bool> = view
+        .resource_sessions
+        .iter()
+        .map(|session: &crate::models::NativeSessionResourceView| -> bool { session.harness_header })
+        .collect();
+    assert_eq!(headers, [true, false, true, false, true]);
+}
+
+#[test]
+fn activity_groups_by_harness_and_keeps_running_first_order_within_each() -> () {
+    let activity = |id: &str, family: &str| -> crate::models::NativeSessionActivityView {
+        crate::models::NativeSessionActivityView {
+            id: id.to_owned(),
+            name: id.to_owned(),
+            family: family.to_owned(),
+            ..Default::default()
+        }
+    };
+    let mut snapshot: NativeSnapshot = OverviewPresentationTests::snapshot(Vec::new());
+    snapshot.activity = vec![
+        activity("claude-running", "Claude"),
+        activity("codex-running", "Codex"),
+        activity("claude-finished", "Claude"),
+        activity("unreported", ""),
+    ];
+    let view: NativeOverviewView = OverviewPresentationTests::view(&snapshot);
+    let order: Vec<(&str, bool)> = view
+        .activity
+        .iter()
+        .map(|session: &crate::models::NativeSessionActivityView| -> (&str, bool) {
+            (session.id.as_str(), session.harness_header)
+        })
+        .collect();
+    assert_eq!(
+        order,
+        [("codex-running", true), ("claude-running", true), ("claude-finished", false), ("unreported", true)]
+    );
+}
+
+#[test]
+fn harness_session_names_resource_cards_and_activity_by_exact_id() -> () {
+    let harness: crate::models::NativeHarnessSession = crate::models::NativeHarnessSession {
+        family: "Claude".to_owned(),
+        id: "63832326-6ada-44fb-a626-edd4e86b08a4".to_owned(),
+        app_id: Some("local_fc570abd-4ed8-4dd3-8c93-415a48215291".to_owned()),
+        project: Some("SWARX".to_owned()),
+        title: Some("Implement".to_owned()),
+        title_source: "Claude desktop session title".to_owned(),
+        last_activity_at: Some(OverviewPresentationTests::NOW - 30.0),
+        archived: false,
+        model: Some("claude-opus-5-5".to_owned()),
+        provider: None,
+    };
+    let mut snapshot: NativeSnapshot = OverviewPresentationTests::snapshot(Vec::new());
+    snapshot.session_groups = crate::TachyonRustServices::SessionViewUtils::named(
+        Vec::new(),
+        &[harness.clone()],
+        OverviewPresentationTests::NOW,
+    );
+    snapshot.activity = vec![crate::models::NativeSessionActivityView {
+        id: "Claude:63832326-6ada-44fb-a626-edd4e86b08a4".to_owned(),
+        name: "Reported label".to_owned(),
+        family: "Claude".to_owned(),
+        session_id: Some(harness.id.clone()),
+        ..Default::default()
+    }];
+    snapshot.harness_sessions = vec![harness];
+    let view: NativeOverviewView = OverviewPresentationTests::view(&snapshot);
+    assert_eq!(view.resource_sessions.len(), 1);
+    let session: &crate::models::NativeSessionResourceView = &view.resource_sessions[0];
+    assert_eq!(session.name, "SWARX/Implement");
+    assert_eq!(
+        session.id.as_deref(),
+        Some("63832326-6ada-44fb-a626-edd4e86b08a4")
+    );
+    assert_eq!(session.source, "Claude desktop session title");
+    assert_eq!(session.model.as_deref(), Some("claude-opus-5-5"));
+    assert_eq!(session.provider, None);
+    assert_eq!(session.source_record_count, 0);
+    assert!(session.commands.is_empty());
+    assert!(session.harness_header);
+    assert_eq!(view.activity[0].name, "SWARX/Implement");
+    assert_eq!(
+        view.activity[0].source.as_deref(),
+        Some("Claude desktop session title")
+    );
 }

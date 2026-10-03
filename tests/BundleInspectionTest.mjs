@@ -4,9 +4,11 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import assert from 'node:assert/strict';
+import {NativeLoaderPolicyUtils} from './utils/NativeLoaderPolicyUtils.mjs';
 
 /** @typedef {{name: string, passed: boolean, detail: string, evidence?: unknown}} InspectionCheck */
 /** @typedef {{status: number | null, stdout: string, stderr: string, error: string | null}} InspectionToolResult */
+/** @typedef {(tool: string, arguments_: string[]) => InspectionToolResult} InspectionToolRunner */
 /** @typedef {{reference: string, passed: boolean, kind: string, local?: string}} InspectionAsset */
 /** @typedef {{name: string, content: string}} InspectionModuleSource */
 /** @typedef {{name: string, references: string[], error: string | null}} InspectionModuleRecord */
@@ -20,6 +22,8 @@ export class BundleInspectionTest {
   static #TOOL_OUTPUT_LIMIT = 262144;
   /** @type {string[]} */
   static #LOCAL_ASSETS = ['shared/assets/observatory.svg', 'shared/assets/duvay/duvay-wc.min.js', 'shared/assets/duvay/duvay.min.js', 'shared/assets/duvay/duvay.min.css', 'shared/assets/chartjs/chart.umd.min.js'];
+  /** @type {string[]} */
+  static #RETIRED_BROWSER_ASSETS = ['shared/scripts/ChartRenderer.js', 'shared/scripts/GraphRenderer.js', 'shared/scripts/GraphGroupRenderer.js', 'shared/scripts/ViewContinuity.js', 'utils/PresentationUtils.js', 'utils/DomUtils.js'];
   /** @type {string} */
   static #WEB_PREFIX = 'Contents/Resources/WebBundle/';
   /** @type {string[]} */
@@ -41,6 +45,8 @@ const records = input.map(/** @param {{name: string, content: string}} record @r
 });
 process.stdout.write(JSON.stringify(records));
 `;
+  /** @type {InspectionToolRunner} */
+  #toolRunner;
   /** @type {string} */
   #bundle;
   /** @type {string} */
@@ -51,11 +57,14 @@ process.stdout.write(JSON.stringify(records));
   #checks = [];
   /** @type {string[]} */
   #files = [];
+  /** @type {string[]} */
+  #paths = [];
   /** @type {Record<string, unknown>} */
   #information = {};
 
-  /** @param {string} bundle @param {string} report @param {string} label */
-  constructor(bundle, report, label) {
+  /** @param {string} bundle @param {string} report @param {string} label @param {InspectionToolRunner} toolRunner */
+  constructor(bundle, report, label, toolRunner = BundleInspectionTest.#defaultTool) {
+    this.#toolRunner = toolRunner;
     this.#bundle = fs.realpathSync(bundle);
     this.#report = path.resolve(report);
     this.#label = label;
@@ -119,15 +128,32 @@ process.stdout.write(JSON.stringify(records));
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
       const absolute = path.join(directory, entry.name);
       const relative = path.relative(this.#bundle, absolute);
+      this.#paths.push(relative.split(path.sep).join('/'));
       if (entry.isSymbolicLink()) {
         let contained = false;
         try { contained = this.#inside(this.#bundle, fs.realpathSync(absolute)); } catch {}
         this.#check(`symlink:${relative}`, contained, 'Symlink target exists inside the inspected bundle.');
+        if (contained) this.#recordAliasPaths(absolute, new Set());
       } else if (entry.isDirectory()) {
         this.#walk(absolute);
       } else if (entry.isFile()) {
         this.#files.push(relative);
       }
+    }
+  }
+
+  /** @param {string} directory @param {Set<string>} ancestors @returns {void} */
+  #recordAliasPaths(directory, ancestors) {
+    let physical;
+    try { physical = fs.realpathSync(directory); } catch { return; }
+    if (!this.#inside(this.#bundle, physical) || ancestors.has(physical)) return;
+    if (!fs.statSync(physical).isDirectory()) return;
+    const lineage = new Set(ancestors);
+    lineage.add(physical);
+    for (const entry of fs.readdirSync(directory, {withFileTypes:true})) {
+      const absolute = path.join(directory, entry.name);
+      this.#paths.push(path.relative(this.#bundle, absolute).split(path.sep).join('/'));
+      this.#recordAliasPaths(absolute, lineage);
     }
   }
 
@@ -138,6 +164,11 @@ process.stdout.write(JSON.stringify(records));
 
   /** @param {string} tool @param {string[]} arguments_ @returns {InspectionToolResult} */
   #tool(tool, arguments_) {
+    return this.#toolRunner(tool, arguments_);
+  }
+
+  /** @param {string} tool @param {string[]} arguments_ @returns {InspectionToolResult} */
+  static #defaultTool(tool, arguments_) {
     const result = spawnSync(tool, arguments_, { encoding: 'utf8', timeout: BundleInspectionTest.#TOOL_TIMEOUT, maxBuffer: BundleInspectionTest.#TOOL_OUTPUT_LIMIT });
     return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '', error: result.error?.message ?? null };
   }
@@ -195,6 +226,9 @@ process.stdout.write(JSON.stringify(records));
     const python = dependencies.filter(/** @param {string} line @returns {boolean} */ line => /(?:libpython[^/\s]*\.(?:dylib|so)|Python\.framework\/|\/python(?:[23](?:\.\d+)*)?(?:\s|$))/i.test(line));
     this.#check(`${role}-linked-dependencies`, libraries.status === 0, 'otool reads actual loader dependencies.', { dependencies, error: libraries.error });
     this.#check(`${role}-no-python-link`, libraries.status === 0 && python.length === 0, 'No Python interpreter/library appears in actual linked dependencies; debug symbols are not searched.', python);
+    const commands = this.#tool('/usr/bin/otool', ['-l', binary]);
+    const policy = NativeLoaderPolicyUtils.inspect(this.#bundle, binary, libraries, commands);
+    this.#check(`${role}-loader-path-policy`, policy.passed, 'Declared direct dependencies and runtime search paths use macOS system locations or existing relative bundle targets; external, missing and unreadable paths are refused.', policy);
     const signature = this.#tool('/usr/bin/codesign', ['-d', '--verbose=4', binary]);
     const metadata = `${signature.stdout}\n${signature.stderr}`;
     this.#check(`${role}-adhoc-signature`, signature.status === 0 && /Signature=adhoc|flags=.*adhoc/.test(metadata), 'codesign display identifies an ad-hoc signature.', { status: signature.status, description: metadata.trim(), error: signature.error });
@@ -374,11 +408,15 @@ process.stdout.write(JSON.stringify(records));
     const forbidden = this.#files.filter(/** @param {string} file @returns {boolean} */ file => /(?:^|\/)Collector(?:\/|$)|\.(?:py|pyc)$/i.test(file));
     const collector = fs.existsSync(path.join(this.#bundle, 'Contents/Resources/Collector'));
     this.#check('no-collector-or-python-source', !collector && forbidden.length === 0, 'No Collector resource or .py/.pyc file is bundled.', forbidden);
+    const retired = this.#paths.filter(/** @param {string} file @returns {boolean} */ file =>
+      file.startsWith(BundleInspectionTest.#WEB_PREFIX) && BundleInspectionTest.#RETIRED_BROWSER_ASSETS.some(
+        /** @param {string} asset @returns {boolean} */ asset => file.endsWith('/'+asset)));
+    this.#check('no-retired-browser-adapters', retired.length === 0, 'No retired browser adapter path is bundled anywhere under WebBundle, including compiler runtime aliases.', retired);
   }
 
   /** @returns {void} */
   #writeReport() {
-    const report = { schema: 2, scope: 'read-only bundle preflight; baseline, not latest-build acceptance', label: this.#label, bundle: this.#bundle, inspected_at: new Date().toISOString(), conditions_passed: this.#checks.every(/** @param {InspectionCheck} check @returns {boolean} */ check => check.passed), checks: this.#checks, limitations: ['Does not launch the app, quit processes, touch the event socket, or certify relocation/lifecycle.', 'Does not verify native bridge resolution, live metrics, UI interactions, icon appearance or current source/compiler provenance.', 'Inspects literal HTML script/link attributes and nonvendor JS/MJS static relative/root import/export-from declarations. Does not resolve bare packages/import maps, dynamic imports, computed script URLs, CSS references or vendor module dependencies.', 'Uses the current Node/V8 module parser without linking or evaluating bundled JavaScript; export symbol compatibility and execution are not certified.', 'Uses the native .tachyon to tachyon-runtime resource alias; its presence does not prove the host serves it correctly.', 'Does not search debug strings or symbols for Python; only actual linked dependencies and bundled Python source resources are checked.', 'Ad-hoc signature verification does not establish notarization, Developer ID signing, Gatekeeper approval or target-host compatibility.'] };
+    const report = { schema: 2, scope: 'read-only bundle preflight; baseline, not latest-build acceptance', label: this.#label, bundle: this.#bundle, inspected_at: new Date().toISOString(), conditions_passed: this.#checks.every(/** @param {InspectionCheck} check @returns {boolean} */ check => check.passed), checks: this.#checks, limitations: ['Does not launch the app, quit processes, touch the event socket, or certify relocation/lifecycle.', 'Does not verify native bridge resolution, live metrics, UI interactions, icon appearance or current source/compiler provenance.', 'Inspects literal HTML script/link attributes and nonvendor JS/MJS static relative/root import/export-from declarations. Does not resolve bare packages/import maps, dynamic imports, computed script URLs, CSS references or vendor module dependencies.', 'Uses the current Node/V8 module parser without linking or evaluating bundled JavaScript; export symbol compatibility and execution are not certified.', 'Uses the native .tachyon to tachyon-runtime resource alias; its presence does not prove the host serves it correctly.', 'Inspects direct linked dependencies and LC_RPATH for the main and emitter executables; other bundled images, inherited rpath stacks, dlopen, environment overrides and runtime loading are not certified.', 'System declarations may be provided by the dyld shared cache; accepted system paths are not proof that an arbitrary system library exists. Multi-architecture otool output is refused until per-slice inspection is implemented.', 'Does not search debug strings or symbols for Python; only actual linked dependencies and bundled Python source resources are checked.', 'Ad-hoc signature verification does not establish notarization, Developer ID signing, Gatekeeper approval or target-host compatibility.'] };
     fs.mkdirSync(path.dirname(this.#report), { recursive: true });
     this.#requireExternalReport();
     fs.writeFileSync(this.#report, `${JSON.stringify(report, null, 2)}\n`, { encoding: 'utf8', flag: 'wx', mode: 0o600 });

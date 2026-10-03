@@ -36,6 +36,8 @@ export class NativePackagerFixture {
 
   host(): string {
     const source: string = 'window.contentMinSize = NSSize(width: 0, height: 0)\n'
+      + '        window.title = "Agent Observatory"\n'
+      + '        menus.install(NSApplication.shared, window, "Agent Observatory", menuNavigation)\n'
       + '        NSApplication.shared.activate(ignoringOtherApps: true)\n'
       + '        Telemetry.shared.record("controller.active")\n';
     this.write('tools/native/NativePreviewVerifier.swift', 'let script = "__NATIVE_REPORT_SCRIPT__"\n');

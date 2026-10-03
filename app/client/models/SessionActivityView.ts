@@ -10,4 +10,5 @@ export interface SessionActivityView {
   label_reported_at: number | null;
   records: ActivityRecord[];
   captured_at: number;
+  harnessHeader: boolean;
 }

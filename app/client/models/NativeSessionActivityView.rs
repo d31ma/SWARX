@@ -14,4 +14,6 @@ pub struct NativeSessionActivityView {
     pub label_reported_at: Option<f64>,
     pub records: Vec<NativeActivityRecord>,
     pub captured_at: f64,
+    #[serde(rename = "harnessHeader", default)]
+    pub harness_header: bool,
 }

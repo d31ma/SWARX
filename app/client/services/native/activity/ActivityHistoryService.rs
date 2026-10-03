@@ -111,6 +111,7 @@ impl ActivityHistoryService {
             label_reported_at: Self::label_time(agent, execution),
             records: Vec::new(),
             captured_at: 0.0,
+            harness_header: false,
         }
     }
 

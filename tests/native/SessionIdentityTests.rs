@@ -1,5 +1,6 @@
 use crate::models::{
-    NativeLogicalAgent, NativeLogicalAgentView, NativeSessionLink, NativeSessionView,
+    NativeHarnessSession, NativeLogicalAgent, NativeLogicalAgentView, NativeSessionActivityView,
+    NativeSessionLink, NativeSessionView,
 };
 use crate::TachyonRustServices::{LogicalViewUtils, SessionViewUtils};
 
@@ -39,6 +40,37 @@ impl SessionIdentityTests {
             reported_status: None,
         };
         LogicalViewUtils::agent(&agent, captured_at)
+    }
+
+    const NOW: f64 = 100_000.0;
+    const HARNESS_SOURCE: &'static str = "Claude Desktop session metadata";
+    const CLAUDE_SESSION: &'static str = "63832326-6ada-44fb-a626-edd4e86b08a4";
+
+    fn harness(id: &str, project: Option<&str>, title: Option<&str>) -> NativeHarnessSession {
+        NativeHarnessSession {
+            family: "Claude".to_owned(),
+            id: id.to_owned(),
+            app_id: Some("local_fc570abd-4ed8-4dd3-8c93-415a48215291".to_owned()),
+            project: project.map(str::to_owned),
+            title: title.map(str::to_owned),
+            title_source: Self::HARNESS_SOURCE.to_owned(),
+            last_activity_at: Some(Self::NOW - 60.0),
+            archived: false,
+            model: None,
+            provider: None,
+        }
+    }
+
+    fn activity(family: &str, session_id: &str) -> NativeSessionActivityView {
+        NativeSessionActivityView {
+            id: format!("{family}:{session_id}"),
+            name: "Reported label".to_owned(),
+            family: family.to_owned(),
+            session_id: Some(session_id.to_owned()),
+            session_name: Some("Reported label".to_owned()),
+            source: Some(Self::SOURCE.to_owned()),
+            ..Default::default()
+        }
     }
 
     fn report(id: &str, family: &str, name: &str, captured_at: f64) -> NativeLogicalAgentView {
@@ -410,4 +442,316 @@ fn native_id_with_unlinked_prefix_never_merges_with_missing_session() -> () {
     assert!(sessions[0].known);
     assert!(!sessions[1].known);
     assert_ne!(sessions[0].key, sessions[1].key);
+}
+
+#[test]
+fn matched_harness_session_shows_project_and_title_with_harness_source() -> () {
+    let report: NativeLogicalAgentView = SessionIdentityTests::report(
+        SessionIdentityTests::CLAUDE_SESSION,
+        "Claude",
+        "Reported label",
+        10.0,
+    );
+    let harness: NativeHarnessSession = SessionIdentityTests::harness(
+        SessionIdentityTests::CLAUDE_SESSION,
+        Some("SWARX"),
+        Some("Implement"),
+    );
+    let before: Vec<NativeSessionView> = SessionViewUtils::sessions(&[report]);
+    let sessions: Vec<NativeSessionView> =
+        SessionViewUtils::named(before.clone(), &[harness], SessionIdentityTests::NOW);
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].name, "SWARX/Implement");
+    assert_eq!(sessions[0].source, SessionIdentityTests::HARNESS_SOURCE);
+    assert_eq!(
+        sessions[0].id.as_deref(),
+        Some(SessionIdentityTests::CLAUDE_SESSION)
+    );
+    assert_eq!(sessions[0].key, before[0].key);
+    assert_eq!(sessions[0].agents.len(), 1);
+}
+
+#[test]
+fn unmatched_session_keeps_reported_label_and_source() -> () {
+    let report: NativeLogicalAgentView =
+        SessionIdentityTests::report("other", "Claude", "Reported label", 10.0);
+    let harness: NativeHarnessSession =
+        SessionIdentityTests::harness("different", Some("SWARX"), Some("Implement"));
+    let mut old: NativeHarnessSession = harness.clone();
+    old.last_activity_at = Some(1.0);
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report]),
+        &[old],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].name, "Reported label");
+    assert_eq!(sessions[0].source, SessionIdentityTests::SOURCE);
+}
+
+#[test]
+fn harness_only_session_appears_with_exact_id_and_no_agents() -> () {
+    let harness: NativeHarnessSession = SessionIdentityTests::harness(
+        SessionIdentityTests::CLAUDE_SESSION,
+        Some("SWARX"),
+        Some("Implement"),
+    );
+    let sessions: Vec<NativeSessionView> =
+        SessionViewUtils::named(Vec::new(), &[harness], SessionIdentityTests::NOW);
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].name, "SWARX/Implement");
+    assert_eq!(sessions[0].family, "Claude");
+    assert_eq!(
+        sessions[0].id.as_deref(),
+        Some(SessionIdentityTests::CLAUDE_SESSION)
+    );
+    assert_eq!(sessions[0].source, SessionIdentityTests::HARNESS_SOURCE);
+    assert_eq!(
+        sessions[0].captured_at,
+        Some(SessionIdentityTests::NOW - 60.0)
+    );
+    assert!(sessions[0].known);
+    assert!(sessions[0].agents.is_empty());
+    assert_eq!(SessionViewUtils::linked_count(&sessions), 1);
+}
+
+#[test]
+fn harness_only_key_matches_the_key_a_later_event_report_uses() -> () {
+    let harness: NativeHarnessSession =
+        SessionIdentityTests::harness("part:one", Some("SWARX"), Some("Implement"));
+    let report: NativeLogicalAgentView =
+        SessionIdentityTests::report("part:one", "Claude", "Reported label", 10.0);
+    let alone: Vec<NativeSessionView> =
+        SessionViewUtils::named(Vec::new(), &[harness.clone()], SessionIdentityTests::NOW);
+    let reported: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report]),
+        &[harness],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(reported.len(), 1);
+    assert_eq!(alone[0].key, reported[0].key);
+    assert_eq!(reported[0].name, "SWARX/Implement");
+}
+
+#[test]
+fn archived_old_undated_and_blank_id_harness_sessions_are_not_added() -> () {
+    let mut archived: NativeHarnessSession =
+        SessionIdentityTests::harness("archived", Some("SWARX"), Some("Archived"));
+    archived.archived = true;
+    let mut old: NativeHarnessSession =
+        SessionIdentityTests::harness("old", Some("SWARX"), Some("Old"));
+    old.last_activity_at = Some(SessionIdentityTests::NOW - 12.0 * 60.0 * 60.0 - 1.0);
+    let mut undated: NativeHarnessSession =
+        SessionIdentityTests::harness("undated", Some("SWARX"), Some("Undated"));
+    undated.last_activity_at = None;
+    let blank: NativeHarnessSession =
+        SessionIdentityTests::harness("  ", Some("SWARX"), Some("Blank"));
+    let mut edge: NativeHarnessSession =
+        SessionIdentityTests::harness("edge", Some("SWARX"), Some("Edge"));
+    edge.last_activity_at = Some(SessionIdentityTests::NOW - 12.0 * 60.0 * 60.0);
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::named(
+        Vec::new(),
+        &[archived, old, undated, blank, edge],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].id.as_deref(), Some("edge"));
+}
+
+#[test]
+fn archived_harness_session_still_names_a_matching_reported_session() -> () {
+    let report: NativeLogicalAgentView =
+        SessionIdentityTests::report("one", "Claude", "Reported label", 10.0);
+    let mut harness: NativeHarnessSession =
+        SessionIdentityTests::harness("one", Some("SWARX"), Some("Implement"));
+    harness.archived = true;
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report]),
+        &[harness],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].name, "SWARX/Implement");
+}
+
+#[test]
+fn duplicate_harness_titles_with_different_ids_stay_separate() -> () {
+    let first: NativeHarnessSession =
+        SessionIdentityTests::harness("one", Some("SWARX"), Some("Implement"));
+    let second: NativeHarnessSession =
+        SessionIdentityTests::harness("two", Some("SWARX"), Some("Implement"));
+    let report: NativeLogicalAgentView =
+        SessionIdentityTests::report("one", "Claude", "Reported label", 10.0);
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report]),
+        &[first, second],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(sessions.len(), 2);
+    assert_eq!(sessions[0].id.as_deref(), Some("one"));
+    assert_eq!(sessions[0].agents.len(), 1);
+    assert_eq!(sessions[1].id.as_deref(), Some("two"));
+    assert!(sessions[1].agents.is_empty());
+    assert_eq!(sessions[0].name, sessions[1].name);
+    assert_ne!(sessions[0].key, sessions[1].key);
+}
+
+#[test]
+fn repeated_harness_record_for_one_session_adds_one_card() -> () {
+    let newer: NativeHarnessSession =
+        SessionIdentityTests::harness("one", Some("SWARX"), Some("Renamed"));
+    let mut older: NativeHarnessSession =
+        SessionIdentityTests::harness("one", Some("SWARX"), Some("Original"));
+    older.last_activity_at = Some(SessionIdentityTests::NOW - 120.0);
+    let sessions: Vec<NativeSessionView> =
+        SessionViewUtils::named(Vec::new(), &[older, newer], SessionIdentityTests::NOW);
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].name, "SWARX/Renamed");
+}
+
+#[test]
+fn same_id_under_a_different_family_is_not_matched() -> () {
+    let report: NativeLogicalAgentView =
+        SessionIdentityTests::report("one", "Codex", "Reported label", 10.0);
+    let harness: NativeHarnessSession =
+        SessionIdentityTests::harness("one", Some("SWARX"), Some("Implement"));
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report]),
+        &[harness],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(sessions.len(), 2);
+    assert_eq!(sessions[0].family, "Codex");
+    assert_eq!(sessions[0].name, "Reported label");
+    assert_eq!(sessions[1].family, "Claude");
+    assert_eq!(sessions[1].name, "SWARX/Implement");
+    assert_ne!(sessions[0].key, sessions[1].key);
+}
+
+#[test]
+fn blank_harness_title_keeps_reported_label_or_falls_back_to_untitled() -> () {
+    let report: NativeLogicalAgentView =
+        SessionIdentityTests::report("one", "Claude", "Reported label", 10.0);
+    let matched: NativeHarnessSession =
+        SessionIdentityTests::harness("one", Some("SWARX"), Some("  "));
+    let alone: NativeHarnessSession = SessionIdentityTests::harness("two", Some("SWARX"), None);
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report]),
+        &[matched, alone],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(sessions[0].name, "Reported label");
+    assert_eq!(sessions[0].source, SessionIdentityTests::SOURCE);
+    assert_eq!(sessions[1].name, "Untitled");
+    assert_eq!(sessions[1].id.as_deref(), Some("two"));
+}
+
+#[test]
+fn harness_title_without_project_is_shown_alone() -> () {
+    let missing: NativeHarnessSession =
+        SessionIdentityTests::harness("one", None, Some("Implement"));
+    let blank: NativeHarnessSession =
+        SessionIdentityTests::harness("two", Some(" "), Some("Review"));
+    let sessions: Vec<NativeSessionView> =
+        SessionViewUtils::named(Vec::new(), &[missing, blank], SessionIdentityTests::NOW);
+    assert_eq!(sessions[0].name, "Implement");
+    assert_eq!(sessions[1].name, "Review");
+}
+
+#[test]
+fn matched_activity_uses_harness_name_and_source_only_for_same_family() -> () {
+    let harness: NativeHarnessSession = SessionIdentityTests::harness(
+        SessionIdentityTests::CLAUDE_SESSION,
+        Some("SWARX"),
+        Some("Implement"),
+    );
+    let activity: Vec<NativeSessionActivityView> = SessionViewUtils::named_activity(
+        vec![
+            SessionIdentityTests::activity("Claude", SessionIdentityTests::CLAUDE_SESSION),
+            SessionIdentityTests::activity("Codex", SessionIdentityTests::CLAUDE_SESSION),
+            SessionIdentityTests::activity("Claude", "other"),
+        ],
+        &[harness],
+    );
+    assert_eq!(activity.len(), 3);
+    assert_eq!(activity[0].name, "SWARX/Implement");
+    assert_eq!(activity[0].session_name.as_deref(), Some("SWARX/Implement"));
+    assert_eq!(
+        activity[0].source.as_deref(),
+        Some(SessionIdentityTests::HARNESS_SOURCE)
+    );
+    assert_eq!(
+        activity[0].session_id.as_deref(),
+        Some(SessionIdentityTests::CLAUDE_SESSION)
+    );
+    assert_eq!(activity[1].name, "Reported label");
+    assert_eq!(
+        activity[1].source.as_deref(),
+        Some(SessionIdentityTests::SOURCE)
+    );
+    assert_eq!(activity[2].name, "Reported label");
+}
+
+#[test]
+fn matched_session_carries_reported_model_and_provider_even_without_a_title() -> () {
+    let report: NativeLogicalAgentView = SessionIdentityTests::report(
+        SessionIdentityTests::CLAUDE_SESSION,
+        "Claude",
+        "Reported label",
+        10.0,
+    );
+    let mut harness: NativeHarnessSession =
+        SessionIdentityTests::harness(SessionIdentityTests::CLAUDE_SESSION, None, None);
+    harness.model = Some("deepseek/deepseek-chat".to_owned());
+    harness.provider = Some("openrouter".to_owned());
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report]),
+        &[harness],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(sessions.len(), 1);
+    assert_eq!(sessions[0].name, "Reported label");
+    assert_eq!(sessions[0].model.as_deref(), Some("deepseek/deepseek-chat"));
+    assert_eq!(sessions[0].provider.as_deref(), Some("openrouter"));
+}
+
+#[test]
+fn harness_only_session_carries_reported_model_and_provider() -> () {
+    let mut harness: NativeHarnessSession = SessionIdentityTests::harness(
+        SessionIdentityTests::CLAUDE_SESSION,
+        Some("SWARX"),
+        Some("Implement"),
+    );
+    harness.model = Some("claude-opus-5-5".to_owned());
+    let sessions: Vec<NativeSessionView> =
+        SessionViewUtils::named(Vec::new(), &[harness], SessionIdentityTests::NOW);
+    assert_eq!(sessions[0].model.as_deref(), Some("claude-opus-5-5"));
+    assert_eq!(sessions[0].provider, None);
+}
+
+#[test]
+fn no_reported_model_or_other_family_leaves_model_unknown() -> () {
+    let report: NativeLogicalAgentView =
+        SessionIdentityTests::report("one", "Codex", "Reported label", 10.0);
+    let mut other_family: NativeHarnessSession =
+        SessionIdentityTests::harness("one", Some("SWARX"), Some("Implement"));
+    other_family.model = Some("gpt-5.1-codex".to_owned());
+    other_family.provider = Some("openai".to_owned());
+    let plain: NativeHarnessSession =
+        SessionIdentityTests::harness("two", Some("SWARX"), Some("Plain"));
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report]),
+        &[other_family, plain],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(sessions[0].family, "Codex");
+    assert_eq!(sessions[0].model, None);
+    assert_eq!(sessions[0].provider, None);
+    let unattributed: Vec<&NativeSessionView> = sessions
+        .iter()
+        .filter(|session: &&NativeSessionView| -> bool { session.name == "SWARX/Plain" })
+        .collect();
+    assert_eq!(unattributed.len(), 1);
+    assert_eq!(unattributed[0].model, None);
+    assert!(!serde_json::to_string(&sessions[0]).unwrap().contains("openai"));
 }
