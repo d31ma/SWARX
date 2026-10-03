@@ -29,6 +29,18 @@
     "styles": [
       "/shared/styles/app.css"
     ],
+    "styleSources": {
+      "/shared/styles/app.css": {
+        "kind": "foundation"
+      },
+      "/shared/assets/duvay/duvay.min.css": {
+        "kind": "vendor",
+        "package": "DuVay",
+        "version": "26.35.01",
+        "license": "MIT",
+        "sha256": "dd0b9a6841313bc3b4bf30da476dc1aa88821a58220d662b679f83873b92c768"
+      }
+    },
     "scripts": [
       "/shared/assets/duvay/duvay-wc.min.js",
       "/shared/assets/duvay/duvay.min.js",

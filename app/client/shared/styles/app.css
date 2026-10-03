@@ -246,14 +246,13 @@
     --mint: #9daaff;
     --amber: #d8b679;
     font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-    font-synthesis: none;
   }
   * {
     box-sizing: border-box;
   }
   body {
     margin: 0;
-    background: var(--bg);
+    background-color: var(--bg);
     color: var(--text);
     font-size: 14px;
   }
@@ -261,7 +260,6 @@
     font: inherit;
   }
   button {
-    cursor: pointer;
     color: inherit;
   }
   button {

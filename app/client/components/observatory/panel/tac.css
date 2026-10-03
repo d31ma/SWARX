@@ -3592,3 +3592,11 @@ h1 {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+.observatory,.overview-loading {
+  font-synthesis: none;
+}
+
+button {
+  cursor: pointer;
+}
