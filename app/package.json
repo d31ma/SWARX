@@ -6,7 +6,7 @@
     "build": "../build.sh",
     "open": "../run-local.sh",
     "typecheck": "tsc --project client/jsconfig.json",
-    "test:ui": "node ../tests/presentation.test.mjs"
+    "test:ui": "node ../tests/client/presentation.test.mjs"
   },
   "devDependencies": {
     "typescript": "7.0.2"

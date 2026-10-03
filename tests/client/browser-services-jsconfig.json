@@ -1,0 +1,10 @@
+{
+  "extends": "./jsconfig.json",
+  "include": [
+    "../../app/tachyon-env.d.ts",
+    "../../app/.tachyon/types/client/**/*.d.ts",
+    "GraphServiceTest.mjs",
+    "ChartServiceTest.mjs",
+    "ViewContinuityServiceTest.mjs"
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "extends": "./jsconfig.json",
+  "include": [
+    "../../app/tachyon-env.d.ts",
+    "../../app/.tachyon/types/client/**/*.d.ts",
+    "BrowserBundleProvenanceTest.mjs",
+    "BrowserInjectionTest.mjs"
+  ]
+}

@@ -96,7 +96,7 @@ export class NativeRustPackager {
   }
 
   private emitterTests(): string {
-    const directory: string = path.join(this.root, 'tests/native/emitter');
+    const directory: string = path.join(this.root, 'tests/client/native/emitter');
     const reader: string = path.join(directory, 'EmitterIdentityReader.rs');
     const fixture: string = path.join(directory, 'EmitterIdentityFixture.rs');
     const cases: string = path.join(directory, 'EmitterIdentityTests.rs');
@@ -107,8 +107,8 @@ export class NativeRustPackager {
 
   private writeOverviewFixture(): void {
     const directory: string = path.join(this.cache, NativeRustPackager.FIXTURE_NAME);
-    const request: string = path.join(this.root, 'tests/native/OverviewFixtureRequest.rs');
-    const entry: string = path.join(this.root, 'tests/native/OverviewFixtureMain.rs');
+    const request: string = path.join(this.root, 'tests/client/native/OverviewFixtureRequest.rs');
+    const entry: string = path.join(this.root, 'tests/client/native/OverviewFixtureMain.rs');
     const body: string = 'use observatory_native::{models, fixture_utils as utils};\n'
       + `#[path = ${JSON.stringify(request)}]\nmod request;\nuse request::OverviewFixtureRequest;\n`
       + `#[path = ${JSON.stringify(entry)}]\nmod entry;\n`
@@ -125,19 +125,19 @@ export class NativeRustPackager {
   }
 
   private testModule(): string {
-    const monitor: string = path.join(this.root, 'tests/native/MonitorTests.rs');
-    const transport: string = path.join(this.root, 'tests/native/SnapshotTransportTests.rs');
-    const activity: string = path.join(this.root, 'tests/native/ActivityHistoryTests.rs');
-    const presentation: string = path.join(this.root, 'tests/native/ProcessPresentationTests.rs');
-    const topology: string = path.join(this.root, 'tests/native/ProcessTopologyTests.rs');
-    const logical: string = path.join(this.root, 'tests/native/LogicalPresentationTests.rs');
-    const overview: string = path.join(this.root, 'tests/native/OverviewPresentationTests.rs');
-    const overviewTransport: string = path.join(this.root, 'tests/native/OverviewTransportTests.rs');
-    const command: string = path.join(this.root, 'tests/native/CommandResourceViewTests.rs');
-    const commandFixture: string = path.join(this.root, 'tests/native/MonitorCommandFixture.rs');
-    const charts: string = path.join(this.root, 'tests/native/ChartDataTests.rs');
-    const commandMonitor: string = path.join(this.root, 'tests/native/MonitorCommandTests.rs');
-    const owners: string = path.join(this.root, 'tests/native/ProcessOwnerTests.rs');
+    const monitor: string = path.join(this.root, 'tests/client/native/MonitorTests.rs');
+    const transport: string = path.join(this.root, 'tests/client/native/SnapshotTransportTests.rs');
+    const activity: string = path.join(this.root, 'tests/client/native/ActivityHistoryTests.rs');
+    const presentation: string = path.join(this.root, 'tests/client/native/ProcessPresentationTests.rs');
+    const topology: string = path.join(this.root, 'tests/client/native/ProcessTopologyTests.rs');
+    const logical: string = path.join(this.root, 'tests/client/native/LogicalPresentationTests.rs');
+    const overview: string = path.join(this.root, 'tests/client/native/OverviewPresentationTests.rs');
+    const overviewTransport: string = path.join(this.root, 'tests/client/native/OverviewTransportTests.rs');
+    const command: string = path.join(this.root, 'tests/client/native/CommandResourceViewTests.rs');
+    const commandFixture: string = path.join(this.root, 'tests/client/native/MonitorCommandFixture.rs');
+    const charts: string = path.join(this.root, 'tests/client/native/ChartDataTests.rs');
+    const commandMonitor: string = path.join(this.root, 'tests/client/native/MonitorCommandTests.rs');
+    const owners: string = path.join(this.root, 'tests/client/native/ProcessOwnerTests.rs');
     return `\n#[cfg(test)]\n#[path = ${JSON.stringify(monitor)}]\nmod monitor_tests;\n`
       + `\n#[cfg(test)]\n#[path = ${JSON.stringify(transport)}]\nmod snapshot_transport_tests;\n`
       + `\n#[cfg(test)]\n#[path = ${JSON.stringify(activity)}]\nmod activity_history_tests;\n`

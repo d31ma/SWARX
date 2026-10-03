@@ -1,0 +1,8 @@
+{
+  "extends": "../client/jsconfig.json",
+  "include": [
+    "BundleInspectionTest.mjs",
+    "NativeLoaderPolicyTest.mjs",
+    "utils/NativeLoaderPolicyUtils.mjs"
+  ]
+}

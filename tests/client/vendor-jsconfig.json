@@ -1,0 +1,10 @@
+{
+  "extends": "./jsconfig.json",
+  "include": [
+    "../../app/tachyon-env.d.ts",
+    "../../app/.tachyon/types/client/**/*.d.ts",
+    "ScriptUtilsTest.mjs",
+    "VendorManifestTest.mjs",
+    "vendor/**/*.mjs"
+  ]
+}

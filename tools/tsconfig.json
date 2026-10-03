@@ -11,5 +11,5 @@
     "allowImportingTsExtensions": true,
     "types": ["node"]
   },
-  "include": ["NativeRustPackager.ts", "NativeHostCustomizer.ts", "IconPackager.ts", "utils/*.ts", "../tests/NativePackagerFixture.ts", "../tests/NativePackagersTest.ts"]
+  "include": ["NativeRustPackager.ts", "NativeHostCustomizer.ts", "IconPackager.ts", "utils/*.ts", "../tests/tools/NativePackagerFixture.ts", "../tests/tools/NativePackagersTest.ts"]
 }
