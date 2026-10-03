@@ -1,6 +1,6 @@
 use crate::HarnessSessionSource;
 use crate::models::NativeHarnessSession;
-use std::cmp::Ordering;
+use std::cmp::Ordering as ComparisonOrder;
 
 #[Service]
 pub struct HarnessSessionService {
@@ -27,13 +27,15 @@ impl HarnessSessionService {
         sessions
     }
 
-    fn order(left: &NativeHarnessSession, right: &NativeHarnessSession) -> Ordering {
+    fn order(left: &NativeHarnessSession, right: &NativeHarnessSession) -> ComparisonOrder {
         left.family
             .cmp(&right.family)
-            .then_with(|| -> Ordering { left.id.cmp(&right.id) })
-            .then_with(|| -> Ordering { Self::activity(right).total_cmp(&Self::activity(left)) })
-            .then_with(|| -> Ordering { left.app_id.cmp(&right.app_id) })
-            .then_with(|| -> Ordering { left.title.cmp(&right.title) })
+            .then_with(|| -> ComparisonOrder { left.id.cmp(&right.id) })
+            .then_with(|| -> ComparisonOrder {
+                Self::activity(right).total_cmp(&Self::activity(left))
+            })
+            .then_with(|| -> ComparisonOrder { left.app_id.cmp(&right.app_id) })
+            .then_with(|| -> ComparisonOrder { left.title.cmp(&right.title) })
     }
 
     fn activity(session: &NativeHarnessSession) -> f64 {
