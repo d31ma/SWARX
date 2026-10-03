@@ -284,9 +284,9 @@
   }
 }
 :root[w-theme="dark"] {
-  --w-primary: #9daaff!important;
-  --w-primary-container: #303b62!important;
-  --w-on-primary-container: #c6d0ff!important;
-  --w-selected: #303b62!important;
-  --w-selected-text: #cbd4ff!important;
+  --w-primary: #9daaff;
+  --w-primary-container: #303b62;
+  --w-on-primary-container: #c6d0ff;
+  --w-selected: #303b62;
+  --w-selected-text: #cbd4ff;
 }
