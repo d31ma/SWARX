@@ -3,8 +3,9 @@ use std::ffi::CStr;
 use std::ffi::{c_char, c_int, c_void};
 use std::marker::PhantomData;
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-#[link(name = "sqlite3")]
+#[cfg(any(target_os = "macos", target_os = "linux", windows))]
+#[cfg_attr(windows, link(name = "winsqlite3"))]
+#[cfg_attr(not(windows), link(name = "sqlite3"))]
 unsafe extern "C" {
     #[link_name = "sqlite3_prepare_v2"]
     fn statement_prepare(
@@ -31,7 +32,7 @@ pub struct SqliteReadOnlyStatement<'connection> {
     connection: PhantomData<&'connection SqliteReadOnlyConnection>,
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", windows))]
 impl<'connection> SqliteReadOnlyStatement<'connection> {
     const SUCCESS: c_int = 0;
     const ROW: c_int = 100;
@@ -127,14 +128,14 @@ impl<'connection> SqliteReadOnlyStatement<'connection> {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", windows))]
 impl Drop for SqliteReadOnlyStatement<'_> {
     fn drop(&mut self) -> () {
         unsafe { statement_finalize(self.handle) };
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 impl<'connection> SqliteReadOnlyStatement<'connection> {
     pub fn prepare(
         _query: &'static str,

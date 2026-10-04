@@ -2,8 +2,9 @@ use std::ffi::CString;
 use std::ffi::{c_char, c_int, c_void};
 use std::path::Path;
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
-#[link(name = "sqlite3")]
+#[cfg(any(target_os = "macos", target_os = "linux", windows))]
+#[cfg_attr(windows, link(name = "winsqlite3"))]
+#[cfg_attr(not(windows), link(name = "sqlite3"))]
 unsafe extern "C" {
     #[link_name = "sqlite3_open_v2"]
     fn connection_open(
@@ -28,7 +29,7 @@ impl SqliteReadOnlyConnection {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", windows))]
 impl SqliteReadOnlyConnection {
     const OPEN_READ_ONLY: c_int = 0x0000_0001;
     const OPEN_URI: c_int = 0x0000_0040;
@@ -87,14 +88,14 @@ impl SqliteReadOnlyConnection {
     }
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[cfg(any(target_os = "macos", target_os = "linux", windows))]
 impl Drop for SqliteReadOnlyConnection {
     fn drop(&mut self) -> () {
         unsafe { connection_close(self.handle) };
     }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+#[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
 impl SqliteReadOnlyConnection {
     pub fn open(_path: &Path) -> Option<Self> {
         None

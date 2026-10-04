@@ -1,4 +1,4 @@
-#![cfg(any(target_os = "macos", target_os = "linux"))]
+#![cfg(any(target_os = "macos", target_os = "linux", windows))]
 #[path = "support/DiscoveredSessions.rs"]
 mod discovered_sessions;
 
@@ -263,6 +263,7 @@ fn file_that_is_not_a_database_yields_no_sessions() -> () {
     assert_eq!(read(&fixture), Vec::<NativeHarnessSession>::new());
 }
 
+#[cfg(unix)]
 #[test]
 fn symbolic_link_database_file_is_refused() -> () {
     let fixture: SessionFolderFixture = SessionFolderFixture::new("local-link");

@@ -1,7 +1,8 @@
 use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::path::Path;
 
-#[link(name = "sqlite3")]
+#[cfg_attr(windows, link(name = "winsqlite3"))]
+#[cfg_attr(not(windows), link(name = "sqlite3"))]
 unsafe extern "C" {
     fn sqlite3_open(file: *const c_char, database: *mut *mut c_void) -> c_int;
     fn sqlite3_exec(
