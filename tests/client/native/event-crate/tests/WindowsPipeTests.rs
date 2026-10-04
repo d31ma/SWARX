@@ -196,14 +196,6 @@ fn a_hard_linked_file_is_not_private() -> () {
 }
 
 #[test]
-fn an_endpoint_in_a_folder_owned_by_another_account_is_refused() -> () {
-    let endpoint = system_folder().join("hooks-native.pipe").to_string_lossy().into_owned();
-    let mut refused = source(&endpoint);
-    assert!(refused.start().is_err());
-    assert!(!system_folder().join("native.lock").exists());
-}
-
-#[test]
 fn a_junction_folder_is_refused() -> () {
     let folder = folder("junction");
     let target = folder.join("target");

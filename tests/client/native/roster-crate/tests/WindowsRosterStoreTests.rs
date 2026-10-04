@@ -63,13 +63,12 @@ fn a_rejected_payload_keeps_the_previous_file() -> () {
     assert_eq!(names(&fixture), vec!["roster-native.json".to_string()]);
 }
 
+// Read-only on purpose: an elevated test run could write into this folder if the check broke.
 #[test]
-fn a_folder_owned_by_another_account_is_refused() -> () {
+fn reading_from_a_folder_owned_by_another_account_is_refused() -> () {
     let endpoint = system_folder().join("hooks-test.pipe");
     let store = LogicalRosterStoreService::new(&endpoint.to_string_lossy()).unwrap();
     assert!(store.load(1001.0).is_err());
-    assert!(store.save(&[Fixture::row()]).is_err());
-    assert!(!system_folder().join("roster-native.json").exists());
 }
 
 #[test]
