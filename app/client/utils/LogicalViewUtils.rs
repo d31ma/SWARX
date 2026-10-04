@@ -107,8 +107,25 @@ impl LogicalViewUtils {
         view
     }
 
+    // A stale agent whose open shell commands still have live process evidence: present exactly
+    // those executions as current, as running_view does for freshly reported ones.
+    pub fn evidenced_view(
+        agent: &NativeLogicalAgentView,
+        executions: Vec<NativeExecutionView>,
+        now: f64,
+    ) -> NativeLogicalAgentView {
+        let mut view: NativeLogicalAgentView = agent.clone();
+        view.executions = executions;
+        Self::present_executions(&mut view, now);
+        view
+    }
+
     fn present_current(view: &mut NativeLogicalAgentView, now: f64) -> () {
         view.executions = Self::current_views(view);
+        Self::present_executions(view, now);
+    }
+
+    fn present_executions(view: &mut NativeLogicalAgentView, now: f64) -> () {
         let records: Vec<NativeExecutionRecord> = Self::execution_records(&view.executions);
         view.current_action = Self::present(Self::current_actions(&records));
         view.action_detail = Self::newest_detail(&records);

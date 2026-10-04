@@ -2,12 +2,12 @@ use crate::models::{
     NativeActiveSessionView, NativeGroupMetrics, NativeLogicalAgentView, NativeOverviewView,
     NativeProcessMetrics, NativeProcessOwner, NativeProcessRow, NativeResourceTotals,
     NativeRuntimeView, NativeSessionActivityView, NativeSessionDetailView, NativeSessionLink,
-    NativeSessionResourceView, NativeSnapshot, NativeTaskRecord, NativeTaskView,
+    NativeSessionResourceView, NativeShellEvidence, NativeSnapshot, NativeTaskRecord, NativeTaskView,
     NativeViewSelection,
 };
 use crate::utils::{
     ActiveSessionUtils, ActiveSummaryUtils, LogicalViewUtils, MetricFormatUtils,
-    SessionDetailUtils, SessionResourceUtils, SessionViewUtils, TimeFormatUtils,
+    SessionDetailUtils, SessionResourceUtils, SessionViewUtils, ShellEvidenceUtils, TimeFormatUtils,
 };
 use std::cmp::Ordering;
 
@@ -56,7 +56,7 @@ impl OverviewViewUtils {
         let sample_age: f64 = Self::age(snapshot.sampled_at, now);
         let live_status: String = Self::fresh(sample_age, available);
         let logical: Vec<NativeLogicalAgentView> = SessionViewUtils::named_agents(
-            Self::running_agents(&snapshot.logical_views, now),
+            Self::running_agents(&snapshot.logical_views, &snapshot.shell_evidence, now),
             &snapshot.harness_sessions,
         );
         let logical_count: i64 = logical.len() as i64;
@@ -401,14 +401,34 @@ impl OverviewViewUtils {
         [Self::EVENT_FEED, Self::COORDINATOR_FEED].contains(&agent.feed_mode.as_str())
     }
 
-    fn running_agents(agents: &[NativeLogicalAgentView], now: f64) -> Vec<NativeLogicalAgentView> {
+    fn running_agents(
+        agents: &[NativeLogicalAgentView],
+        evidence: &[NativeShellEvidence],
+        now: f64,
+    ) -> Vec<NativeLogicalAgentView> {
         agents
             .iter()
+            .filter_map(|agent: &NativeLogicalAgentView| -> Option<NativeLogicalAgentView> {
+                Self::current_agent(agent, evidence, now)
+            })
+            .collect()
+    }
+
+    // A fresh report of current work, or a stale row whose open shell command still has its
+    // live shell under the verified session process.
+    fn current_agent(
+        agent: &NativeLogicalAgentView,
+        evidence: &[NativeShellEvidence],
+        now: f64,
+    ) -> Option<NativeLogicalAgentView> {
+        Some(agent)
             .filter(|agent: &&NativeLogicalAgentView| -> bool { Self::running_agent(agent, now) })
             .map(|agent: &NativeLogicalAgentView| -> NativeLogicalAgentView {
                 LogicalViewUtils::running_view(agent, now)
             })
-            .collect()
+            .or_else(|| -> Option<NativeLogicalAgentView> {
+                ShellEvidenceUtils::current_view(agent, evidence, now)
+            })
     }
 
     fn running_agent(agent: &NativeLogicalAgentView, now: f64) -> bool {
@@ -426,7 +446,8 @@ impl OverviewViewUtils {
     }
 
     // Process existence, connection or a coordinator heartbeat is not work: an agent needs an
-    // unfinished execution, or a recent lifecycle hook for its open turn.
+    // unfinished execution, or a recent lifecycle hook for its open turn. A stale row can only
+    // return through ShellEvidenceUtils, never through the harness process alone.
     fn current_work(agent: &NativeLogicalAgentView, now: f64) -> bool {
         [Self::open_execution(agent), Self::recent_hook(agent, now)]
             .into_iter()
@@ -490,7 +511,7 @@ impl OverviewViewUtils {
 
     fn notice(count: i64) -> String {
         if count > Self::NO_RECORDS {
-            return "Only verified current work appears here: a running tool, or a lifecycle hook for an unfinished turn in the last 45 seconds. Idle, completed and stale work leaves this view and stays in Activity.".to_owned();
+            return "Only verified current work appears here: a running tool, a shell command whose shell process is still running under the verified session process, or a lifecycle hook for an unfinished turn in the last 45 seconds. Idle, completed and stale work leaves this view and stays in Activity.".to_owned();
         }
         "This feed does not prove no agents are working. Reopened apps need a fresh coordinator report; history stays in Activity."
             .to_owned()

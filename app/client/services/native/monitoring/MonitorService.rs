@@ -1,7 +1,7 @@
 use crate::models::{NativeCapabilities, NativeGroup, NativeRuntimeView, NativeSnapshot};
 use crate::utils::{
     BackgroundTaskUtils, ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, ProcessGraphUtils,
-    ProcessOwnerUtils, ProcessTreeUtils, RuntimeViewUtils, SessionViewUtils,
+    ProcessOwnerUtils, ProcessTreeUtils, RuntimeViewUtils, SessionViewUtils, ShellEvidenceUtils,
 };
 use crate::{EventSource, MetricSource, ObservationClock};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -105,6 +105,7 @@ impl MonitorService {
         result.harness_count = SessionViewUtils::harness_count(&result.session_groups);
         result.activity = self.activity.view(&result.logical_agents, now);
         result.background_tasks = BackgroundTaskUtils::tasks(&result, now);
+        result.shell_evidence = ShellEvidenceUtils::evidence(&result, now);
         result
     }
 

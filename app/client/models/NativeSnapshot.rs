@@ -1,7 +1,7 @@
 use crate::models::{
     NativeBackgroundTaskView, NativeCapabilities, NativeCommandBinding, NativeCommandObservation, NativeGroup,
     NativeHarnessSession, NativeLogicalAgent, NativeLogicalAgentView, NativeResourceTotals,
-    NativeRuntimeView, NativeSessionActivityView, NativeSessionView,
+    NativeRuntimeView, NativeSessionActivityView, NativeSessionView, NativeShellEvidence,
 };
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -32,6 +32,8 @@ pub struct NativeSnapshot {
     pub harness_count: i64,
     #[serde(default)]
     pub activity: Vec<NativeSessionActivityView>,
+    #[serde(skip)]
+    pub shell_evidence: Vec<NativeShellEvidence>,
     #[serde(default)]
     pub background_tasks: Vec<NativeBackgroundTaskView>,
     pub errors: Vec<String>,
