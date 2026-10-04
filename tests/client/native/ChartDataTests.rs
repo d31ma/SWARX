@@ -362,3 +362,78 @@ fn chart_series_are_sent_once_so_a_long_running_page_stays_under_the_transfer_li
         .as_ref()
         .map_or(true, |runtime| runtime.charts.is_empty()));
 }
+
+#[test]
+fn cpu_chart_fills_from_zero_to_one_core_without_a_legend() -> () {
+    let view = ChartDataTests::mode(&ChartDataTests::history(), "cpu");
+    assert!(view.filled);
+    assert!(!view.legend);
+    assert!(view.zero_based);
+    assert_eq!(view.ceiling, Some(100.0));
+    assert_eq!(view.series[0].tone, "blue");
+}
+
+#[test]
+fn memory_chart_fills_without_a_zero_floor_ceiling_or_legend() -> () {
+    let view = ChartDataTests::mode(&ChartDataTests::history(), "memory");
+    assert!(view.filled);
+    assert!(!view.legend);
+    assert!(!view.zero_based);
+    assert_eq!(view.ceiling, None);
+    assert_eq!(view.series[0].tone, "violet");
+}
+
+#[test]
+fn network_chart_draws_unfilled_lines_from_zero_with_a_legend() -> () {
+    let view = ChartDataTests::mode(&ChartDataTests::history(), "network");
+    assert!(!view.filled);
+    assert!(view.legend);
+    assert!(view.zero_based);
+    assert_eq!(view.ceiling, None);
+    assert_eq!(view.series[0].tone, "blue");
+    assert_eq!(view.series[1].tone, "amber");
+}
+
+#[test]
+fn disk_chart_fills_from_zero_with_a_legend() -> () {
+    let view = ChartDataTests::mode(&ChartDataTests::history(), "disk");
+    assert!(view.filled);
+    assert!(view.legend);
+    assert!(view.zero_based);
+    assert_eq!(view.ceiling, None);
+    assert_eq!(view.series[0].tone, "blue");
+    assert_eq!(view.series[1].tone, "violet");
+}
+
+#[test]
+fn empty_history_keeps_each_mode_behaviour() -> () {
+    let views = ChartDataUtils::build(&[], 1000.0);
+    assert_eq!(views[0].ceiling, Some(100.0));
+    assert!(!views[1].zero_based);
+    assert!(!views[2].filled);
+    assert!(views[3].legend);
+}
+
+#[test]
+fn wire_contract_names_behaviour_fields_in_camel_case() -> () {
+    let view = ChartDataTests::mode(&[vec![Some(200.0), None]], "memory");
+    let wire = serde_json::to_value(view).unwrap();
+    assert_eq!(wire["filled"], true);
+    assert_eq!(wire["legend"], false);
+    assert_eq!(wire["zeroBased"], false);
+    assert!(wire["ceiling"].is_null());
+    assert_eq!(wire["series"][0]["tone"], "violet");
+    assert!(wire.get("zero_based").is_none());
+}
+
+#[test]
+fn older_chart_payloads_without_behaviour_fields_still_decode() -> () {
+    let view: crate::models::NativeChartView = serde_json::from_str(
+        r#"{"mode":"cpu","unit":"%","windowStart":0,"windowEnd":120,"sampleCount":0,"measuredCount":0,"empty":true,"emptyText":"","series":[{"id":"cpu","label":"CPU","points":[],"measuredCount":0}]}"#,
+    )
+    .unwrap();
+    assert!(!view.filled);
+    assert!(!view.zero_based);
+    assert_eq!(view.ceiling, None);
+    assert_eq!(view.series[0].tone, "");
+}

@@ -9,4 +9,8 @@ export interface ChartView {
   empty: boolean;
   emptyText: string;
   series: ChartSeries[];
+  filled?: boolean;
+  legend?: boolean;
+  zeroBased?: boolean;
+  ceiling?: number | null;
 }

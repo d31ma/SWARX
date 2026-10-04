@@ -16,4 +16,12 @@ pub struct NativeChartView {
     #[serde(rename = "emptyText")]
     pub empty_text: String,
     pub series: Vec<NativeChartSeries>,
+    #[serde(default)]
+    pub filled: bool,
+    #[serde(default)]
+    pub legend: bool,
+    #[serde(default, rename = "zeroBased")]
+    pub zero_based: bool,
+    #[serde(default)]
+    pub ceiling: Option<f64>,
 }

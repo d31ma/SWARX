@@ -4,4 +4,5 @@ export interface ChartSeries {
   label: string;
   points: ChartPoint[];
   measuredCount: number;
+  tone?: string;
 }

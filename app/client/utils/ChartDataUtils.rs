@@ -11,42 +11,48 @@ impl ChartDataUtils {
     const WAITING: &'static str = "Waiting for measured samples.";
     const NETWORK_MISSING: &'static str = "No visible socket-rate samples for this group.";
     const CPU_MODE: &'static str = "cpu";
-    const CPU: (&'static str, &'static str, usize, f64) = (Self::CPU_MODE, "CPU", 1, 1.0);
-    const MEMORY: (&'static str, &'static str, usize, f64) =
-        ("resident", "Resident memory", 2, Self::MEBIBYTE);
-    const RECEIVED: (&'static str, &'static str, usize, f64) =
-        ("received", "Received", 3, Self::KIBIBYTE);
-    const SENT: (&'static str, &'static str, usize, f64) = ("sent", "Sent", 4, Self::KIBIBYTE);
-    const DISK_READ: (&'static str, &'static str, usize, f64) =
-        ("disk-read", "Disk read", 5, Self::KIBIBYTE);
-    const DISK_WRITE: (&'static str, &'static str, usize, f64) =
-        ("disk-write", "Disk write", 6, Self::KIBIBYTE);
+    const CPU_CEILING: f64 = 100.0;
+    const BLUE_TONE: &'static str = "blue";
+    const VIOLET_TONE: &'static str = "violet";
+    const AMBER_TONE: &'static str = "amber";
+    const CPU: (&'static str, &'static str, usize, f64, &'static str) =
+        (Self::CPU_MODE, "CPU", 1, 1.0, Self::BLUE_TONE);
+    const MEMORY: (&'static str, &'static str, usize, f64, &'static str) = (
+        "resident",
+        "Resident memory",
+        2,
+        Self::MEBIBYTE,
+        Self::VIOLET_TONE,
+    );
+    const RECEIVED: (&'static str, &'static str, usize, f64, &'static str) =
+        ("received", "Received", 3, Self::KIBIBYTE, Self::BLUE_TONE);
+    const SENT: (&'static str, &'static str, usize, f64, &'static str) =
+        ("sent", "Sent", 4, Self::KIBIBYTE, Self::AMBER_TONE);
+    const DISK_READ: (&'static str, &'static str, usize, f64, &'static str) =
+        ("disk-read", "Disk read", 5, Self::KIBIBYTE, Self::BLUE_TONE);
+    const DISK_WRITE: (&'static str, &'static str, usize, f64, &'static str) = (
+        "disk-write",
+        "Disk write",
+        6,
+        Self::KIBIBYTE,
+        Self::VIOLET_TONE,
+    );
 
     pub fn build(history: &[Vec<Option<f64>>], now: f64) -> Vec<NativeChartView> {
         let rows: Vec<(f64, &[Option<f64>])> = Self::valid_rows(history);
         vec![
+            Self::view(&rows, now, Self::cpu_chart(), &[Self::CPU]),
+            Self::view(&rows, now, Self::memory_chart(), &[Self::MEMORY]),
             Self::view(
                 &rows,
                 now,
-                (Self::CPU_MODE, "% of one logical core", Self::WAITING),
-                &[Self::CPU],
-            ),
-            Self::view(
-                &rows,
-                now,
-                ("memory", "MiB RSS", Self::WAITING),
-                &[Self::MEMORY],
-            ),
-            Self::view(
-                &rows,
-                now,
-                ("network", "KiB / s (partial)", Self::NETWORK_MISSING),
+                Self::network_chart(),
                 &[Self::RECEIVED, Self::SENT],
             ),
             Self::view(
                 &rows,
                 now,
-                ("disk", "KiB / s (storage)", Self::WAITING),
+                Self::disk_chart(),
                 &[Self::DISK_READ, Self::DISK_WRITE],
             ),
         ]
@@ -59,6 +65,58 @@ impl ChartDataUtils {
     fn present_views(views: &mut [NativeRuntimeView], now: f64) -> () {
         for view in views {
             view.charts = Self::build(&view.group.history, now);
+        }
+    }
+
+    fn cpu_chart() -> NativeChartView {
+        NativeChartView {
+            mode: Self::CPU_MODE.to_owned(),
+            unit: "% of one logical core".to_owned(),
+            empty_text: Self::WAITING.to_owned(),
+            filled: true,
+            legend: false,
+            zero_based: true,
+            ceiling: Some(Self::CPU_CEILING),
+            ..NativeChartView::default()
+        }
+    }
+
+    fn memory_chart() -> NativeChartView {
+        NativeChartView {
+            mode: "memory".to_owned(),
+            unit: "MiB RSS".to_owned(),
+            empty_text: Self::WAITING.to_owned(),
+            filled: true,
+            legend: false,
+            zero_based: false,
+            ceiling: None,
+            ..NativeChartView::default()
+        }
+    }
+
+    fn network_chart() -> NativeChartView {
+        NativeChartView {
+            mode: "network".to_owned(),
+            unit: "KiB / s (partial)".to_owned(),
+            empty_text: Self::NETWORK_MISSING.to_owned(),
+            filled: false,
+            legend: true,
+            zero_based: true,
+            ceiling: None,
+            ..NativeChartView::default()
+        }
+    }
+
+    fn disk_chart() -> NativeChartView {
+        NativeChartView {
+            mode: "disk".to_owned(),
+            unit: "KiB / s (storage)".to_owned(),
+            empty_text: Self::WAITING.to_owned(),
+            filled: true,
+            legend: true,
+            zero_based: true,
+            ceiling: None,
+            ..NativeChartView::default()
         }
     }
 
@@ -78,22 +136,20 @@ impl ChartDataUtils {
     fn view(
         rows: &[(f64, &[Option<f64>])],
         now: f64,
-        labels: (&str, &str, &str),
-        channels: &[(&str, &str, usize, f64)],
+        chart: NativeChartView,
+        channels: &[(&str, &str, usize, f64, &str)],
     ) -> NativeChartView {
         let series: Vec<NativeChartSeries> = Self::series(rows, channels);
         let measured_count: i64 = Self::total_count(&series);
         let window_end: f64 = Self::last_time(rows, now);
         NativeChartView {
-            mode: labels.0.to_owned(),
-            unit: labels.1.to_owned(),
             window_start: window_end - Self::WINDOW_SECONDS,
             window_end,
             sample_count: rows.len() as i64,
             measured_count,
             empty: measured_count == Self::NO_MEASUREMENTS,
-            empty_text: labels.2.to_owned(),
             series,
+            ..chart
         }
     }
 
@@ -107,7 +163,7 @@ impl ChartDataUtils {
 
     fn series(
         rows: &[(f64, &[Option<f64>])],
-        channels: &[(&str, &str, usize, f64)],
+        channels: &[(&str, &str, usize, f64, &str)],
     ) -> Vec<NativeChartSeries> {
         let mut series: Vec<NativeChartSeries> = Vec::new();
         for channel in channels {
@@ -118,7 +174,7 @@ impl ChartDataUtils {
 
     fn channel(
         rows: &[(f64, &[Option<f64>])],
-        channel: (&str, &str, usize, f64),
+        channel: (&str, &str, usize, f64, &str),
     ) -> NativeChartSeries {
         let points: Vec<NativeChartPoint> = Self::points(rows, channel.2, channel.3);
         let measured_count: i64 = Self::point_count(&points);
@@ -127,6 +183,7 @@ impl ChartDataUtils {
             label: channel.1.to_owned(),
             points,
             measured_count,
+            tone: channel.4.to_owned(),
         }
     }
 

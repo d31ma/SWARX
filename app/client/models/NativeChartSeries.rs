@@ -7,4 +7,6 @@ pub struct NativeChartSeries {
     pub points: Vec<NativeChartPoint>,
     #[serde(rename = "measuredCount")]
     pub measured_count: i64,
+    #[serde(default)]
+    pub tone: String,
 }
