@@ -54,7 +54,7 @@ test('Rust manifest adds windows-sys only for Windows builds and keeps macOS byt
   assert.ok(macos.endsWith('regex = "=1.13.1"\n'));
   assert.ok(windows.startsWith(macos));
   assert.equal(windows.slice(macos.length).split('\n')[0], "[target.'cfg(windows)'.dependencies]");
-  assert.ok(windows.includes('windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_ProcessStatus", "Win32_System_Threading"] }'));
+  assert.ok(windows.includes('windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Threading", "Win32_System_Time"] }'));
 });
 
 test('Host uses runtime icon companion with QA sources kept in tooling', (context: TestContext): void => {

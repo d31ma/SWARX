@@ -23,7 +23,7 @@ export class NativeRustPackager {
   private static readonly EXECUTABLE_MODE: number = 0o755;
   private static readonly WINDOWS_PLATFORM: NodeJS.Platform = 'win32';
   private static readonly WINDOWS_DEPENDENCIES: string = [`[target.'cfg(windows)'.dependencies]`,
-    'windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_ProcessStatus", "Win32_System_Threading"] }', ''].join('\n');
+    'windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_Security_Cryptography", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp", "Win32_System_IO", "Win32_System_Pipes", "Win32_System_ProcessStatus", "Win32_System_Threading", "Win32_System_Time"] }', ''].join('\n');
   private readonly root: string;
   private readonly artifacts: string;
   private readonly source: string;
