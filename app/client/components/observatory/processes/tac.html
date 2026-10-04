@@ -37,8 +37,10 @@
   </details>
   </logic>
   <logic :if="observatory.processView === 'tree'"><div class="process-tree-view">
-    <loop :for="session of observatory.model.resourceSessions"><logic :if="session.graph.nodes.length">
-      <section class="process-tree-panel session-process-card graph-group" :data-group="session.key" :data-session="session.key" :aria-label="session.name + ' process tree'">
+    <div class="graph-group-tabs" role="tablist" aria-label="Process trees"><loop :for="session of observatory.model.resourceSessions"><logic :if="session.graph.nodes.length"><button type="button" role="tab" class="graph-tab" :data-graph-group="session.key" :aria-selected="observatory.graphGroup === session.key ? 'true' : 'false'" :tabindex="observatory.graphGroup === session.key ? '0' : '-1'"><strong>{session.name}</strong><small>{session.family} · {session.processCount} linked processes</small></button></logic></loop><loop :for="runtime of observatory.model.sharedResources"><logic :if="runtime.graph.nodes.length"><button type="button" role="tab" class="graph-tab" :data-graph-group="'context:' + runtime.id" :aria-selected="observatory.graphGroup === 'context:' + runtime.id ? 'true' : 'false'" :tabindex="observatory.graphGroup === 'context:' + runtime.id ? '0' : '-1'"><strong>{runtime.name}</strong><small>{runtime.family} · PID {runtime.pid} · shared</small></button></logic></loop></div>
+    <logic :if="observatory.graphGroup === ''"><div class="empty">No process tree is available yet.<p>Session trees need a verified command link; shared runtime trees appear when a local runtime is measured.</p></div></logic>
+    <loop :for="session of observatory.model.resourceSessions"><logic :if="observatory.graphGroup === session.key">
+      <section role="tabpanel" class="process-tree-panel session-process-card graph-group" :data-group="session.key" :data-session="session.key" :aria-label="session.name + ' process tree'">
         <header class="process-tree-heading"><h3>{session.name}</h3><p>{session.family} · {session.processCount} currently linked processes<logic :if="session.id"> · Session ID {session.id}</logic></p></header>
         <div class="session-process-tree">
           <div class="graph-group-tools" role="group" :aria-label="session.name + ' tree zoom'"><button :data-group="session.key" data-zoom="out" aria-label="Zoom this tree out">−</button><span class="graph-zoom-value">100%</span><button :data-group="session.key" data-zoom="in" aria-label="Zoom this tree in">+</button><button :data-group="session.key" data-zoom="fit">Fit this tree</button></div>
@@ -53,8 +55,8 @@
         </div>
       </section>
     </logic></loop>
-    <loop :for="runtime of observatory.model.sharedResources"><logic :if="runtime.graph.nodes.length">
-      <section class="process-tree-panel session-process-card graph-group" :data-group="'context:' + runtime.id" :aria-label="runtime.name + ' shared process tree'">
+    <loop :for="runtime of observatory.model.sharedResources"><logic :if="observatory.graphGroup === 'context:' + runtime.id">
+      <section role="tabpanel" class="process-tree-panel session-process-card graph-group" :data-group="'context:' + runtime.id" :aria-label="runtime.name + ' shared process tree'">
         <header class="process-tree-heading"><h3>{runtime.name}</h3><p>{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel} · inclusive CPU {runtime.cpu} · RSS {runtime.memory}. Shared or unassigned context; no session owner is inferred.</p></header>
         <div class="session-process-tree">
           <div class="graph-group-tools" role="group" :aria-label="runtime.name + ' context tree zoom'"><button :data-group="'context:' + runtime.id" data-zoom="out" aria-label="Zoom this tree out">−</button><span class="graph-zoom-value">100%</span><button :data-group="'context:' + runtime.id" data-zoom="in" aria-label="Zoom this tree in">+</button><button :data-group="'context:' + runtime.id" data-zoom="fit">Fit this tree</button></div>

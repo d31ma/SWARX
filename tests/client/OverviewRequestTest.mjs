@@ -5,9 +5,9 @@ import { test } from 'node:test';
 import { BrowserServiceTestUtils } from './BrowserServiceTestUtils.mjs';
 
 /** @typedef {import('../../app/client/models/NativeViewSelection.ts').NativeViewSelection} NativeSelection */
-/** @typedef {Pick<import('../../app/client/models/ObservatoryModel.ts').ObservatoryModel, 'selected' | 'liveStatus' | 'detail' | 'selectedSession' | 'selectedSessionProcess'>} TestResponse */
+/** @typedef {Pick<import('../../app/client/models/ObservatoryModel.ts').ObservatoryModel, 'selected' | 'liveStatus' | 'detail' | 'selectedSession' | 'selectedSessionProcess' | 'resourceSessions' | 'sharedResources'>} TestResponse */
 /** @typedef {{selection: NativeSelection, resolve: (value: TestResponse | PromiseLike<TestResponse>) => void, reject: (reason?: unknown) => void}} PendingRequest */
-/** @typedef {{model?: TestResponse, series: string, processView: string, query: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, session: string, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, setProcessView: (event: object, mode: string) => void}} FixtureController */
+/** @typedef {{model?: TestResponse, graphGroup: string, series: string, processView: string, query: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, session: string, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, setProcessView: (event: object, mode: string) => void}} FixtureController *
 /** @typedef {{controller: FixtureController, requests: PendingRequest[], poll: (() => void) | null}} RequestFrame */
 /** @typedef {Omit<RequestFrame, 'controller'> & {controller: FixtureController | null}} PreparingFrame */
 
@@ -136,7 +136,7 @@ class OverviewRequestTest {
 
   /** @param {string} selected @returns {TestResponse} */
   static response(selected) {
-    return { selected, liveStatus: 'Live', detail: null, selectedSession: '', selectedSessionProcess: null };
+    return { selected, liveStatus: 'Live', detail: null, selectedSession: '', selectedSessionProcess: null, resourceSessions: [], sharedResources: [] };
   }
 }
 
@@ -341,5 +341,34 @@ test('a bound process click selects runtime and PID without exposing an internal
   frame.requests[1].resolve(OverviewRequestTest.response('runtime:actual-root'));
   await OverviewRequestTest.flush();
   assert.equal(OverviewRequestTest.acceptedModel(frame).selected, 'runtime:actual-root');
+  frame.controller.dispose();
+});
+
+/** @param {string[]} sessions @param {string[]} shared @returns {TestResponse} */
+function treeResponse(sessions, shared) {
+  return /** @type {TestResponse} */ (/** @type {unknown} */ ({...OverviewRequestTest.response('runtime'),
+    resourceSessions: sessions.map(/** @param {string} key @returns {object} */ key => ({key, graph: {nodes: [{}]}})),
+    sharedResources: shared.map(/** @param {string} id @returns {object} */ id => ({id, graph: {nodes: [{}]}}))}));
+}
+
+test('the tree tab defaults to the first tree, keeps a chosen tab and falls back when that tree disappears', /** @returns {Promise<void>} */ async () => {
+  const frame = OverviewRequestTest.frame();
+  frame.controller.initialize();
+  await OverviewRequestTest.flush();
+  frame.requests[0].resolve(treeResponse(['Claude:a'], ['b']));
+  await OverviewRequestTest.flush();
+  assert.equal(frame.controller.graphGroup, 'Claude:a');
+  frame.controller.graphGroup = 'context:b';
+  assert.ok(frame.poll);
+  frame.poll();
+  await OverviewRequestTest.flush();
+  frame.requests[1].resolve(treeResponse(['Claude:a'], ['b']));
+  await OverviewRequestTest.flush();
+  assert.equal(frame.controller.graphGroup, 'context:b');
+  frame.poll();
+  await OverviewRequestTest.flush();
+  frame.requests[2].resolve(treeResponse(['Claude:a'], []));
+  await OverviewRequestTest.flush();
+  assert.equal(frame.controller.graphGroup, 'Claude:a');
   frame.controller.dispose();
 });

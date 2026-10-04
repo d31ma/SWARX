@@ -9,6 +9,8 @@ export default class ObservatoryService {
     /** @type {string} */
     static _EMPTY_TEXT = '';
     /** @type {string} */
+    static _CONTEXT_PREFIX = 'context:';
+    /** @type {string} */
     static _COLLECTOR_UNAVAILABLE = 'Local measurements unavailable. Retrying automatically; last values may be older.';
     /** @type {import('/services/native/monitoring/SnapshotService.js').default | undefined} */
     @Needs
@@ -37,8 +39,8 @@ export default class ObservatoryService {
     series = 'cpu';
     /** @type {string} */
     processView = 'table';
-    /** @type {string} */
-    #graphGroup = ObservatoryService._EMPTY_TEXT;
+    /** @type {string} Process tree tab shown in the Tree view; kept while it still exists. */
+    graphGroup = ObservatoryService._EMPTY_TEXT;
     /** @type {number} */
     #selectedProcessNumber = 0;
     /** @type {string} */
@@ -116,7 +118,7 @@ export default class ObservatoryService {
 
     /** @param {Event} _event @param {string} identifier @returns {void} */
     #showGraph(_event, identifier) {
-        this.#graphGroup = identifier;
+        this.graphGroup = identifier;
         void this.#renderIfReady();
     }
 
@@ -127,7 +129,7 @@ export default class ObservatoryService {
             mode: this.series,
             model: this.model,
             pid: this.#selectedProcessNumber,
-            graphGroup: this.#graphGroup,
+            graphGroup: this.graphGroup,
             session: this.#selectedSession,
             sessionPid: this.#sessionProcessNumber,
             sessionStarted: this.#sessionProcessStarted,
@@ -163,7 +165,7 @@ export default class ObservatoryService {
     /** @param {Event} event @param {string} group @param {number} identifier @returns {void} */
     #selectProcess(event, group, identifier) {
         this.#selectedProcessNumber = identifier;
-        this.#graphGroup = group;
+        this.graphGroup = group;
         this.#select(event, group);
     }
 
@@ -238,6 +240,7 @@ export default class ObservatoryService {
     /** @param {import('/models/ObservatoryModel.ts').ObservatoryModel} model @returns {void} */
     #acceptCurrent(model) {
         this.model = model;
+        this.graphGroup = this.#currentGraph(this.#treeGroups(model));
         this.#selected = model.selected;
         this.#selectedSession = model.selectedSession;
         this.#sessionProcessNumber = this.#processPid(model.selectedSessionProcess);
@@ -246,6 +249,21 @@ export default class ObservatoryService {
         this.problem = ObservatoryService._EMPTY_TEXT;
         delete this.#element().dataset.nativeFailure;
         void this.#renderCharts().catch(/** @param {unknown} error @returns {void} */ error => this.#chartFailure(error));
+    }
+
+    /** @param {import('/models/ObservatoryModel.ts').ObservatoryModel} model @returns {string[]} */
+    #treeGroups(model) {
+        const sessions = model.resourceSessions.filter(/** @param {import('/models/SessionResourceView.ts').SessionResourceView} session @returns {boolean} */
+            session => session.graph.nodes.length > 0).map(/** @param {import('/models/SessionResourceView.ts').SessionResourceView} session @returns {string} */ session => session.key);
+        const shared = model.sharedResources.filter(/** @param {import('/models/RuntimeView.ts').RuntimeView} runtime @returns {boolean} */
+            runtime => runtime.graph.nodes.length > 0).map(/** @param {import('/models/RuntimeView.ts').RuntimeView} runtime @returns {string} */ runtime => ObservatoryService._CONTEXT_PREFIX + runtime.id);
+        return [...sessions, ...shared];
+    }
+
+    /** @param {string[]} groups @returns {string} */
+    #currentGraph(groups) {
+        const kept = groups.filter(/** @param {string} group @returns {boolean} */ group => group === this.graphGroup);
+        return [...kept, ...groups, ObservatoryService._EMPTY_TEXT][0];
     }
 
     /** @param {import('/models/ProcessRow.ts').ProcessRow | null | undefined} process @returns {number | null} */
