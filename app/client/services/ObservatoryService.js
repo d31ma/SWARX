@@ -63,6 +63,7 @@ export default class ObservatoryService {
     /** @returns {void} */
     @OnStart
     initialize() {
+        globalThis.performance?.mark('swarx:observatory-start');
         ScriptUtils.load();
         // Section components share this page singleton, and Tac rebinds `view` to each newly
         // activated component host. Keep the observatory panel host that started the service.
@@ -237,6 +238,9 @@ export default class ObservatoryService {
 
     /** @param {import('/models/ObservatoryModel.ts').ObservatoryModel} model @returns {void} */
     #acceptCurrent(model) {
+        if (this.model === undefined) {
+            globalThis.performance?.mark('swarx:first-model');
+        }
         this.model = model;
         this.#selected = model.selected;
         this.#selectedSession = model.selectedSession;

@@ -780,12 +780,17 @@ class NativePreviewReport {
       summaryBounds: this.#summaryBounds(), logicalRecords: this.#logicalRecords(), logicalRows: document.querySelectorAll(this.#AGENT_ROW_SELECTOR).length, appIconLoaded: iconLoaded, diagnostics: this.#diagnostics()};
   }
 
-  /** @returns {{path: string, elements: number, document: Record<string, string | undefined>, failures: {tag: string, native: string | undefined, chart: string | undefined, mount: string | null}[]}} */
+  /** @returns {{path: string, elements: number, document: Record<string, string | undefined>, failures: {tag: string, native: string | undefined, chart: string | undefined, mount: string | null}[], timing: {paint: [string, number][], marks: [string, number][], slow: [string, number, number][]}}} */
   static #diagnostics() {
     const failures = Array.from(document.querySelectorAll('[data-native-failure],[data-chart-failure],[data-tachyon-mount-error]'),
       /** @param {Element} element @returns {{tag: string, native: string | undefined, chart: string | undefined, mount: string | null}} */ element => ({tag: element.tagName.toLowerCase(),
         native: /** @type {HTMLElement} */ (element).dataset.nativeFailure, chart: /** @type {HTMLElement} */ (element).dataset.chartFailure, mount: element.getAttribute('data-tachyon-mount-error')}));
-    return {path: globalThis.location?.pathname ?? '', elements: document.getElementsByTagName?.('*').length ?? 0, document: {...document.documentElement?.dataset}, failures};
+    const entries = /** @param {string} type @returns {PerformanceEntry[]} */ type => globalThis.performance?.getEntriesByType?.(type) ?? [];
+    const timing = {paint: entries('paint').map(/** @param {PerformanceEntry} entry @returns {[string, number]} */ entry => [entry.name, Math.round(entry.startTime)]),
+      marks: entries('mark').map(/** @param {PerformanceEntry} entry @returns {[string, number]} */ entry => [entry.name, Math.round(entry.startTime)]),
+      slow: entries('resource').filter(/** @param {PerformanceEntry} entry @returns {boolean} */ entry => entry.duration > 200).map(
+        /** @param {PerformanceEntry} entry @returns {[string, number, number]} */ entry => [String(entry.name).split('/').pop() ?? '', Math.round(entry.startTime), Math.round(entry.duration)])};
+    return {path: globalThis.location?.pathname ?? '', elements: document.getElementsByTagName?.('*').length ?? 0, document: {...document.documentElement?.dataset}, failures, timing};
   }
 
   /** @returns {{id: string, height: number, textTop: number, textBottom: number, top: number, bottom: number, lineHeight: string, appearance: string}[]} */
