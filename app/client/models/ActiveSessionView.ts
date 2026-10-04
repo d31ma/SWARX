@@ -1,5 +1,6 @@
 import type { AgentRowView } from '/models/AgentRowView.ts';
 import type { BackgroundTaskView } from '/models/BackgroundTaskView.ts';
+import type { SessionLoadView } from '/models/SessionLoadView.ts';
 
 export interface ActiveSessionView {
   key: string;
@@ -20,4 +21,5 @@ export interface ActiveSessionView {
   background: BackgroundTaskView[];
   backgroundRunning: number;
   backgroundWaiting: number;
+  loads: SessionLoadView[];
 }

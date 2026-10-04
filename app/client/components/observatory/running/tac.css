@@ -135,6 +135,57 @@
   outline-offset: 2px;
 }
 
+.session-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.session-card-title h3 {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Above-other-sessions hints: amber, never red (no host pressure signal exists). Each chip
+   names its channel in text; its tooltip gives the value, baseline and window. Chips sit above
+   the card's open overlay so the tooltip appears on hover. */
+.load-chips {
+  position: relative;
+  z-index: 1;
+  flex: 0 1 auto;
+  max-width: 55%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.load-chip {
+  padding: 0 5px;
+  border: 1px solid #9a7a36;
+  border-radius: 4px;
+  background: #3a3424;
+  color: #f3d08a;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 16px;
+  white-space: nowrap;
+  cursor: help;
+}
+
+.load-detail {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .session-card-heading p {
   margin: 2px 0 0;
   color: #c9d3ec;

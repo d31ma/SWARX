@@ -1,4 +1,4 @@
-use crate::models::{NativeAgentRowView, NativeBackgroundTaskView};
+use crate::models::{NativeAgentRowView, NativeBackgroundTaskView, NativeSessionLoadView};
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct NativeActiveSessionView {
@@ -29,6 +29,9 @@ pub struct NativeActiveSessionView {
     pub background_running: i64,
     #[serde(default, rename = "backgroundWaiting")]
     pub background_waiting: i64,
+    // Channels above the other active linked sessions (SessionLoadUtils); empty when none.
+    #[serde(default)]
+    pub loads: Vec<NativeSessionLoadView>,
     #[serde(skip)]
     pub started_at: f64,
 }

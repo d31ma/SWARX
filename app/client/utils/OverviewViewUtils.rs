@@ -7,7 +7,8 @@ use crate::models::{
 };
 use crate::utils::{
     ActiveSessionUtils, ActiveSummaryUtils, LogicalViewUtils, MetricFormatUtils,
-    SessionDetailUtils, SessionResourceUtils, SessionViewUtils, ShellEvidenceUtils, TimeFormatUtils,
+    SessionDetailUtils, SessionLoadUtils, SessionResourceUtils, SessionViewUtils, ShellEvidenceUtils,
+    TimeFormatUtils,
 };
 use std::cmp::Ordering;
 
@@ -60,7 +61,7 @@ impl OverviewViewUtils {
             &snapshot.harness_sessions,
         );
         let logical_count: i64 = logical.len() as i64;
-        let active_sessions: Vec<NativeActiveSessionView> = ActiveSessionUtils::sessions(
+        let mut active_sessions: Vec<NativeActiveSessionView> = ActiveSessionUtils::sessions(
             &logical,
             &snapshot.logical_views,
             &selection.expanded_sessions,
@@ -70,6 +71,7 @@ impl OverviewViewUtils {
             SessionViewUtils::named_activity(snapshot.activity.clone(), &snapshot.harness_sessions);
         let all_resource_sessions: Vec<NativeSessionResourceView> =
             SessionResourceUtils::build(&snapshot.session_groups, now);
+        SessionLoadUtils::mark(&mut active_sessions, &all_resource_sessions, now);
         let all_contexts: Vec<NativeRuntimeView> =
             SessionResourceUtils::contexts(&groups, &all_resource_sessions);
         let resource_sessions: Vec<NativeSessionResourceView> = Self::harness_sessions(

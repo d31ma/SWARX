@@ -136,6 +136,7 @@ impl ActiveSessionUtils {
             background,
             background_running: states.0,
             background_waiting: states.1,
+            loads: Vec::new(),
         }
     }
 
