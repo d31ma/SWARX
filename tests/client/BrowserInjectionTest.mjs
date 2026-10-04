@@ -10,13 +10,16 @@ import {BrowserBundleProvenanceUtils} from './utils/BrowserBundleProvenanceUtils
 /** @typedef {import('../../app/client/models/SnapshotPage.ts').SnapshotPage} SnapshotPage */
 /** @typedef {import('../../app/client/services/ObservatoryService.js').default} Observatory */
 /** @typedef {import('../../app/client/services/native/monitoring/SnapshotService.js').default} Snapshot */
-/** @typedef {{ObservatoryService: {default: typeof import('../../app/client/services/ObservatoryService.js').default}, SnapshotService: {default: typeof import('../../app/client/services/native/monitoring/SnapshotService.js').default}, SnapshotReaderService: {default: typeof import('../../app/client/services/SnapshotReaderService.js').default}, PresentationService: {default: typeof import('../../app/client/services/browser/PresentationService.js').default}, GraphService: {default: typeof import('../../app/client/services/browser/GraphService.js').default}, ChartService: {default: typeof import('../../app/client/services/browser/ChartService.js').default}, ViewContinuityService: {default: typeof import('../../app/client/services/browser/ViewContinuityService.js').default}}} EmittedModules */
+/** @typedef {{ObservatoryService: {default: typeof import('../../app/client/services/ObservatoryService.js').default}, SnapshotService: {default: typeof import('../../app/client/services/native/monitoring/SnapshotService.js').default}, PresentationService: {default: typeof import('../../app/client/services/browser/PresentationService.js').default}, GraphService: {default: typeof import('../../app/client/services/browser/GraphService.js').default}, ChartService: {default: typeof import('../../app/client/services/browser/ChartService.js').default}, ViewContinuityService: {default: typeof import('../../app/client/services/browser/ViewContinuityService.js').default}}} EmittedModules */
 /** @typedef {{default: new () => object}} BrowserModule */
 /** @typedef {{open: number, page: number, release: number}} BoundaryCalls */
+/** @typedef {import('../../app/client/models/SnapshotReader.ts').SnapshotReader} SnapshotReader */
+/** @typedef {(instance: object, name: string) => Promise<void>} NativeBinder */
+/** @typedef {{calls: BoundaryCalls, bind: NativeBinder}} NativeBoundary */
 /** @typedef {{view?: HTMLElement, taskScheduler?: TacTaskScheduler, lifecycle?: AbortSignal}} RuntimeOwner */
 /** @typedef {(name: string) => Promise<Observatory>} Resolver */
 /** @typedef {{services: Record<string, unknown>}} ClientPlan */
-/** @typedef {{ClientView: {plan: ClientPlan}, AbortController: typeof AbortController, location: {pathname: string}, Owners: {modules: WeakMap<object, BrowserModule>, managed: WeakMap<object, AbortController>, stored: WeakMap<object, unknown>}, Runtime: {graphs: WeakMap<object, object[]>}, importAsset: (path: string) => Promise<BrowserModule>, nativeHost: () => boolean, attachRuntime: (instance: RuntimeOwner) => void, resolve?: Resolver}} ResolverContext */
+/** @typedef {{ClientView: {plan: ClientPlan}, AbortController: typeof AbortController, location: {pathname: string}, Owners: {modules: WeakMap<object, BrowserModule>, managed: WeakMap<object, AbortController>, stored: WeakMap<object, unknown>}, Runtime: {graphs: WeakMap<object, object[]>}, importAsset: (path: string) => Promise<BrowserModule>, nativeHost: () => boolean, bindNativeInstance: NativeBinder, drainCompanionQueue: () => void, attachRuntime: (instance: RuntimeOwner) => void, resolve?: Resolver}} ResolverContext */
 
 class BrowserInjectionTest {
   /** @type {URL} */
@@ -41,12 +44,14 @@ class BrowserInjectionTest {
   /** @returns {Promise<void>} */
   static async check() {
     const modules = await this.modules();
-    const calls = this.nativeBoundary(modules.SnapshotReaderService.default);
-    const resolver = this.resolver(modules);
+    const boundary = this.nativeBoundary();
+    const calls = boundary.calls;
+    const resolver = this.resolver(modules, boundary.bind);
     const observatory = await resolver('observatory');
     try {
       assert.ok(observatory.snapshot instanceof modules.SnapshotService.default);
-      assert.ok(observatory.snapshot.snapshotReader instanceof modules.SnapshotReaderService.default);
+      assert.equal(Object.getPrototypeOf(observatory.snapshot.snapshotReader)?.constructor?.name, 'Object');
+      assert.equal(typeof observatory.snapshot.snapshotReader?.open, 'function');
       const presentation = observatory.presentation;
       assert.ok(presentation instanceof modules.PresentationService.default);
       assert.ok(presentation.graph instanceof modules.GraphService.default);
@@ -69,7 +74,7 @@ class BrowserInjectionTest {
       observatory.dispose();
       assert.equal(this.observerCalls.disconnected, 2);
     }
-    console.log('PASS: seven actual emitted Services resolve through the compiler catalog, including shared transitive graph/chart identity. Public search, paging, empty-DOM render, watch and disposal pass with explicit synthetic native/observer boundaries. This is not actual WKWebView or startup acceptance.');
+    console.log('PASS: six actual emitted browser Services and the module-less native snapshotReader resolve through the compiler catalog, including shared transitive graph/chart identity. Public search, paging, empty-DOM render, watch and disposal pass with explicit synthetic native/observer boundaries. This is not actual WKWebView or startup acceptance.');
   }
 
   /** @returns {Promise<EmittedModules>} */
@@ -78,7 +83,6 @@ class BrowserInjectionTest {
     return {
       ObservatoryService: await import(paths.ObservatoryService.href),
       SnapshotService: await import(paths.SnapshotService.href),
-      SnapshotReaderService: await import(paths.SnapshotReaderService.href),
       PresentationService: await import(paths.PresentationService.href),
       GraphService: await import(paths.GraphService.href),
       ChartService: await import(paths.ChartService.href),
@@ -133,28 +137,40 @@ class BrowserInjectionTest {
       hasTaskFeed: false, ready: true, processLabel: 'Synthetic boundary fixture', liveStatus: 'Live'};
   }
 
-  /** @param {typeof import('../../app/client/services/SnapshotReaderService.js').default} Reader @returns {BoundaryCalls} */
-  static nativeBoundary(Reader) {
+  /** @returns {NativeBoundary} */
+  static nativeBoundary() {
     const content = JSON.stringify(this.overview());
     const cut = Math.floor(content.length / 2);
     const parts = [content.slice(0, cut), content.slice(cut)];
     /** @type {BoundaryCalls} */
     const calls = {open: 0, page: 0, release: 0};
-    Reader.prototype.open = /** @param {NativeSelection} selection @returns {Promise<SnapshotTransfer>} */ async selection => {
-      assert.deepEqual(selection, BrowserInjectionTest.selection());
-      calls.open += 1;
-      return {id: 1, pages: parts.length, bytes: new TextEncoder().encode(content).length, error: ''};
+    /** @type {SnapshotReader} */
+    const reader = {
+      /** @param {NativeSelection} selection @returns {Promise<SnapshotTransfer>} */
+      async open(selection) {
+        assert.deepEqual(selection, BrowserInjectionTest.selection());
+        calls.open += 1;
+        return {id: 1, pages: parts.length, bytes: new TextEncoder().encode(content).length, error: ''};
+      },
+      /** @param {number} id @param {number} index @returns {Promise<SnapshotPage>} */
+      async page(id, index) {
+        calls.page += 1;
+        return {id, index, content: parts[index], error: ''};
+      },
+      /** @param {number} id @returns {Promise<boolean>} */
+      async release(id) { assert.equal(id, 1); calls.release += 1; return true; }
     };
-    Reader.prototype.page = /** @param {number} id @param {number} index @returns {Promise<SnapshotPage>} */ async (id, index) => {
-      calls.page += 1;
-      return {id, index, content: parts[index], error: ''};
+    /** @type {NativeBinder} */
+    const bind = async (instance, name) => {
+      assert.equal(name, 'snapshotReader');
+      assert.deepEqual(Object.keys(instance), []);
+      Object.assign(instance, reader);
     };
-    Reader.prototype.release = /** @param {number} id @returns {Promise<boolean>} */ async id => { assert.equal(id, 1); calls.release += 1; return true; };
-    return calls;
+    return {calls, bind};
   }
 
-  /** @param {EmittedModules} modules @returns {Resolver} */
-  static resolver(modules) {
+  /** @param {EmittedModules} modules @param {NativeBinder} bind @returns {Resolver} */
+  static resolver(modules, bind) {
     const runtime = readFileSync(new URL('tachyon-runtime/tac-client.js', this.ROOT), 'utf8');
     const start = runtime.indexOf('const createOwner = async ');
     const end = runtime.indexOf('const composeOwner = ', start);
@@ -178,7 +194,9 @@ class BrowserInjectionTest {
         assert.ok(module);
         return module;
       },
-      nativeHost: /** @returns {boolean} */ () => false,
+      nativeHost: /** @returns {boolean} */ () => true,
+      bindNativeInstance: bind,
+      drainCompanionQueue: /** @returns {void} */ () => {},
       attachRuntime: /** @param {RuntimeOwner} instance @returns {void} */ instance => {
         instance.view = BrowserInjectionTest.browserView();
         instance.taskScheduler = /** @type {TacTaskScheduler} */ (/** @type {unknown} */ ({render: /** @returns {Promise<void>} */ async () => {}}));

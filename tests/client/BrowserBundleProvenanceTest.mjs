@@ -10,7 +10,7 @@ import {ProvenanceVendorFixture} from './provenance/ProvenanceVendorFixture.mjs'
 /** @typedef {import('node:test').TestContext} TestContext */
 /** @typedef {{project: URL, emitted: URL, build: URL}} ProvenanceFixture */
 /** @type {Record<string, string>} */
-const SERVICES = {observatory: 'services/ObservatoryService.js', snapshot: 'services/native/monitoring/SnapshotService.js', snapshotReader: 'services/SnapshotReaderService.js', presentation: 'services/browser/PresentationService.js', graph: 'services/browser/GraphService.js', chart: 'services/browser/ChartService.js', viewContinuity: 'services/browser/ViewContinuityService.js'};
+const SERVICES = {observatory: 'services/ObservatoryService.js', snapshot: 'services/native/monitoring/SnapshotService.js', presentation: 'services/browser/PresentationService.js', graph: 'services/browser/GraphService.js', chart: 'services/browser/ChartService.js', viewContinuity: 'services/browser/ViewContinuityService.js'};
 
 /** @param {URL} root @param {string} relative @param {string} content @returns {void} */
 function put(root, relative, content) {
@@ -38,11 +38,12 @@ function fixture(context) {
   const project = pathToFileURL(root + '/project/');
   const emitted = pathToFileURL(root + '/emitted/');
   const build = pathToFileURL(root + '/build.json');
-  /** @type {Record<string, {module: string}>} */
-  const services = {};
+  /** @type {Record<string, {module: string | null, native: boolean}>} */
+  const services = {snapshotReader: {module: null, native: true}};
+  put(project, 'app/client/services/SnapshotReaderService.rs', '#[Service]\nstruct SnapshotReaderService;\n');
   for (const [field, source] of Object.entries(SERVICES)) {
     const name = source.split('/').pop();
-    services[field] = {module: '/.tachyon/services/' + name};
+    services[field] = {module: '/.tachyon/services/' + name, native: false};
     put(project, 'app/client/' + source, '@Service\nexport default class ' + field + ' {}\n');
     put(emitted, 'tachyon-runtime/services/' + name, 'export default class ' + field + ' {}\n');
   }
@@ -62,10 +63,11 @@ function fixture(context) {
   return {project, emitted, build};
 }
 
-test('provenance captures seven actual catalog modules and scoped component inputs', context => {
+test('provenance captures six actual catalog modules and scoped component inputs', context => {
   const data = fixture(context);
   const record = BrowserBundleProvenanceUtils.inspect(data.project, data.emitted, data.build);
-  assert.equal(Object.keys(record).filter(name => name.startsWith('emitted:tachyon-runtime/services/')).length, 7);
+  assert.equal(Object.keys(record).filter(name => name.startsWith('emitted:tachyon-runtime/services/')).length, 6);
+  assert.ok(record['source:app/client/services/SnapshotReaderService.rs']);
   assert.ok(record['source:app/client/components/observatory/panel/tac.css']);
   assert.ok(record['source:app/client/components/observatory/help/tac.css']);
   assert.ok(record['source:app/client/models/Fixture.ts']);
@@ -105,7 +107,7 @@ test('retired asset in a compiler runtime alias is refused', context => {
 test('missing catalog provider is refused', context => {
   const data = fixture(context);
   put(data.emitted, 'index.html', '<script id="tachyon-view">{"services":{}}</script>');
-  assert.throws(() => BrowserBundleProvenanceUtils.inspect(data.project, data.emitted, data.build), /seven browser Services/);
+  assert.throws(() => BrowserBundleProvenanceUtils.inspect(data.project, data.emitted, data.build), /six browser Services and the native snapshotReader/);
 });
 
 test('external catalog module paths are refused', context => {
@@ -151,10 +153,10 @@ function corruptPublished(data, script) {
   writeFileSync(file, Buffer.concat([readFileSync(file), Buffer.from('\n')]));
 }
 
-test('public modules resolves exactly the seven providers to their local emitted modules', /** @param {TestContext} context @returns {void} */ context => {
+test('public modules resolves exactly the six browser providers to their local emitted modules', /** @param {TestContext} context @returns {void} */ context => {
   const data = fixture(context);
   const modules = BrowserBundleProvenanceUtils.modules(data.emitted);
-  assert.deepEqual(Object.keys(modules).sort(), ['ChartService', 'GraphService', 'ObservatoryService', 'PresentationService', 'SnapshotReaderService', 'SnapshotService', 'ViewContinuityService']);
+  assert.deepEqual(Object.keys(modules).sort(), ['ChartService', 'GraphService', 'ObservatoryService', 'PresentationService', 'SnapshotService', 'ViewContinuityService']);
   assert.equal(modules.GraphService.href, new URL('tachyon-runtime/services/GraphService.js', data.emitted).href);
 });
 
@@ -283,7 +285,27 @@ test('published vendor drift after acceptance capture is refused', /** @param {T
   assert.throws(() => BrowserBundleProvenanceUtils.requireStable(record, data.project, data.emitted, data.build), /changed during acceptance/);
 });
 
-for (const field of Object.keys(SERVICES)) {
+test('a browser module for the native snapshot reader is refused', /** @param {TestContext} context @returns {void} */ context => {
+  const data = fixture(context);
+  const html = readFileSync(new URL('index.html', data.emitted), 'utf8').replace('"snapshotReader":{"module":null', '"snapshotReader":{"module":"/.tachyon/services/SnapshotReaderService.js"');
+  put(data.emitted, 'index.html', html);
+  assert.throws(() => BrowserBundleProvenanceUtils.modules(data.emitted), /no browser module/);
+});
+
+test('a snapshot reader that is not served by Rust is refused', /** @param {TestContext} context @returns {void} */ context => {
+  const data = fixture(context);
+  const html = readFileSync(new URL('index.html', data.emitted), 'utf8').replace('"module":null,"native":true', '"module":null,"native":false');
+  put(data.emitted, 'index.html', html);
+  assert.throws(() => BrowserBundleProvenanceUtils.modules(data.emitted), /served by Rust/);
+});
+
+test('missing Rust snapshot reader source is refused', /** @param {TestContext} context @returns {void} */ context => {
+  const data = fixture(context);
+  unlinkSync(new URL('app/client/services/SnapshotReaderService.rs', data.project));
+  assert.throws(() => BrowserBundleProvenanceUtils.inspect(data.project, data.emitted, data.build), /ENOENT/);
+});
+
+for (const field of [...Object.keys(SERVICES), 'snapshotReader']) {
   test('public modules refuses missing catalog provider: ' + field, /** @param {TestContext} context @returns {void} */ context => {
     const data = fixture(context);
     const html = readFileSync(new URL('index.html', data.emitted), 'utf8');
@@ -292,11 +314,11 @@ for (const field of Object.keys(SERVICES)) {
     const catalog = JSON.parse(matched[1]);
     delete catalog.services[field];
     put(data.emitted, 'index.html', '<script id="tachyon-view">' + JSON.stringify(catalog) + '</script>');
-    assert.throws(() => BrowserBundleProvenanceUtils.modules(data.emitted), /seven browser Services/);
+    assert.throws(() => BrowserBundleProvenanceUtils.modules(data.emitted), /six browser Services and the native snapshotReader/);
   });
 }
 
-for (const retired of ['shared/scripts/ChartRenderer.js', 'shared/scripts/GraphRenderer.js', 'shared/scripts/GraphGroupRenderer.js', 'shared/scripts/ViewContinuity.js', 'utils/PresentationUtils.js', 'utils/DomUtils.js']) {
+for (const retired of ['services/SnapshotReaderService.js', 'shared/scripts/ChartRenderer.js', 'shared/scripts/GraphRenderer.js', 'shared/scripts/GraphGroupRenderer.js', 'shared/scripts/ViewContinuity.js', 'utils/PresentationUtils.js', 'utils/DomUtils.js']) {
   test('each retired source remains refused: ' + retired, /** @param {TestContext} context @returns {void} */ context => {
     const data = fixture(context);
     put(data.project, 'app/client/' + retired, 'retired fixture');

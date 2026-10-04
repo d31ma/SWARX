@@ -10,7 +10,7 @@ export default class SnapshotService {
     static _EMPTY_TEXT = '';
     /** @type {string} */
     static _BUSY_READ = 'A local Overview read is already in progress.';
-    /** @type {import('/services/SnapshotReaderService.js').default | undefined} */
+    /** @type {import('/models/SnapshotReader.ts').SnapshotReader | undefined} */
     @Needs
     snapshotReader;
     /** @type {Promise<import('/models/ObservatoryModel.ts').ObservatoryModel> | null} */
@@ -38,11 +38,11 @@ export default class SnapshotService {
         this.#requireTicket(ticket);
         return this.#readAndRelease(ticket, reader);
     }
-    /** @param {import('/models/SnapshotTransfer.ts').SnapshotTransfer} ticket @param {import('/services/SnapshotReaderService.js').default} reader @returns {Promise<import('/models/ObservatoryModel.ts').ObservatoryModel>} */
+    /** @param {import('/models/SnapshotTransfer.ts').SnapshotTransfer} ticket @param {import('/models/SnapshotReader.ts').SnapshotReader} reader @returns {Promise<import('/models/ObservatoryModel.ts').ObservatoryModel>} */
     #readAndRelease(ticket, reader) {
         return this.#readContent(ticket, reader).finally(/** @returns {Promise<boolean>} */ () => reader.release(ticket.id));
     }
-    /** @param {import('/models/SnapshotTransfer.ts').SnapshotTransfer} ticket @param {import('/services/SnapshotReaderService.js').default} reader @returns {Promise<import('/models/ObservatoryModel.ts').ObservatoryModel>} */
+    /** @param {import('/models/SnapshotTransfer.ts').SnapshotTransfer} ticket @param {import('/models/SnapshotReader.ts').SnapshotReader} reader @returns {Promise<import('/models/ObservatoryModel.ts').ObservatoryModel>} */
     async #readContent(ticket, reader) {
         const content = await this.#pages(ticket, reader);
         return this.#decode(content, ticket);
@@ -54,7 +54,7 @@ export default class SnapshotService {
             Number.isSafeInteger(ticket.bytes), ticket.bytes > SnapshotService._MINIMUM, ticket.bytes <= SnapshotService._MAXIMUM_BYTES];
         this.#require(checks.every(Boolean), 'Invalid local snapshot transfer. ' + ticket.error);
     }
-    /** @param {import('/models/SnapshotTransfer.ts').SnapshotTransfer} ticket @param {import('/services/SnapshotReaderService.js').default} reader @returns {Promise<string>} */
+    /** @param {import('/models/SnapshotTransfer.ts').SnapshotTransfer} ticket @param {import('/models/SnapshotReader.ts').SnapshotReader} reader @returns {Promise<string>} */
     async #pages(ticket, reader) {
         /** @type {string[]} */
         const parts = [];
@@ -63,7 +63,7 @@ export default class SnapshotService {
         }
         return parts.join(SnapshotService._EMPTY_TEXT);
     }
-    /** @param {number} id @param {number} index @param {import('/services/SnapshotReaderService.js').default} reader @returns {Promise<string>} */
+    /** @param {number} id @param {number} index @param {import('/models/SnapshotReader.ts').SnapshotReader} reader @returns {Promise<string>} */
     async #part(id, index, reader) {
         const page = await reader.page(id, index);
         const checks = [page.error === SnapshotService._EMPTY_TEXT, page.id === id, page.index === index, typeof page.content === 'string'];
@@ -81,7 +81,7 @@ export default class SnapshotService {
             throw new Error(message);
         }
     }
-    /** @returns {import('/services/SnapshotReaderService.js').default} */
+    /** @returns {import('/models/SnapshotReader.ts').SnapshotReader} */
     #reader() {
         if (this.snapshotReader === undefined) {
             throw new Error('Required native snapshot provider is unavailable.');

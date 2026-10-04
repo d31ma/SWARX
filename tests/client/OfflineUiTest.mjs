@@ -23,6 +23,7 @@ const {chromium} = await import(QaPathUtils.file('OBSERVATORY_PLAYWRIGHT_MODULE'
 /** @typedef {{sampled_at:number,started_at:number,groups:OfflineGroup[],logical_agents:OfflineLogical[],activity:OfflineActivity[],totals:OfflineTotals,errors:string[],limitations:string[]}} OfflineFixture */
 /** @typedef {OfflineFixture & {now:number,selection:NativeSelection}} OfflineRequest */
 /** @typedef {{open:(selection:NativeSelection)=>Promise<SnapshotTransfer>,page:(id:number,index:number)=>Promise<SnapshotPage>,release:(id:number)=>Promise<boolean>}} OfflineNative */
+/** @typedef {{op:string,service:string,name:string,args:unknown[]}} OfflineHostRequest */
 /** @typedef {{options:{scales:{x:{max:number,min:number,title:{text:string}},y:{title:{text:string}}}},data:{datasets:import('../../app/client/models/ChartDataset.ts').ChartDataset[]},tooltip:{opacity:number}}} OfflineChart */
 /** @typedef {{getChart:(canvas:Element|null)=>OfflineChart|undefined}} OfflineChartLibrary */
 /** @typedef {typeof globalThis & {offlineFixture:OfflineFixture,offlineNative:OfflineNative,offlineRustOverview:(request:OfflineRequest)=>Promise<Overview>,Chart?:OfflineChartLibrary}} OfflineBrowser */
@@ -97,11 +98,7 @@ class OfflineUiTest {
     /** @type {Record<string, string>} */
     const types = {'.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json', '.webmanifest': 'application/manifest+json'};
     const extension = name.slice(name.lastIndexOf('.'));
-    /** @type {Buffer | string} */
-    let body = readFileSync(source);
-    if (name.endsWith('/services/SnapshotReaderService.js')) {
-      body = body.toString() + '\nSnapshotReaderService.prototype.open = /** @param {{selected:string,query:string,pid:number|null}} selection @returns {Promise<{id:number,pages:number,bytes:number,error:string}>} */ selection => globalThis.offlineNative.open(selection);\nSnapshotReaderService.prototype.page = /** @param {number} id @param {number} index @returns {Promise<{id:number,index:number,content:string,error:string}>} */ (id,index) => globalThis.offlineNative.page(id,index);\nSnapshotReaderService.prototype.release = /** @param {number} id @returns {Promise<boolean>} */ id => globalThis.offlineNative.release(id);\n';
-    }
+    const body = readFileSync(source);
     return route.fulfill({contentType: types[extension] ?? 'application/octet-stream', body});
   }
 
@@ -187,6 +184,17 @@ class OfflineUiTest {
         },
         release: /** @param {number} id @returns {Promise<boolean>} */ async id => transfers.delete(id)
       };
+      /** @param {string} capability @param {string} payload @returns {Promise<string>} */
+      const hostCall = async (capability, payload) => {
+        /** @type {OfflineHostRequest} */
+        const request = JSON.parse(payload);
+        if (capability !== 'companion.invoke' || request.service !== 'snapshotReader') return JSON.stringify({ok: false, error: 'The synthetic offline host only answers snapshotReader.'});
+        if (request.op === 'init') return JSON.stringify({value: {fields: [], methods: ['open', 'page', 'release'], listeners: []}});
+        const member = /** @type {((...values: unknown[]) => Promise<unknown>) | undefined} */ (Reflect.get(boundary.offlineNative, request.name));
+        if (request.op === 'call' && member) return JSON.stringify({value: await member(...request.args)});
+        return JSON.stringify({value: null});
+      };
+      Object.defineProperty(boundary, '__tachyonNativeHostCall', {value: hostCall, configurable: true});
     }, this.fixture());
     await page.goto(this.ORIGIN, {waitUntil: 'load'});
     await page.waitForFunction(/** @returns {boolean} */ () => document.querySelectorAll('.logical-agent-row').length === 4 && document.querySelector('.main-footer')?.textContent?.includes('samples') === true);

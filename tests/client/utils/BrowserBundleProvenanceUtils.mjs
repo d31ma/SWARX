@@ -2,14 +2,16 @@ import assert from 'node:assert/strict';
 import {readFileSync, readdirSync, existsSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 
-/** @typedef {{module: string}} BrowserCatalogEntry */
+/** @typedef {{module: string | null, native?: boolean}} BrowserCatalogEntry */
 /** @typedef {{services: Record<string, BrowserCatalogEntry>}} BrowserCatalog */
 
 export class BrowserBundleProvenanceUtils {
   /** @type {Record<string, string>} */
-  static #SERVICES = {observatory: 'services/ObservatoryService.js', snapshot: 'services/native/monitoring/SnapshotService.js', snapshotReader: 'services/SnapshotReaderService.js', presentation: 'services/browser/PresentationService.js', graph: 'services/browser/GraphService.js', chart: 'services/browser/ChartService.js', viewContinuity: 'services/browser/ViewContinuityService.js'};
+  static #SERVICES = {observatory: 'services/ObservatoryService.js', snapshot: 'services/native/monitoring/SnapshotService.js', presentation: 'services/browser/PresentationService.js', graph: 'services/browser/GraphService.js', chart: 'services/browser/ChartService.js', viewContinuity: 'services/browser/ViewContinuityService.js'};
+  /** @type {Record<string, string>} */
+  static #NATIVE_SERVICES = {snapshotReader: 'services/SnapshotReaderService.rs'};
   /** @type {string[]} */
-  static #RETIRED = ['shared/scripts/ChartRenderer.js', 'shared/scripts/GraphRenderer.js', 'shared/scripts/GraphGroupRenderer.js', 'shared/scripts/ViewContinuity.js', 'utils/PresentationUtils.js', 'utils/DomUtils.js'];
+  static #RETIRED = ['services/SnapshotReaderService.js', 'shared/scripts/ChartRenderer.js', 'shared/scripts/GraphRenderer.js', 'shared/scripts/GraphGroupRenderer.js', 'shared/scripts/ViewContinuity.js', 'utils/PresentationUtils.js', 'utils/DomUtils.js'];
   /** @type {string[]} */
   static #REQUIRED = ['components/observatory/panel/tac.html', 'components/observatory/panel/tac.css', 'components/observatory/help/tac.html', 'components/observatory/help/tac.css', 'shared/styles/app.css', 'utils/ScriptUtils.js', 'manifest.json'];
 
@@ -67,8 +69,17 @@ export class BrowserBundleProvenanceUtils {
     assert.ok(matched, 'Actual emitted browser service catalog must be present.');
     /** @type {BrowserCatalog} */
     const catalog = JSON.parse(matched[1]);
-    assert.deepEqual(Object.keys(catalog.services).sort(), Object.keys(this.#SERVICES).sort(), 'The actual catalog must declare all seven browser Services.');
+    assert.deepEqual(Object.keys(catalog.services).sort(), [...Object.keys(this.#SERVICES), ...Object.keys(this.#NATIVE_SERVICES)].sort(), 'The actual catalog must declare the six browser Services and the native snapshotReader.');
+    this.#requireNativeOnly(catalog);
     return catalog;
+  }
+
+  /** @param {BrowserCatalog} catalog @returns {void} */
+  static #requireNativeOnly(catalog) {
+    for (const field of Object.keys(this.#NATIVE_SERVICES)) {
+      assert.equal(catalog.services[field].native, true, 'The native snapshot reader must be served by Rust: ' + field);
+      assert.equal(catalog.services[field].module, null, 'The native snapshot reader must have no browser module: ' + field);
+    }
   }
 
   /** @param {BrowserCatalog} catalog @param {URL} emitted @returns {Record<string, URL>} */
@@ -83,9 +94,9 @@ export class BrowserBundleProvenanceUtils {
 
   /** @param {BrowserCatalogEntry} entry @param {string} source @param {URL} emitted @returns {URL} */
   static #modulePath(entry, source, emitted) {
-    assert.equal(typeof entry.module, 'string', 'Each browser provider must have a local catalog module.');
-    assert.ok(/^\/?\.tachyon\//.test(entry.module), 'Each browser provider must have a local catalog module.');
-    const relative = entry.module.replace(/^\/?\.tachyon\//, 'tachyon-runtime/');
+    const module = entry.module;
+    assert.ok(typeof module === 'string' && /^\/?\.tachyon\//.test(module), 'Each browser provider must have a local catalog module.');
+    const relative = module.replace(/^\/?\.tachyon\//, 'tachyon-runtime/');
     const url = new URL(relative, emitted);
     assert.ok(url.href.startsWith(emitted.href), 'A local catalog module cannot escape the bundle.');
     assert.equal(url.pathname.slice(url.pathname.lastIndexOf('/') + 1), source.slice(source.lastIndexOf('/') + 1), 'Catalog module must identify the actual marked Service.');
@@ -108,7 +119,7 @@ export class BrowserBundleProvenanceUtils {
 
   /** @param {URL} project @returns {void} */
   static #requireInputs(project) {
-    for (const relative of [...Object.values(this.#SERVICES), ...this.#REQUIRED]) {
+    for (const relative of [...Object.values(this.#SERVICES), ...Object.values(this.#NATIVE_SERVICES), ...this.#REQUIRED]) {
       assert.ok(readFileSync(new URL('app/client/' + relative, project)).length > 0, 'Required browser input is nonempty: ' + relative);
     }
     /** @type {{tac: {scripts: string[], scriptSources: Record<string, {package: string, version: string, license: string, sha256: string}>}}} */
