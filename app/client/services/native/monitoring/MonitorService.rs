@@ -29,9 +29,9 @@ impl MonitorService {
     const LOCK_FAILURE: &'static str = "Native measurement state unavailable.";
     const LIMITS: [&'static str; 7] = [
         "CPU: 100% means one local logical core. Remote model compute is unavailable.",
-        "RSS is resident memory; shared pages can appear in several processes.",
+        Self::MEMORY_LIMIT,
         "Network counters cover visible sockets only. Missing or reset counters leave gaps.",
-        "Disk counters measure storage bytes, not every logical file operation.",
+        Self::DISK_LIMIT,
         "Agents, sessions, tasks and action names require explicit lifecycle reports. No automatic desktop task stream is connected.",
         "Shared runtime totals cannot be divided among sessions or logical agents.",
         "Process arguments, environment, prompts, private history and terminal output are not collected.",
@@ -327,4 +327,19 @@ impl Drop for MonitorService {
     fn drop(&mut self) -> () {
         self.shutdown();
     }
+}
+
+#[cfg(not(windows))]
+impl MonitorService {
+    const MEMORY_LIMIT: &'static str =
+        "RSS is resident memory; shared pages can appear in several processes.";
+    const DISK_LIMIT: &'static str =
+        "Disk counters measure storage bytes, not every logical file operation.";
+}
+
+#[cfg(windows)]
+impl MonitorService {
+    const MEMORY_LIMIT: &'static str = "Memory is the process working set.";
+    const DISK_LIMIT: &'static str =
+        "Disk counters on Windows count all I/O transfer bytes (files, devices, pipes, network).";
 }

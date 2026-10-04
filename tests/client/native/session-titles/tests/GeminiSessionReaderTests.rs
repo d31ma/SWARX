@@ -381,6 +381,7 @@ fn symbolic_links_are_not_followed() -> () {
     assert_eq!(read(&fixture), Vec::<NativeHarnessSession>::new());
 }
 
+#[cfg(unix)]
 #[test]
 fn linked_project_registry_is_not_read() -> () {
     let fixture: SessionFolderFixture = SessionFolderFixture::new("gemini-linked-registry");

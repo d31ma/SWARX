@@ -8,6 +8,7 @@ impl LogicalAccountService {
     const SUCCESS_STATUS: u32 = windows_sys::Win32::Foundation::ERROR_SUCCESS;
     const NO_ATTRIBUTES: u32 = 0;
     const SINGLE_LINK_COUNT: u32 = 1;
+    const CREATOR_COUNT: usize = 2;
     const EMPTY_LENGTH: u32 = 0;
     const TEXT_END: u16 = 0;
     const TOKEN_WORD_BYTES: usize = 8;
@@ -26,13 +27,15 @@ impl LogicalAccountService {
     pub fn current_user_text() -> Result<String, String> {
         let process: windows_sys::Win32::Foundation::HANDLE =
             unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
-        let buffer: Vec<u64> = Self::token_user(process)?;
+        let buffer: Vec<u64> =
+            Self::token_information(process, windows_sys::Win32::Security::TokenUser)?;
         Self::identifier_text(Self::user_identifier(&buffer))
     }
 
     pub fn require_process_user(process: u32) -> Result<(), String> {
         let handle: std::os::windows::io::OwnedHandle = Self::open_process(process)?;
-        let buffer: Vec<u64> = Self::token_user(Self::raw(&handle))?;
+        let buffer: Vec<u64> =
+            Self::token_information(Self::raw(&handle), windows_sys::Win32::Security::TokenUser)?;
         let user: Vec<u8> = Self::identifier_bytes(Self::user_identifier(&buffer))?;
         Self::require_current(&user)
     }
@@ -99,7 +102,7 @@ impl LogicalAccountService {
         };
         let user: Result<Vec<u8>, String> = Self::owner_bytes(status, owner);
         unsafe { windows_sys::Win32::Foundation::LocalFree(descriptor) };
-        Self::require_current(&user?)
+        Self::require_creator(&user?)
     }
 
     fn owner_bytes(
@@ -111,11 +114,34 @@ impl LogicalAccountService {
     }
 
     fn require_current(user: &[u8]) -> Result<(), String> {
+        let current: Vec<u8> = Self::current_user()?;
+        Self::require(current == user, Self::FOREIGN)
+    }
+
+    fn require_creator(owner: &[u8]) -> Result<(), String> {
+        let creators: [Vec<u8>; Self::CREATOR_COUNT] =
+            [Self::current_user()?, Self::current_default_owner()?];
+        Self::require(creators.contains(&owner.to_vec()), Self::FOREIGN)
+    }
+
+    fn current_user() -> Result<Vec<u8>, String> {
+        let buffer: Vec<u64> =
+            Self::current_token_information(windows_sys::Win32::Security::TokenUser)?;
+        Self::identifier_bytes(Self::user_identifier(&buffer))
+    }
+
+    fn current_default_owner() -> Result<Vec<u8>, String> {
+        let buffer: Vec<u64> =
+            Self::current_token_information(windows_sys::Win32::Security::TokenOwner)?;
+        Self::identifier_bytes(Self::owner_identifier(&buffer))
+    }
+
+    fn current_token_information(
+        class: windows_sys::Win32::Security::TOKEN_INFORMATION_CLASS,
+    ) -> Result<Vec<u64>, String> {
         let process: windows_sys::Win32::Foundation::HANDLE =
             unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
-        let buffer: Vec<u64> = Self::token_user(process)?;
-        let current: Vec<u8> = Self::identifier_bytes(Self::user_identifier(&buffer))?;
-        Self::require(current == user, Self::FOREIGN)
+        Self::token_information(process, class)
     }
 
     fn open_process(process: u32) -> Result<std::os::windows::io::OwnedHandle, String> {
@@ -155,16 +181,19 @@ impl LogicalAccountService {
         })
     }
 
-    fn token_user(process: windows_sys::Win32::Foundation::HANDLE) -> Result<Vec<u64>, String> {
+    fn token_information(
+        process: windows_sys::Win32::Foundation::HANDLE,
+        class: windows_sys::Win32::Security::TOKEN_INFORMATION_CLASS,
+    ) -> Result<Vec<u64>, String> {
         let token: std::os::windows::io::OwnedHandle = Self::open_token(process)?;
-        let length: u32 = Self::token_length(&token);
+        let length: u32 = Self::token_length(&token, class);
         let words: usize = (length as usize).div_ceil(Self::TOKEN_WORD_BYTES);
         let mut buffer: Vec<u64> = vec![0; words];
         let mut written: u32 = Self::EMPTY_LENGTH;
         let result: windows_sys::core::BOOL = unsafe {
             windows_sys::Win32::Security::GetTokenInformation(
                 Self::raw(&token),
-                windows_sys::Win32::Security::TokenUser,
+                class,
                 buffer.as_mut_ptr().cast(),
                 (words * Self::TOKEN_WORD_BYTES) as u32,
                 &mut written,
@@ -174,12 +203,15 @@ impl LogicalAccountService {
         Ok(buffer)
     }
 
-    fn token_length(token: &std::os::windows::io::OwnedHandle) -> u32 {
+    fn token_length(
+        token: &std::os::windows::io::OwnedHandle,
+        class: windows_sys::Win32::Security::TOKEN_INFORMATION_CLASS,
+    ) -> u32 {
         let mut length: u32 = Self::EMPTY_LENGTH;
         unsafe {
             windows_sys::Win32::Security::GetTokenInformation(
                 Self::raw(token),
-                windows_sys::Win32::Security::TokenUser,
+                class,
                 std::ptr::null_mut(),
                 Self::EMPTY_LENGTH,
                 &mut length,
@@ -191,6 +223,11 @@ impl LogicalAccountService {
     fn user_identifier(buffer: &[u64]) -> windows_sys::Win32::Security::PSID {
         let user: *const windows_sys::Win32::Security::TOKEN_USER = buffer.as_ptr().cast();
         unsafe { (*user).User.Sid }
+    }
+
+    fn owner_identifier(buffer: &[u64]) -> windows_sys::Win32::Security::PSID {
+        let owner: *const windows_sys::Win32::Security::TOKEN_OWNER = buffer.as_ptr().cast();
+        unsafe { (*owner).Owner }
     }
 
     fn identifier_bytes(identifier: windows_sys::Win32::Security::PSID) -> Result<Vec<u8>, String> {

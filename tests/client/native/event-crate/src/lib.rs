@@ -71,6 +71,13 @@ mod harness_process_root_reader {
     ));
 }
 pub use harness_process_root_reader::*;
+mod owned_handle {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../app/client/shared/native/WindowsOwnedHandle.rs"
+    ));
+}
+pub use owned_handle::*;
 mod roster_storage {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -238,7 +245,10 @@ pub mod services {
     }
     pub use native_command_binding_service::*;
     mod native_command_event_service {
-        use super::{NativeCommandBindingRegistryService, NativeCommandBindingService};
+        use super::{
+            NativeCommandBindingRegistryService, NativeCommandBindingService,
+            NativePlatformCompositionService,
+        };
         include!(concat!(env!("OUT_DIR"), "/NativeCommandEventService.rs"));
     }
     pub use native_command_event_service::*;
@@ -273,11 +283,24 @@ pub mod services {
         include!(concat!(env!("OUT_DIR"), "/KernelNetworkReaderService.rs"));
     }
     pub use kernel_network_reader_service::*;
+    mod windows_process_conversion_service {
+        include!(concat!(
+            env!("OUT_DIR"),
+            "/WindowsProcessConversionService.rs"
+        ));
+    }
+    pub use windows_process_conversion_service::*;
+    #[cfg_attr(not(windows), allow(unused_imports, dead_code))]
+    mod windows_process_reader_service {
+        use super::WindowsProcessConversionService;
+        include!(concat!(env!("OUT_DIR"), "/WindowsProcessReaderService.rs"));
+    }
+    pub use windows_process_reader_service::*;
     mod native_platform_composition_service {
         #[allow(unused_imports)]
         use super::{
             KernelNetworkReaderService, KernelProcessReaderService, NativeNetworkReaderService,
-            NativeProcessReaderService,
+            NativeProcessReaderService, WindowsProcessReaderService,
         };
         include!(concat!(
             env!("OUT_DIR"),

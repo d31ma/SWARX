@@ -169,7 +169,10 @@ mod native_command_binding_service {
 pub use native_command_binding_service::*;
 
 mod native_command_event_service {
-    use super::{NativeCommandBindingRegistryService, NativeCommandBindingService};
+    use super::{
+        NativeCommandBindingRegistryService, NativeCommandBindingService,
+        NativePlatformCompositionService,
+    };
     include!(concat!(env!("OUT_DIR"), "/NativeCommandEventService.rs"));
 }
 pub use native_command_event_service::*;

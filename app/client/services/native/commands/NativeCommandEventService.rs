@@ -118,6 +118,10 @@ impl NativeCommandEventService {
         errors
     }
 
+    pub fn user() -> i64 {
+        NativePlatformCompositionService::current_user()
+    }
+
     fn configured(
         registry: Result<Arc<Mutex<NativeCommandBindingRegistryService>>, String>,
         reader: Box<dyn ProcessIdentityReader>,
@@ -234,22 +238,5 @@ impl NativeCommandEventService {
             Ok(registry) => registry.errors(),
             Err(_) => vec![Self::UNAVAILABLE.to_owned()],
         }
-    }
-}
-
-#[cfg(unix)]
-impl NativeCommandEventService {
-    pub fn user() -> i64 {
-        i64::from(unsafe { libc::getuid() })
-    }
-}
-
-// No numeric account id exists here; unknown matches no process, so no binding is granted.
-#[cfg(not(unix))]
-impl NativeCommandEventService {
-    const UNKNOWN_USER: i64 = -1;
-
-    pub fn user() -> i64 {
-        Self::UNKNOWN_USER
     }
 }

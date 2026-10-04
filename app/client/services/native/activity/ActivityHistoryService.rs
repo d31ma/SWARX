@@ -545,29 +545,38 @@ impl ActivityHistoryService {
     }
 }
 
-// The C runtime has gmtime_s but no strftime binding here; the fields give the same UTC text.
+// Windows file times reach year 30827, so the full supported range (to 9999-12-31) keeps its UTC
+// text; the C runtime gmtime_s stops at year 3000.
 #[cfg(windows)]
 impl ActivityHistoryService {
-    const SUCCESS_CODE: i32 = 0;
-    const FIRST_CALENDAR_YEAR: i32 = 1900;
-    const FIRST_MONTH: i32 = 1;
+    const WINDOWS_EPOCH_OFFSET_SECONDS: u64 = 11_644_473_600;
+    const TICKS_PER_SECOND: u64 = 10_000_000;
+    const HIGH_WORD_SHIFT: u32 = 32;
+    const FAILED_CALL: i32 = 0;
 
     fn format_time(value: f64) -> Option<String> {
-        let seconds: libc::time_t = value as libc::time_t;
-        let mut calendar: libc::tm = unsafe { std::mem::zeroed() };
-        let result: i32 = unsafe { libc::gmtime_s(&mut calendar, &seconds) };
-        (result == Self::SUCCESS_CODE).then(|| -> String { Self::calendar_text(&calendar) })
+        let ticks: u64 = (value as u64 + Self::WINDOWS_EPOCH_OFFSET_SECONDS) * Self::TICKS_PER_SECOND;
+        let file_time: windows_sys::Win32::Foundation::FILETIME =
+            windows_sys::Win32::Foundation::FILETIME {
+                dwLowDateTime: ticks as u32,
+                dwHighDateTime: (ticks >> Self::HIGH_WORD_SHIFT) as u32,
+            };
+        let mut calendar: windows_sys::Win32::Foundation::SYSTEMTIME = unsafe { std::mem::zeroed() };
+        let result: windows_sys::core::BOOL = unsafe {
+            windows_sys::Win32::System::Time::FileTimeToSystemTime(&file_time, &mut calendar)
+        };
+        (result != Self::FAILED_CALL).then(|| -> String { Self::calendar_text(&calendar) })
     }
 
-    fn calendar_text(calendar: &libc::tm) -> String {
+    fn calendar_text(calendar: &windows_sys::Win32::Foundation::SYSTEMTIME) -> String {
         format!(
             "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC",
-            calendar.tm_year + Self::FIRST_CALENDAR_YEAR,
-            calendar.tm_mon + Self::FIRST_MONTH,
-            calendar.tm_mday,
-            calendar.tm_hour,
-            calendar.tm_min,
-            calendar.tm_sec
+            calendar.wYear,
+            calendar.wMonth,
+            calendar.wDay,
+            calendar.wHour,
+            calendar.wMinute,
+            calendar.wSecond
         )
     }
 }
