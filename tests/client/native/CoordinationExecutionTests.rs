@@ -27,7 +27,10 @@ fn actual_controlled_command_reports_safe_start_result_and_real_duration() -> ()
     assert_eq!(before.executions[0].status, "running");
     assert!(before.metrics.is_none());
     let began = Instant::now();
+    #[cfg(unix)]
     let result = Command::new("/usr/bin/true").status().unwrap();
+    #[cfg(windows)]
+    let result = Command::new("cmd").args(["/c", "exit", "0"]).status().unwrap();
     let duration = began.elapsed().as_secs_f64();
     fixture.local.clock.set(110);
     let mut finish = CoordinationExecutionFixture::action("finish", "actual-child", "command-test");
