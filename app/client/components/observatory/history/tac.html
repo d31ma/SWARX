@@ -1,0 +1,27 @@
+<div class="panel-heading"><h2>Session resource history</h2><p>Verified command-root measurements only. Two-minute window; missing values leave gaps. No remote model or whole-session total.</p></div>
+<div class="chart-tabs flex gap-2" role="group" aria-label="History metric">
+  <w-btn :variant="observatory.series === 'cpu' ? 'tonal' : 'text'" on:click="observatory.setSeries('cpu')">CPU</w-btn>
+  <w-btn :variant="observatory.series === 'memory' ? 'tonal' : 'text'" on:click="observatory.setSeries('memory')">Memory</w-btn>
+  <w-btn :variant="observatory.series === 'network' ? 'tonal' : 'text'" on:click="observatory.setSeries('network')">Network</w-btn>
+  <w-btn :variant="observatory.series === 'disk' ? 'tonal' : 'text'" on:click="observatory.setSeries('disk')">Disk I/O</w-btn>
+</div>
+<div class="history-scroll">
+  <div class="history-grid session-history-grid">
+    <loop :for="session of observatory.model.resourceSessions">
+      <logic :if="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></logic>
+      <w-card variant="outlined" class="session-history-card" :data-session="session.key">
+        <h3 class="session-resource-title">{session.name}</h3><p class="session-resource-provider">{session.family}</p>
+        <logic :if="session.id"><p class="session-native-id">Session ID · {session.id}</p></logic>
+        <logic :if="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></logic>
+        <p class="session-label-source">Reported label source · {session.source}</p>
+        <logic :if="session.model"><p class="session-label-source session-model">Model {session.model}<logic :if="session.provider"> · provider {session.provider}</logic> · reported by {session.family} (configuration, not measured usage)</p></logic>
+        <loop :for="runtime of session.commands">
+          <article class="history-card history-command" :data-group="runtime.id"><h4>{runtime.name} · PID {runtime.pid}</h4><p class="runtime-card-scope">Root only; descendants excluded · birth {runtime.started}</p><div class="chart-shell"><canvas class="resource-chart" :data-group="runtime.id" :aria-label="session.name + ' command-root measured history'" role="img"></canvas><div class="chart-empty">Waiting for measured samples.</div></div><p class="chart-caption">Hover for time and value. {runtime.networkNote}.</p></article>
+        </loop>
+        <p class="session-resource-note">{session.resourceNotice}</p>
+      </w-card>
+    </loop>
+  </div>
+  <logic :if="observatory.model.resourceSessions.length === 0"><div class="empty">No matching reported sessions.<p>Unlinked process history stays in the context section below.</p></div></logic>
+  <details class="shared-resource-context" open="open"><summary>Shared / unassigned local history</summary><p>Inclusive process-group history below is secondary context. It does not allocate resources to a conversation and may overlap linked roots.</p><div class="history-grid context-history-grid"><loop :for="runtime of observatory.model.sharedResources"><w-card variant="outlined" class="history-card" :data-group="runtime.id"><h3>{runtime.name}</h3><p class="runtime-card-scope">{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel} · inclusive group</p><div class="chart-shell"><canvas class="resource-chart" :data-group="runtime.id" :aria-label="runtime.name + ' shared context history'" role="img"></canvas><div class="chart-empty">Waiting for measured samples.</div></div><p class="chart-caption">Hover for time and value. {runtime.networkNote}.</p></w-card></loop></div></details>
+</div>

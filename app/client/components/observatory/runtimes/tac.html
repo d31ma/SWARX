@@ -1,0 +1,37 @@
+<div class="panel-heading"><h2>Session resources</h2><p>Only current verified command roots and descendants carry session links. These cards do not measure remote model work.</p></div>
+<div class="session-resource-grid">
+  <loop :for="session of observatory.model.resourceSessions">
+    <logic :if="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></logic>
+    <w-card variant="outlined" class="session-resource-card" :data-session="session.key">
+      <h2 class="session-resource-title">{session.name}</h2>
+      <p class="session-resource-provider">{session.family}</p>
+      <logic :if="session.id"><p class="session-native-id">Session ID · {session.id}</p></logic>
+      <logic :if="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></logic>
+      <p class="session-label-source">Reported label source · {session.source}</p>
+      <logic :if="session.model"><p class="session-label-source session-model">Model {session.model}<logic :if="session.provider"> · provider {session.provider}</logic> · reported by {session.family} (configuration, not measured usage)</p></logic>
+      <loop :for="runtime of session.commands">
+        <article class="session-command-resource" :data-group="runtime.id">
+          <h3>{runtime.name}</h3>
+          <p class="runtime-card-scope">PID {runtime.pid} · birth {runtime.started}<br />Command-root totals exclude descendants · {runtime.processCount} current processes</p>
+          <div class="runtime-card-metrics"><div><small>ROOT CPU · ONE CORE</small><strong>{runtime.cpu}</strong></div><div><small>ROOT RSS</small><strong>{runtime.memory}</strong></div><div><small>NETWORK RECEIVE</small><strong>{runtime.download}</strong></div><div><small>NETWORK SEND</small><strong>{runtime.upload}</strong></div><div><small>ROOT DISK READ</small><strong>{runtime.diskRead}</strong></div><div><small>ROOT DISK WRITE</small><strong>{runtime.diskWrite}</strong></div></div>
+          <p class="runtime-card-note">{runtime.networkNote}.</p>
+        </article>
+      </loop>
+      <p class="session-resource-note">{session.resourceNotice}</p>
+    </w-card>
+  </loop>
+</div>
+<logic :if="observatory.model.resourceSessions.length === 0"><div class="empty">No explicitly linked sessions yet.<p>Local process measurements below do not identify a conversation.</p></div></logic>
+<details class="shared-resource-context" open="open">
+  <summary>Shared / unassigned local context</summary>
+  <p>Measured process groups below are not session allocations. Inclusive shared groups may contain linked command processes; do not add the two displays together.</p>
+  <div class="context-resource-grid">
+    <loop :for="runtime of observatory.model.sharedResources">
+      <w-card variant="outlined" class="context-resource-card" :data-group="runtime.id">
+        <h3>{runtime.name}</h3><p>{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel}</p>
+        <p>CPU {runtime.cpu} · RSS {runtime.memory}<br />Receive {runtime.download} · Send {runtime.upload}<br />Disk read {runtime.diskRead} · Disk write {runtime.diskWrite}</p>
+        <p class="runtime-card-note">{runtime.networkNote}. Local context only.</p>
+      </w-card>
+    </loop>
+  </div>
+</details>

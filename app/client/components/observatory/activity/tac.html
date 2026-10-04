@@ -1,0 +1,32 @@
+<div class="panel-heading"><h2>Activity</h2><p>Sessions with verified running actions come first, newest first; finished work stays below. Only safe action names are collected; full commands and arguments are unavailable. Times are hook receipts, not OS process start times.</p></div>
+<div class="activity-scroll"><div class="activity-grid">
+  <loop :for="session of observatory.model.activity">
+    <logic :if="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></logic>
+    <w-card variant="outlined" class="activity-card" :data-session="session.id">
+      <div class="runtime-card-heading"><h3 class="session-resource-title">{session.name}</h3></div><p class="runtime-card-scope">{session.family} · Retained reported session history</p>
+      <logic :if="session.session_id"><p class="history-session-identity">Session ID · {session.session_id}</p></logic>
+      <logic :if="!session.session_id"><p class="history-session-identity">Session ID unavailable · unlinked reported actions</p></logic>
+      <logic :if="session.source"><p class="session-label-source">Reported label source · {session.source}</p></logic>
+      <logic :if="!session.source"><p class="session-label-source">Label source unavailable</p></logic>
+      <div class="action-history-list" :data-session="session.id" :aria-label="session.name + ' session activity'" role="region" tabindex="0">
+      <loop :for="record of session.records">
+        <article class="action-history-row" :data-action="record.id" :data-agent="record.agent_id" :data-session="record.session_id || ''" :data-task="record.task_id || ''" :data-family="record.agent_family" :data-source="record.source || ''" :data-status="record.status" :data-running="record.running ? 'true' : 'false'">
+          <div class="action-history-heading"><strong>{record.name}</strong><span :class="'status-pill state-' + record.status">{record.status_label}</span></div>
+          <p class="action-owner">{record.agent_name} · {record.agent_family}</p><p class="history-source">{record.freshness}</p>
+          <logic :if="record.task_name"><p>Task · {record.task_name}</p></logic>
+          <logic :if="record.elapsed_label"><p class="action-elapsed">{record.elapsed_label}</p></logic>
+          <div class="action-history-times">
+            <logic :if="record.started_label"><p><span>Started · hook receipt</span><strong>{record.started_label}</strong></p></logic>
+            <logic :if="record.finished_label"><p><span>Finished · hook receipt</span><strong>{record.finished_label}</strong></p></logic>
+            <logic :if="record.duration_label"><p><span>Duration</span><strong>{record.duration_label}</strong></p></logic>
+            <logic :if="record.exit_code !== null"><p><span>Exit code</span><strong>{record.exit_code}</strong></p></logic>
+          </div>
+          <logic :if="record.duration_note"><p class="history-source">{record.duration_note}</p></logic>
+          <logic :if="record.source"><p class="history-source">Source · {record.source}</p></logic>
+        </article>
+      </loop>
+      </div>
+    </w-card>
+  </loop>
+  <logic :if="observatory.model.activity.length === 0"><div class="empty">No retained action history.<p>Only explicitly connected hooks supply history. Existing desktop commands are not automatically imported.</p></div></logic>
+</div><p class="activity-retention">Up to 20 actions per agent in the bounded local cache. Earlier or unreported actions are outside this feed; unknown times and links are omitted. Unlinked actions remain separate; a session ID never allocates shared resources. Runtime ownership is not established by a task or session ID.</p></div>

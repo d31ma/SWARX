@@ -59,11 +59,16 @@ export default class ObservatoryService {
     problem = ObservatoryService._EMPTY_TEXT;
     /** @type {ReturnType<typeof setInterval> | null} */
     #timer = null;
+    /** @type {HTMLElement | undefined} */
+    #host = undefined;
 
     /** @returns {void} */
     @OnStart
     initialize() {
         ScriptUtils.load();
+        // Section components share this page singleton, and Tac rebinds `view` to each newly
+        // activated component host. Keep the observatory panel host that started the service.
+        this.#host = this.#provider(this.view);
         this.#presentation().watch(this.#element(), this.#signal(),
             /** @returns {import('/models/ViewSelection.ts').ViewSelection} */ () => this.#selection());
         this.#schedule();
@@ -303,7 +308,7 @@ export default class ObservatoryService {
 
     /** @returns {HTMLElement} */
     #element() {
-        return this.#provider(this.view);
+        return this.#provider(this.#host);
     }
 
     /** @template T @param {T | undefined} value @returns {T} */

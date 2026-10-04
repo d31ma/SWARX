@@ -1,0 +1,27 @@
+<div class="panel-heading"><h2>Agents &amp; assigned work</h2><p>Harness and session labels come from explicit sources. Command resources require an explicit link with a matching OS identity.</p></div>
+<p class="feed-notice">{observatory.model.logicalNotice} History stays in Activity; source records are not a unique agent count.</p>
+<div :class="'logical-scroll agent-grid' + (observatory.model.logicalCount === 0 ? ' is-empty' : '')">
+  <loop :for="agent of observatory.model.logical">
+    <article :class="'logical-agent-row logical-state-' + agent.status" :data-agent="agent.id" :data-session="agent.session ? agent.session.id : ''" :data-task="agent.task ? agent.task.id : ''" :data-family="agent.family" :data-source="agent.source">
+      <div class="logical-title"><div><h3>{agent.name}</h3><small>{agent.family} · {agent.session ? agent.session.name : 'Session not linked'}</small></div><span :class="'status-pill state-' + agent.status">{agent.status}</span></div>
+      <p class="agent-session-id">{agent.session ? 'Session ID · ' + agent.session.id : 'No verified session ID supplied'}</p>
+      <details class="agent-identity"><summary>Technical identity</summary><p>{agent.id}</p></details>
+      <div class="feed-time">{agent.feedLabel} · {agent.source}<br />{agent.capturedLabel} · {agent.ageLabel}</div>
+      <div class="assignment"><small>ASSIGNED TASK</small><strong>{agent.taskLabel}</strong><span>{agent.taskState}</span></div>
+      <logic :if="agent.currentAction || agent.actionTiming"><div class="current-action"><logic :if="agent.currentAction"><small>{agent.actionLabel}</small><strong>{agent.currentAction}</strong></logic><logic :if="agent.actionTiming"><p class="action-timing">{agent.actionTiming}</p></logic></div></logic>
+      <logic :if="agent.command_resources.length">
+        <div class="agent-resources">
+          <loop :for="resource of agent.command_resources">
+            <section class="command-resource" :data-binding="resource.binding_id">
+              <h4>Linked command process · {resource.name}</h4>
+              <p class="command-resource-scope">PID {resource.pid} · command root only · no whole-agent total<br />Reported owner · {agent.name}<br />Session · {resource.owner.session_id}</p>
+              <dl class="command-resource-metrics"><div><dt>CPU</dt><dd>{resource.cpu}</dd></div><div><dt>RSS</dt><dd>{resource.memory}</dd></div><div><dt>Disk read</dt><dd>{resource.diskRead}</dd></div><div><dt>Disk write</dt><dd>{resource.diskWrite}</dd></div><div><dt>Network</dt><dd>Unavailable</dd></div></dl>
+              <logic :if="resource.descendant_rows.length"><details class="command-descendants" :data-binding="resource.binding_id"><summary>{resource.descendant_rows.length} observed child processes</summary><p>Current PID/birth lineage only. Each metric belongs to its process; root totals above exclude children.</p><loop :for="child of resource.descendant_rows"><div class="command-child"><strong>{child.name} · PID {child.pid}</strong><p>{child.cpu} CPU · RSS {child.memory}<br />{child.networkLabel} · {child.diskLabel}<br />{child.relationship}</p></div></loop></details></logic><p class="command-resource-trust">{resource.trustLabel}<br />Sampled {resource.sampleLabel}</p>
+            </section>
+          </loop>
+        </div>
+      </logic>
+    </article>
+  </loop>
+  <logic :if="observatory.model.logicalCount === 0"><div class="empty task-feed-empty">No fresh active-task reports.<p>This feed does not prove no agents are working. After reopening the app, a coordinator must send a new report. Previously reported work stays in Activity.</p></div></logic>
+</div>
