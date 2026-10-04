@@ -80,11 +80,6 @@ impl SessionResourceUtils {
         sources
     }
 
-    pub fn command_tree(commands: &[NativeRuntimeView]) -> Vec<NativeProcessRow> {
-        let processes: Vec<NativeProcessMetrics> = Self::processes(commands);
-        ProcessTreeUtils::build(&processes, Self::root(&processes))
-    }
-
     fn filtered_views(
         sessions: &[NativeSessionResourceView],
         search: &str,
@@ -247,7 +242,7 @@ impl SessionResourceUtils {
     }
 
     fn summary(session: &mut NativeSessionResourceView) -> () {
-        session.tree = Self::command_tree(&session.commands);
+        session.tree = ProcessTreeUtils::runtime_tree(&session.commands);
         session.graph = ProcessGraphUtils::build(&session.tree);
         session.command_count = session.commands.len() as i64;
         session.process_count = session.tree.len() as i64;
@@ -256,7 +251,7 @@ impl SessionResourceUtils {
 
     fn session(session: &NativeSessionView, now: f64) -> NativeSessionResourceView {
         let commands: Vec<NativeRuntimeView> = Self::commands(session, now);
-        let tree: Vec<NativeProcessRow> = Self::command_tree(&commands);
+        let tree: Vec<NativeProcessRow> = ProcessTreeUtils::runtime_tree(&commands);
         NativeSessionResourceView {
             key: session.key.clone(),
             id: session.id.clone(),
@@ -373,40 +368,6 @@ impl SessionResourceUtils {
         let mut view: NativeRuntimeView = RuntimeViewUtils::group(&group);
         view.charts = ChartDataUtils::build(&group.history, now);
         groups.push(view);
-    }
-
-    fn processes(groups: &[NativeRuntimeView]) -> Vec<NativeProcessMetrics> {
-        let mut seen: BTreeSet<(i32, String)> = BTreeSet::new();
-        let mut processes: Vec<NativeProcessMetrics> = Vec::new();
-        for group in groups {
-            Self::group_processes(group, (&mut seen, &mut processes));
-        }
-        processes
-    }
-
-    fn group_processes(
-        group: &NativeRuntimeView,
-        state: (&mut BTreeSet<(i32, String)>, &mut Vec<NativeProcessMetrics>),
-    ) -> () {
-        for process in &group.group.processes {
-            Self::append_process(process, (state.0, state.1));
-        }
-    }
-
-    fn append_process(
-        process: &NativeProcessMetrics,
-        state: (&mut BTreeSet<(i32, String)>, &mut Vec<NativeProcessMetrics>),
-    ) -> () {
-        if state.0.insert((process.pid, process.started.clone())) {
-            state.1.push(process.clone());
-        }
-    }
-
-    fn root(processes: &[NativeProcessMetrics]) -> i32 {
-        processes
-            .first()
-            .map(|process: &NativeProcessMetrics| -> i32 { process.pid })
-            .unwrap_or(0)
     }
 
     fn notice(empty: bool) -> String {

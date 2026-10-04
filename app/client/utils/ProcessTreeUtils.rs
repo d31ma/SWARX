@@ -1,4 +1,4 @@
-use crate::models::{NativeProcessMetrics, NativeProcessRow};
+use crate::models::{NativeProcessMetrics, NativeProcessRow, NativeRuntimeView};
 use crate::utils::MetricFormatUtils;
 use std::collections::BTreeSet;
 
@@ -15,6 +15,46 @@ impl ProcessTreeUtils {
     const NETWORK_UNAVAILABLE: &'static str = "Network unavailable";
     const SEPARATOR: &'static str = " · ";
     const ZERO: f64 = 0.0;
+
+    // One row per process identity (pid, start) across runtime groups, rooted at the first group's root.
+    pub fn runtime_tree(groups: &[NativeRuntimeView]) -> Vec<NativeProcessRow> {
+        let processes: Vec<NativeProcessMetrics> = Self::unique_processes(groups);
+        Self::build(&processes, Self::first_pid(&processes))
+    }
+
+    fn unique_processes(groups: &[NativeRuntimeView]) -> Vec<NativeProcessMetrics> {
+        let mut seen: BTreeSet<(i32, String)> = BTreeSet::new();
+        let mut processes: Vec<NativeProcessMetrics> = Vec::new();
+        for group in groups {
+            Self::group_processes(group, (&mut seen, &mut processes));
+        }
+        processes
+    }
+
+    fn group_processes(
+        group: &NativeRuntimeView,
+        state: (&mut BTreeSet<(i32, String)>, &mut Vec<NativeProcessMetrics>),
+    ) -> () {
+        for process in &group.group.processes {
+            Self::append_process(process, (state.0, state.1));
+        }
+    }
+
+    fn append_process(
+        process: &NativeProcessMetrics,
+        state: (&mut BTreeSet<(i32, String)>, &mut Vec<NativeProcessMetrics>),
+    ) -> () {
+        if state.0.insert((process.pid, process.started.clone())) {
+            state.1.push(process.clone());
+        }
+    }
+
+    fn first_pid(processes: &[NativeProcessMetrics]) -> i32 {
+        processes
+            .first()
+            .map(|process: &NativeProcessMetrics| -> i32 { process.pid })
+            .unwrap_or(0)
+    }
 
     pub fn build(processes: &[NativeProcessMetrics], root: i32) -> Vec<NativeProcessRow> {
         let mut seen: BTreeSet<i32> = BTreeSet::new();

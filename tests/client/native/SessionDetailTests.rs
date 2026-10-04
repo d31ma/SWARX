@@ -6,9 +6,7 @@ use crate::models::{
     NativeSessionActivityView, NativeSessionDetailView, NativeSessionMetricView,
     NativeSessionResourceView, NativeSessionView, NativeSnapshot, NativeViewSelection,
 };
-use crate::utils::{
-    ActiveSessionUtils, SessionDetailUtils, SessionResourceUtils, SessionUsageUtils,
-};
+use crate::utils::{ActiveSessionUtils, ProcessTreeUtils, SessionDetailUtils, SessionUsageUtils};
 use crate::TachyonRustServices::{
     CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionViewUtils,
 };
@@ -81,7 +79,7 @@ impl SessionDetailTests {
     }
 
     fn resource(commands: Vec<NativeRuntimeView>) -> NativeSessionResourceView {
-        let tree: Vec<NativeProcessRow> = SessionResourceUtils::command_tree(&commands);
+        let tree: Vec<NativeProcessRow> = ProcessTreeUtils::runtime_tree(&commands);
         NativeSessionResourceView {
             key: Self::KEY.to_owned(),
             id: Some(Self::SESSION.to_owned()),
@@ -208,7 +206,7 @@ impl SessionDetailTests {
 #[test]
 fn a_parent_and_child_add_their_own_values_once_without_group_totals() -> () {
     let commands: Vec<NativeRuntimeView> = SessionDetailTests::overlapping()[..1].to_vec();
-    let rows: Vec<NativeProcessRow> = SessionResourceUtils::command_tree(&commands);
+    let rows: Vec<NativeProcessRow> = ProcessTreeUtils::runtime_tree(&commands);
     let metrics: Vec<NativeSessionMetricView> = SessionUsageUtils::metrics(&rows, 3);
     assert_eq!(metrics[0].key, "cpu");
     assert_eq!(metrics[0].value, "15.0%");
@@ -271,7 +269,7 @@ fn partial_coverage_names_the_measured_share() -> () {
             SessionDetailTests::process(41, 40, None, Some(500)),
         ],
     )];
-    let rows = SessionResourceUtils::command_tree(&commands);
+    let rows = ProcessTreeUtils::runtime_tree(&commands);
     let metrics = SessionUsageUtils::metrics(&rows, 5);
     assert_eq!(metrics[0].value, "4.0%");
     assert!(metrics[0].available);
@@ -294,7 +292,7 @@ fn unavailable_metrics_state_their_reason() -> () {
         "linked-command:session:1",
         vec![SessionDetailTests::process(40, 1, None, Some(1000))],
     )];
-    let rows = SessionResourceUtils::command_tree(&commands);
+    let rows = ProcessTreeUtils::runtime_tree(&commands);
     let first = SessionUsageUtils::metrics(&rows, 1);
     assert_eq!(
         first[0].detail,
