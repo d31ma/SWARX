@@ -58,6 +58,13 @@ pub use {
     claude_hook_tool_input_reader::*, clock::*, identity_reader::*, process_reader::*, source::*,
     timebase::*,
 };
+mod harness_process_root_reader {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../app/client/shared/native/HarnessProcessRootReader.rs"
+    ));
+}
+pub use harness_process_root_reader::*;
 pub mod utils {
     mod context {
         include!(concat!(
