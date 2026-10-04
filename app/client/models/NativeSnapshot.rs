@@ -1,5 +1,5 @@
 use crate::models::{
-    NativeCapabilities, NativeCommandBinding, NativeCommandObservation, NativeGroup,
+    NativeBackgroundTaskView, NativeCapabilities, NativeCommandBinding, NativeCommandObservation, NativeGroup,
     NativeHarnessSession, NativeLogicalAgent, NativeLogicalAgentView, NativeResourceTotals,
     NativeRuntimeView, NativeSessionActivityView, NativeSessionView,
 };
@@ -32,6 +32,8 @@ pub struct NativeSnapshot {
     pub harness_count: i64,
     #[serde(default)]
     pub activity: Vec<NativeSessionActivityView>,
+    #[serde(default)]
+    pub background_tasks: Vec<NativeBackgroundTaskView>,
     pub errors: Vec<String>,
     pub event_revision: i64,
     pub totals: NativeResourceTotals,

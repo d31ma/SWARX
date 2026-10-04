@@ -1,4 +1,4 @@
-use crate::models::NativeAgentRowView;
+use crate::models::{NativeAgentRowView, NativeBackgroundTaskView};
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct NativeActiveSessionView {
@@ -23,6 +23,12 @@ pub struct NativeActiveSessionView {
     #[serde(rename = "toggleLabel")]
     pub toggle_label: String,
     pub agents: Vec<NativeAgentRowView>,
+    #[serde(default)]
+    pub background: Vec<NativeBackgroundTaskView>,
+    #[serde(default, rename = "backgroundRunning")]
+    pub background_running: i64,
+    #[serde(default, rename = "backgroundWaiting")]
+    pub background_waiting: i64,
     #[serde(skip)]
     pub started_at: f64,
 }

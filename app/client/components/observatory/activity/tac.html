@@ -1,5 +1,19 @@
 <logic :if="(observatory.sessionView === 'detail' || observatory.sessionView === 'inactive') && observatory.sessionTab === 'activity'">
   <section id="session-panel-activity" role="tabpanel" aria-labelledby="session-tab-activity" class="activity-scroll session-tab-panel" tabindex="0" :data-session="observatory.model.sessionDetail.key">
+    <logic :if="observatory.model.sessionDetail.background.length">
+      <h3 class="activity-subheading">Background tasks now</h3>
+      <div class="background-task-list" role="list" aria-label="Current background tasks for the selected session">
+        <loop :for="task of observatory.model.sessionDetail.background">
+          <article :class="'background-task-row' + (task.state === 'waiting' ? ' is-waiting' : '')" role="listitem" :data-background="task.key" :data-state="task.state">
+            <div class="action-history-heading"><strong>{task.title}</strong><span :class="'status-pill state-' + task.state">{task.state_label}</span></div>
+            <p class="background-badge">Background task</p>
+            <logic :if="task.action"><p class="background-action">{task.action}</p></logic>
+            <p class="history-source">{task.started_label} · {task.process_count} processes · {task.attribution}</p>
+          </article>
+        </loop>
+      </div>
+      <h3 class="activity-subheading">Past activity</h3>
+    </logic>
     <logic :if="observatory.model.sessionDetail.activity.length">
       <p class="activity-label">{observatory.model.sessionDetail.activityLabel} Only safe action names are collected; full commands and arguments are unavailable.</p>
       <div class="action-history-list" :data-session="observatory.model.sessionDetail.key" role="list" aria-label="Past activity for the selected session">

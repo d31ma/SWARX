@@ -1,4 +1,6 @@
-use crate::models::{NativeActivityRecord, NativeProcessGraph, NativeSessionMetricView};
+use crate::models::{
+    NativeActivityRecord, NativeBackgroundTaskView, NativeProcessGraph, NativeSessionMetricView,
+};
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct NativeSessionDetailView {
@@ -32,6 +34,7 @@ pub struct NativeSessionDetailView {
     pub graph: NativeProcessGraph,
     #[serde(rename = "treeLabel")]
     pub tree_label: String,
+    pub background: Vec<NativeBackgroundTaskView>,
     pub activity: Vec<NativeActivityRecord>,
     #[serde(rename = "activityLabel")]
     pub activity_label: String,

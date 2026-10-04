@@ -1,4 +1,5 @@
 import type { AgentRowView } from '/models/AgentRowView.ts';
+import type { BackgroundTaskView } from '/models/BackgroundTaskView.ts';
 
 export interface ActiveSessionView {
   key: string;
@@ -16,4 +17,7 @@ export interface ActiveSessionView {
   expanded: boolean;
   toggleLabel: string;
   agents: AgentRowView[];
+  background: BackgroundTaskView[];
+  backgroundRunning: number;
+  backgroundWaiting: number;
 }

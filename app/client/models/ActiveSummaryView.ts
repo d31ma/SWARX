@@ -6,6 +6,8 @@ export interface ActiveSummaryView {
   subAgents: number;
   sessions: number;
   tools: number;
+  backgroundRunning: number;
+  backgroundWaiting: number;
   harnesses: string[];
   cards: SummaryCardView[];
 }

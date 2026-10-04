@@ -15,7 +15,8 @@ impl SessionDetailUtils {
     // Each labelled choice below is (linked, unlinked) or (found, empty).
     const OUTCOMES: usize = 2;
     const STATES: [&'static str; 4] = ["list", "missing", "inactive", "detail"];
-    const ACTIVE_LABEL: &'static str = "Active now";
+    const ACTIVE_LABELS: [&'static str; Self::OUTCOMES] = ["Background tasks only", "Active now"];
+    const NO_AGENTS: i64 = 0;
     const INACTIVE_LABEL: &'static str = "No active agents now";
     const CHART_PREFIX: &'static str = "session:";
     const USAGE_SCOPE: &'static str = "session-usage";
@@ -101,10 +102,12 @@ impl SessionDetailUtils {
             family: session.family.clone(),
             linked: session.linked,
             active: true,
-            state_label: Self::ACTIVE_LABEL.to_owned(),
+            state_label: Self::ACTIVE_LABELS[usize::from(session.agent_total > Self::NO_AGENTS)]
+                .to_owned(),
             count_label: session.count_label.clone(),
             agent_count: session.agent_count,
             sub_agent_count: session.sub_agent_count,
+            background: session.background.clone(),
             ..NativeSessionDetailView::default()
         }
     }

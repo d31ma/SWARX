@@ -1,9 +1,10 @@
 use crate::models::{
-    NativeActiveSessionView, NativeAgentRowView, NativeExecutionView, NativeLogicalAgentView,
-    NativeSessionLink, NativeSessionView, NativeTaskRecord,
+    NativeActiveSessionView, NativeAgentRowView, NativeBackgroundTaskView, NativeExecutionView,
+    NativeLogicalAgentView, NativeSessionLink, NativeSessionView, NativeTaskRecord,
 };
 use crate::utils::SessionViewUtils;
 use std::cmp::Ordering;
+use std::collections::BTreeSet;
 
 pub struct ActiveSessionUtils;
 
@@ -24,15 +25,26 @@ impl ActiveSessionUtils {
     const CLAUDE_NAME: &'static str = "Claude Code";
     const SEPARATOR: &'static str = " \u{b7} ";
     const SINGLE: i64 = 1;
+    const NONE: i64 = 0;
+    const BACKGROUND_SINGULAR: &'static str = "background task";
+    const BACKGROUND_PLURAL: &'static str = "background tasks";
+    const RUNNING: &'static str = "running";
+    const WAITING: &'static str = "waiting";
 
+    // One card per session with an active agent or an active background task; background work
+    // is a task item on the card, never an agent role.
     pub fn sessions(
         agents: &[NativeLogicalAgentView],
         sources: &[NativeLogicalAgentView],
         expanded: &[String],
+        background: (&[NativeBackgroundTaskView], &[NativeSessionView]),
     ) -> Vec<NativeActiveSessionView> {
-        let groups: Vec<NativeSessionView> = SessionViewUtils::sessions(agents);
+        let mut groups: Vec<NativeSessionView> = SessionViewUtils::sessions(agents);
+        let background_only: Vec<NativeSessionView> =
+            Self::background_sessions(&groups, background);
+        groups.extend(background_only);
         let mut sessions: Vec<NativeActiveSessionView> =
-            Self::session_views(&groups, sources, expanded);
+            Self::session_views(&groups, sources, (expanded, background.0));
         sessions.sort_by(Self::session_order);
         sessions
     }
@@ -45,15 +57,44 @@ impl ActiveSessionUtils {
         Self::title(group)
     }
 
+    // Reported sessions whose only current work is background tasks. A task whose session is not
+    // reported has no verified session link and stays out of the session cards.
+    fn background_sessions(
+        groups: &[NativeSessionView],
+        background: (&[NativeBackgroundTaskView], &[NativeSessionView]),
+    ) -> Vec<NativeSessionView> {
+        let keys: BTreeSet<&str> = background
+            .0
+            .iter()
+            .map(|task: &NativeBackgroundTaskView| -> &str { task.session_key.as_str() })
+            .collect();
+        background
+            .1
+            .iter()
+            .filter(|session: &&NativeSessionView| -> bool { keys.contains(session.key.as_str()) })
+            .filter(|session: &&NativeSessionView| -> bool {
+                !groups
+                    .iter()
+                    .any(|group: &NativeSessionView| -> bool { group.key == session.key })
+            })
+            .map(|session: &NativeSessionView| -> NativeSessionView {
+                NativeSessionView {
+                    agents: Vec::new(),
+                    ..session.clone()
+                }
+            })
+            .collect()
+    }
+
     fn session_views(
         groups: &[NativeSessionView],
         sources: &[NativeLogicalAgentView],
-        expanded: &[String],
+        context: (&[String], &[NativeBackgroundTaskView]),
     ) -> Vec<NativeActiveSessionView> {
         groups
             .iter()
             .map(|group: &NativeSessionView| -> NativeActiveSessionView {
-                Self::session(group, sources, expanded)
+                Self::session(group, sources, context)
             })
             .collect()
     }
@@ -61,14 +102,20 @@ impl ActiveSessionUtils {
     fn session(
         group: &NativeSessionView,
         sources: &[NativeLogicalAgentView],
-        expanded: &[String],
+        context: (&[String], &[NativeBackgroundTaskView]),
     ) -> NativeActiveSessionView {
         let mut rows: Vec<NativeAgentRowView> = Self::rows(&group.agents, sources);
         rows.sort_by(Self::row_order);
         let total: i64 = rows.len() as i64;
         let sub_agents: i64 = Self::sub_agent_count(&rows);
         let tools: i64 = Self::tool_count(&rows);
-        let open: bool = expanded.contains(&group.key);
+        let open: bool = context.0.contains(&group.key);
+        let background: Vec<NativeBackgroundTaskView> =
+            Self::session_background(&group.key, context.1);
+        let states: (i64, i64) = (
+            Self::state_count(&background, Self::RUNNING),
+            Self::state_count(&background, Self::WAITING),
+        );
         NativeActiveSessionView {
             key: group.key.clone(),
             id: group.id.clone(),
@@ -80,13 +127,43 @@ impl ActiveSessionUtils {
             sub_agent_count: sub_agents,
             tool_count: tools,
             agent_total: total,
-            count_label: Self::count_label(total - sub_agents, sub_agents, tools),
+            count_label: Self::count_label((total - sub_agents, sub_agents, tools), states),
             collapsible: rows.len() > Self::VISIBLE_ROWS,
             expanded: open,
             toggle_label: Self::toggle_label(open, total),
             started_at: Self::earliest(&rows),
             agents: Self::visible(rows, open),
+            background,
+            background_running: states.0,
+            background_waiting: states.1,
         }
+    }
+
+    // Running tasks first, then waiting watchers; ties keep the stable task key order.
+    fn session_background(
+        key: &str,
+        tasks: &[NativeBackgroundTaskView],
+    ) -> Vec<NativeBackgroundTaskView> {
+        let mut background: Vec<NativeBackgroundTaskView> = tasks
+            .iter()
+            .filter(|task: &&NativeBackgroundTaskView| -> bool { task.session_key == key })
+            .cloned()
+            .collect();
+        background.sort_by(
+            |left: &NativeBackgroundTaskView, right: &NativeBackgroundTaskView| -> Ordering {
+                (left.state != Self::RUNNING)
+                    .cmp(&(right.state != Self::RUNNING))
+                    .then_with(|| -> Ordering { left.key.cmp(&right.key) })
+            },
+        );
+        background
+    }
+
+    fn state_count(tasks: &[NativeBackgroundTaskView], state: &str) -> i64 {
+        tasks
+            .iter()
+            .filter(|task: &&NativeBackgroundTaskView| -> bool { task.state == state })
+            .count() as i64
     }
 
     fn rows(
@@ -247,13 +324,37 @@ impl ActiveSessionUtils {
         family.to_owned()
     }
 
-    fn count_label(agents: i64, sub_agents: i64, tools: i64) -> String {
-        [
-            Self::counted(agents, Self::AGENT_ROLE, Self::AGENT_PLURAL),
-            Self::counted(sub_agents, Self::SUB_AGENT_ROLE, Self::SUB_AGENT_PLURAL),
-            Self::counted(tools, Self::TOOL_SINGULAR, Self::TOOL_PLURAL),
-        ]
-        .join(Self::SEPARATOR)
+    // counts = (agents, sub-agents, tools running); background = (running, waiting).
+    fn count_label(counts: (i64, i64, i64), background: (i64, i64)) -> String {
+        let mut parts: Vec<String> = vec![
+            Self::counted(counts.0, Self::AGENT_ROLE, Self::AGENT_PLURAL),
+            Self::counted(counts.1, Self::SUB_AGENT_ROLE, Self::SUB_AGENT_PLURAL),
+            Self::counted(counts.2, Self::TOOL_SINGULAR, Self::TOOL_PLURAL),
+        ];
+        parts.extend(Self::background_label(background));
+        parts.join(Self::SEPARATOR)
+    }
+
+    fn background_label(background: (i64, i64)) -> Option<String> {
+        let total: i64 = background.0 + background.1;
+        let both: bool = [background.0 > Self::NONE, background.1 > Self::NONE]
+            .into_iter()
+            .all(std::convert::identity);
+        let split: [String; 2] = [
+            String::new(),
+            format!(
+                " ({} running{}{} waiting)",
+                background.0,
+                Self::SEPARATOR,
+                background.1
+            ),
+        ];
+        let label: String = format!(
+            "{}{}",
+            Self::counted(total, Self::BACKGROUND_SINGULAR, Self::BACKGROUND_PLURAL),
+            split[usize::from(both)]
+        );
+        Some(label).filter(|_: &String| -> bool { total > Self::NONE })
     }
 
     fn counted(count: i64, singular: &str, plural: &str) -> String {

@@ -1,12 +1,14 @@
 use crate::command_resource_tests::CommandResourceViewTests;
 use crate::models::{
-    NativeActiveSessionView, NativeActivityRecord, NativeCommandBinding, NativeGroupMetrics,
-    NativeLogicalAgent, NativeLogicalAgentView, NativeOverviewView, NativeProcessMetrics,
-    NativeProcessRow, NativeProcessTreeSample, NativeRuntimeView, NativeSessionActivityView,
-    NativeSessionDetailView, NativeSessionMetricView, NativeSessionResourceView,
-    NativeSessionView, NativeSnapshot, NativeViewSelection,
+    NativeActiveSessionView, NativeActivityRecord, NativeBackgroundTaskView, NativeCommandBinding,
+    NativeGroupMetrics, NativeLogicalAgent, NativeLogicalAgentView, NativeOverviewView,
+    NativeProcessMetrics, NativeProcessRow, NativeProcessTreeSample, NativeRuntimeView,
+    NativeSessionActivityView, NativeSessionDetailView, NativeSessionMetricView,
+    NativeSessionResourceView, NativeSessionView, NativeSnapshot, NativeViewSelection,
 };
-use crate::utils::{ActiveSessionUtils, SessionDetailUtils, SessionResourceUtils, SessionUsageUtils};
+use crate::utils::{
+    ActiveSessionUtils, SessionDetailUtils, SessionResourceUtils, SessionUsageUtils,
+};
 use crate::TachyonRustServices::{
     CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionViewUtils,
 };
@@ -44,7 +46,12 @@ impl SessionDetailTests {
         ]
     }
 
-    fn process(pid: i32, parent: i32, cpu: Option<f64>, memory: Option<i64>) -> NativeProcessMetrics {
+    fn process(
+        pid: i32,
+        parent: i32,
+        cpu: Option<f64>,
+        memory: Option<i64>,
+    ) -> NativeProcessMetrics {
         NativeProcessMetrics {
             pid,
             parent,
@@ -121,7 +128,7 @@ impl SessionDetailTests {
         reported: &[NativeLogicalAgentView],
     ) -> (Vec<NativeActiveSessionView>, Vec<NativeSessionView>) {
         (
-            ActiveSessionUtils::sessions(active, active, &[]),
+            ActiveSessionUtils::sessions(active, active, &[], (&[], &[])),
             SessionViewUtils::sessions(reported),
         )
     }
@@ -177,7 +184,10 @@ impl SessionDetailTests {
         };
         observation.descendants = vec![child.clone()];
         observation.tree_history = vec![
-            Self::sample(98.0, vec![observation.metrics.clone().unwrap(), child.clone()]),
+            Self::sample(
+                98.0,
+                vec![observation.metrics.clone().unwrap(), child.clone()],
+            ),
             Self::sample(Self::NOW, vec![observation.metrics.clone().unwrap(), child]),
         ];
         let bindings: Vec<NativeCommandBinding> = vec![CommandResourceViewTests::binding()];
@@ -209,7 +219,9 @@ fn a_parent_and_child_add_their_own_values_once_without_group_totals() -> () {
 
 #[test]
 fn a_process_reached_from_two_roots_counts_once() -> () {
-    let resources = vec![SessionDetailTests::resource(SessionDetailTests::overlapping())];
+    let resources = vec![SessionDetailTests::resource(
+        SessionDetailTests::overlapping(),
+    )];
     let detail = SessionDetailTests::detail(
         SessionDetailTests::KEY,
         &SessionDetailTests::agents(),
@@ -220,7 +232,10 @@ fn a_process_reached_from_two_roots_counts_once() -> () {
     assert_eq!(detail.process_count, 3);
     assert_eq!(detail.root_count, 2);
     assert_eq!(SessionDetailTests::metric(&detail, "cpu").value, "17.0%");
-    assert_eq!(SessionDetailTests::metric(&detail, "memory").value, "1.7 KiB");
+    assert_eq!(
+        SessionDetailTests::metric(&detail, "memory").value,
+        "1.7 KiB"
+    );
     assert_eq!(detail.graph.nodes.len(), 3);
     assert_eq!(detail.resource_scope, "session");
 }
@@ -271,17 +286,26 @@ fn unavailable_metrics_state_their_reason() -> () {
         .iter()
         .all(|metric: &NativeSessionMetricView| -> bool { !metric.available }));
     assert_eq!(unlinked[0].value, "Unavailable");
-    assert_eq!(unlinked[0].detail, "No verified process link for this session.");
+    assert_eq!(
+        unlinked[0].detail,
+        "No verified process link for this session."
+    );
     let commands = vec![SessionDetailTests::command(
         "linked-command:session:1",
         vec![SessionDetailTests::process(40, 1, None, Some(1000))],
     )];
     let rows = SessionResourceUtils::command_tree(&commands);
     let first = SessionUsageUtils::metrics(&rows, 1);
-    assert_eq!(first[0].detail, "First sample pending: rates need two samples.");
+    assert_eq!(
+        first[0].detail,
+        "First sample pending: rates need two samples."
+    );
     assert_eq!(first[1].detail, "Measured for its 1 process");
     let later = SessionUsageUtils::metrics(&rows, 4);
-    assert_eq!(later[0].detail, "Not reported by macOS for these processes.");
+    assert_eq!(
+        later[0].detail,
+        "Not reported by macOS for these processes."
+    );
     assert_eq!(
         later[2].detail,
         "Per-process network counters were not sampled for these processes."
@@ -327,8 +351,7 @@ fn an_empty_selection_shows_the_list() -> () {
 
 #[test]
 fn an_unreported_session_is_missing_instead_of_closing() -> () {
-    let detail =
-        SessionDetailTests::detail("Claude:gone", &SessionDetailTests::agents(), &[], &[]);
+    let detail = SessionDetailTests::detail("Claude:gone", &SessionDetailTests::agents(), &[], &[]);
     assert!(detail.is_none());
     assert_eq!(
         SessionDetailUtils::view_state("Claude:gone", detail.as_ref()),
@@ -376,7 +399,10 @@ fn a_reported_session_without_active_agents_stays_open_as_inactive() -> () {
         "inactive"
     );
     assert_eq!(detail.resource_scope, "none");
-    assert_eq!(detail.tree_label, "No process tree: no verified process link.");
+    assert_eq!(
+        detail.tree_label,
+        "No process tree: no verified process link."
+    );
 }
 
 #[test]
@@ -424,7 +450,10 @@ fn the_selected_session_key_yields_detail_through_the_overview() -> () {
     assert_eq!(detail.key, "Codex:fixture-session");
     assert_eq!(detail.process_count, 2);
     assert_eq!(SessionDetailTests::metric(detail, "cpu").value, "3.0%");
-    assert_eq!(SessionDetailTests::metric(detail, "memory").value, "3.0 KiB");
+    assert_eq!(
+        SessionDetailTests::metric(detail, "memory").value,
+        "3.0 KiB"
+    );
     assert_eq!(view.chart_resources[0].group.id, detail.chart_id);
     assert_eq!(view.chart_resources[0].charts[0].measured_count, 2);
 }
@@ -449,14 +478,106 @@ fn the_wire_carries_one_session_chart_and_no_raw_samples() -> () {
     let wire: NativeOverviewView =
         OverviewViewUtils::wire(SessionDetailTests::linked_overview("Codex:fixture-session"));
     assert_eq!(wire.chart_resources.len(), 1);
-    assert_eq!(wire.chart_resources[0].group.id, "session:Codex:fixture-session");
+    assert_eq!(
+        wire.chart_resources[0].group.id,
+        "session:Codex:fixture-session"
+    );
     let encoded: String = serde_json::to_string(&wire).unwrap();
     assert!(!encoded.contains("tree_history"));
     assert!(encoded.contains("\"sessionDetail\""));
     assert!(encoded.contains("\"sessionView\":\"detail\""));
     assert!(!encoded.contains("agentDetail"));
-    assert!(encoded.len() < 65_536, "fixture wire {} bytes", encoded.len());
+    assert!(
+        encoded.len() < 65_536,
+        "fixture wire {} bytes",
+        encoded.len()
+    );
     let closed: NativeOverviewView =
         OverviewViewUtils::wire(SessionDetailTests::linked_overview(""));
     assert!(closed.chart_resources.is_empty());
+}
+
+impl SessionDetailTests {
+    fn background(key: &str, state: &str, pids: Vec<i32>) -> NativeBackgroundTaskView {
+        NativeBackgroundTaskView {
+            key: key.to_owned(),
+            session_key: Self::KEY.to_owned(),
+            title: format!("Task {key}"),
+            action: None,
+            state: state.to_owned(),
+            state_label: state.to_owned(),
+            started_label: "started 1 min ago".to_owned(),
+            process_count: pids.len() as i64,
+            pids,
+            attribution: "Process lineage under the verified session process".to_owned(),
+        }
+    }
+
+    fn background_detail(
+        active: &[NativeLogicalAgentView],
+        tasks: &[NativeBackgroundTaskView],
+        resources: &[NativeSessionResourceView],
+    ) -> NativeSessionDetailView {
+        let reported: Vec<NativeSessionView> = SessionViewUtils::sessions(&Self::agents());
+        let live: Vec<NativeActiveSessionView> =
+            ActiveSessionUtils::sessions(active, active, &[], (tasks, &reported));
+        SessionDetailUtils::detail(Self::KEY, (&live, &reported), resources, &[]).unwrap()
+    }
+}
+
+#[test]
+fn background_task_processes_in_the_session_tree_are_counted_once() -> () {
+    let resources = vec![SessionDetailTests::resource(
+        SessionDetailTests::overlapping(),
+    )];
+    let without =
+        SessionDetailTests::background_detail(&SessionDetailTests::agents(), &[], &resources);
+    // Child 41 and helper 50 belong to the background task and are already in the session union.
+    let tasks = vec![SessionDetailTests::background(
+        "watch",
+        "running",
+        vec![41, 50],
+    )];
+    let with =
+        SessionDetailTests::background_detail(&SessionDetailTests::agents(), &tasks, &resources);
+    assert_eq!(with.process_count, without.process_count);
+    assert_eq!(with.process_count, 3);
+    let shown = |detail: &NativeSessionDetailView| -> Vec<(String, String)> {
+        detail
+            .metrics
+            .iter()
+            .map(|metric: &NativeSessionMetricView| -> (String, String) {
+                (metric.value.clone(), metric.detail.clone())
+            })
+            .collect()
+    };
+    assert_eq!(shown(&with), shown(&without));
+    assert_eq!(SessionDetailTests::metric(&with, "cpu").value, "17.0%");
+    assert_eq!(with.background.len(), 1);
+}
+
+#[test]
+fn a_session_with_only_background_tasks_opens_with_them_listed_first() -> () {
+    let tasks = vec![
+        SessionDetailTests::background("a-sleep", "waiting", vec![60]),
+        SessionDetailTests::background("b-run", "running", vec![61]),
+    ];
+    let detail = SessionDetailTests::background_detail(&[], &tasks, &[]);
+    assert!(detail.active);
+    assert_eq!(detail.state_label, "Background tasks only");
+    assert_eq!(
+        SessionDetailUtils::view_state(SessionDetailTests::KEY, Some(&detail)),
+        "detail"
+    );
+    assert_eq!(detail.agent_count, 0);
+    let order: Vec<(&str, &str)> = detail
+        .background
+        .iter()
+        .map(|task: &NativeBackgroundTaskView| -> (&str, &str) {
+            (task.key.as_str(), task.state.as_str())
+        })
+        .collect();
+    assert_eq!(order, vec![("b-run", "running"), ("a-sleep", "waiting")]);
+    let active = SessionDetailTests::background_detail(&SessionDetailTests::agents(), &tasks, &[]);
+    assert_eq!(active.state_label, "Active now");
 }

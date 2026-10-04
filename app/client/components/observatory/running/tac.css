@@ -201,6 +201,63 @@
   white-space: nowrap;
 }
 
+/* Background work is a task item, not an agent role: its badge is dashed and never uses role colours. */
+.background-rows {
+  margin: 4px 0 0;
+  padding: 4px 0 0;
+  list-style: none;
+  border-top: 1px dashed #34405c;
+}
+
+.background-row {
+  min-height: 28px;
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 3px 6px;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.background-badge {
+  justify-self: start;
+  padding: 0 6px;
+  border: 1px dashed #8a7a4f;
+  border-radius: 4px;
+  color: #e6d3a3;
+  font-size: 11px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.background-title,
+.background-action {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.background-state {
+  color: #cfe3d6;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.background-action {
+  grid-column: 2 / -1;
+  color: #a9b7d2;
+  font-family: var(--w-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+}
+
+.background-row.is-waiting .background-title,
+.background-row.is-waiting .background-state {
+  color: #9caecc;
+}
+
 .session-toggle {
   position: relative;
   z-index: 1;

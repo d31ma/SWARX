@@ -1,4 +1,5 @@
 import type { ActivityRecord } from '/models/ActivityRecord.ts';
+import type { BackgroundTaskView } from '/models/BackgroundTaskView.ts';
 import type { ProcessGraph } from '/models/ProcessGraph.ts';
 import type { SessionMetricView } from '/models/SessionMetricView.ts';
 
@@ -23,6 +24,7 @@ export interface SessionDetailView {
   chartId: string;
   graph: ProcessGraph;
   treeLabel: string;
+  background: BackgroundTaskView[];
   activity: ActivityRecord[];
   activityLabel: string;
 }

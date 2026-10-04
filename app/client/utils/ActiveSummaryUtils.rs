@@ -28,6 +28,10 @@ impl ActiveSummaryUtils {
         let total: i64 = Self::total(sessions, Self::agent_total);
         let sub_agents: i64 = Self::total(sessions, Self::sub_agent_total);
         let tools: i64 = Self::total(sessions, Self::tool_total);
+        let background: (i64, i64) = (
+            Self::total(sessions, Self::running_total),
+            Self::total(sessions, Self::waiting_total),
+        );
         let harnesses: Vec<String> = Self::harnesses(sessions);
         let state: (bool, String) = (live_status == Self::LIVE, Self::notice(sampled_at));
         let roles: String = format!(
@@ -46,7 +50,7 @@ impl ActiveSummaryUtils {
             Self::card(
                 Self::TOOLS,
                 tools.to_string(),
-                Self::TOOL_DETAIL.to_owned(),
+                Self::tool_detail(background),
                 &state,
             ),
             Self::card(
@@ -62,6 +66,8 @@ impl ActiveSummaryUtils {
             sub_agents,
             sessions: sessions.len() as i64,
             tools,
+            background_running: background.0,
+            background_waiting: background.1,
             harnesses,
             cards,
         }
@@ -117,6 +123,28 @@ impl ActiveSummaryUtils {
 
     fn tool_total(session: &NativeActiveSessionView) -> i64 {
         session.tool_count
+    }
+
+    fn running_total(session: &NativeActiveSessionView) -> i64 {
+        session.background_running
+    }
+
+    fn waiting_total(session: &NativeActiveSessionView) -> i64 {
+        session.background_waiting
+    }
+
+    // Background tasks are task items, never agents: they add a labelled line to TOOLS RUNNING.
+    fn tool_detail(background: (i64, i64)) -> String {
+        let details: [String; 2] = [
+            Self::TOOL_DETAIL.to_owned(),
+            format!(
+                "{} · {} background running · {} waiting",
+                Self::TOOL_DETAIL,
+                background.0,
+                background.1
+            ),
+        ];
+        details[usize::from(background.0 + background.1 > Self::NONE)].clone()
     }
 
     fn unlinked_count(sessions: &[NativeActiveSessionView]) -> i64 {

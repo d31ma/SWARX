@@ -1,9 +1,9 @@
 use crate::models::{
-    NativeActiveSessionView, NativeAgentRowView, NativeLogicalAgent, NativeLogicalAgentView,
-    NativeOverviewView, NativeSnapshot, NativeViewSelection,
+    NativeActiveSessionView, NativeAgentRowView, NativeBackgroundTaskView, NativeLogicalAgent,
+    NativeLogicalAgentView, NativeOverviewView, NativeSnapshot, NativeViewSelection,
 };
 use crate::utils::ActiveSessionUtils;
-use crate::TachyonRustServices::{LogicalViewUtils, OverviewViewUtils};
+use crate::TachyonRustServices::{LogicalViewUtils, OverviewViewUtils, SessionViewUtils};
 
 struct ActiveSessionTests;
 
@@ -145,7 +145,7 @@ fn agents_without_a_verified_session_get_their_own_unlinked_card() -> () {
     let a = ActiveSessionTests::worker("lonely-a", "Claude", None, 100.0);
     let b = ActiveSessionTests::worker("lonely-b", "Claude", None, 101.0);
     let rows = vec![a, b];
-    let sessions = ActiveSessionUtils::sessions(&rows, &rows, &[]);
+    let sessions = ActiveSessionUtils::sessions(&rows, &rows, &[], (&[], &[]));
     assert_eq!(sessions.len(), 2);
     assert!(sessions
         .iter()
@@ -339,4 +339,151 @@ fn row_wire_names_are_camel_case() -> () {
         wire["activeSessions"][1]["countLabel"],
         "1 Agent \u{b7} 4 Sub-agents \u{b7} 5 tools running"
     );
+}
+
+impl ActiveSessionTests {
+    fn task(key: &str, session: &str, state: &str) -> NativeBackgroundTaskView {
+        NativeBackgroundTaskView {
+            key: key.to_owned(),
+            session_key: session.to_owned(),
+            title: format!("Watcher {key}"),
+            action: Some("cargo watch -x test".to_owned()),
+            state: state.to_owned(),
+            state_label: [
+                ("running", "Running"),
+                ("waiting", "Waiting \u{b7} sleeping watcher"),
+            ]
+            .into_iter()
+            .find(|pair: &(&str, &str)| -> bool { pair.0 == state })
+            .map(|pair: (&str, &str)| -> String { pair.1.to_owned() })
+            .unwrap_or_default(),
+            started_label: "started 2 min ago".to_owned(),
+            process_count: 2,
+            pids: vec![4242, 4243],
+            attribution: "Process lineage under the verified session process".to_owned(),
+        }
+    }
+
+    fn background_view(
+        agents: Vec<NativeLogicalAgentView>,
+        tasks: Vec<NativeBackgroundTaskView>,
+    ) -> NativeOverviewView {
+        let mut snapshot: NativeSnapshot = NativeSnapshot::default();
+        snapshot.ready = true;
+        snapshot.sampled_at = Self::RECENT;
+        snapshot.started_at = 100.0;
+        snapshot.session_groups = SessionViewUtils::sessions(&agents);
+        snapshot.logical_views = agents;
+        snapshot.background_tasks = tasks;
+        OverviewViewUtils::view(&snapshot, &NativeViewSelection::default(), Self::NOW)
+    }
+
+    fn quiet() -> Vec<NativeLogicalAgentView> {
+        vec![
+            Self::worker("build", "Codex", Some(("build", "Build")), 110.0),
+            Self::idle(Self::worker(
+                "review",
+                "Claude",
+                Some(("review", "Parser review")),
+                120.0,
+            )),
+        ]
+    }
+}
+
+#[test]
+fn an_empty_background_list_leaves_cards_and_labels_unchanged() -> () {
+    let view = ActiveSessionTests::background_view(ActiveSessionTests::quiet(), Vec::new());
+    assert_eq!(view.active_sessions.len(), 1);
+    assert!(view.active_sessions[0].background.is_empty());
+    assert!(!view.active_sessions[0].count_label.contains("background"));
+    assert_eq!(view.active_summary.background_running, 0);
+    assert_eq!(view.active_summary.cards[2].detail, "Unfinished tool calls");
+}
+
+#[test]
+fn a_session_with_only_background_work_gets_a_card_without_agents() -> () {
+    let view = ActiveSessionTests::background_view(
+        ActiveSessionTests::quiet(),
+        vec![ActiveSessionTests::task(
+            "watch",
+            "Claude:review",
+            "running",
+        )],
+    );
+    assert_eq!(view.active_sessions.len(), 2);
+    let review = view
+        .active_sessions
+        .iter()
+        .find(|session: &&NativeActiveSessionView| -> bool { session.key == "Claude:review" })
+        .unwrap();
+    assert!(review.agents.is_empty());
+    assert_eq!(review.agent_total, 0);
+    assert_eq!(review.title, "Parser review");
+    assert_eq!(review.background.len(), 1);
+    assert!(review.count_label.ends_with("1 background task"));
+    let summary = &view.active_summary;
+    assert_eq!(summary.sessions, 2);
+    assert_eq!(summary.agents, 1);
+    assert_eq!(summary.tools, 1);
+    assert_eq!(summary.background_running, 1);
+    assert_eq!(
+        summary.cards[2].detail,
+        "Unfinished tool calls \u{b7} 1 background running \u{b7} 0 waiting"
+    );
+    assert_eq!(summary.cards[1].value, "2");
+}
+
+#[test]
+fn background_counts_split_running_and_waiting_and_list_running_first() -> () {
+    let view = ActiveSessionTests::background_view(
+        ActiveSessionTests::quiet(),
+        vec![
+            ActiveSessionTests::task("a-sleep", "Codex:build", "waiting"),
+            ActiveSessionTests::task("b-run", "Codex:build", "running"),
+        ],
+    );
+    let build = &view.active_sessions[0];
+    assert_eq!(build.key, "Codex:build");
+    assert_eq!(build.agent_total, 1);
+    assert_eq!((build.background_running, build.background_waiting), (1, 1));
+    assert!(build
+        .count_label
+        .ends_with("2 background tasks (1 running \u{b7} 1 waiting)"));
+    assert_eq!(build.background[0].key, "b-run");
+    assert_eq!(
+        build.background[1].state_label,
+        "Waiting \u{b7} sleeping watcher"
+    );
+    assert_eq!(view.active_summary.background_waiting, 1);
+}
+
+#[test]
+fn a_task_without_a_reported_session_never_creates_a_card() -> () {
+    let view = ActiveSessionTests::background_view(
+        ActiveSessionTests::quiet(),
+        vec![ActiveSessionTests::task(
+            "orphan",
+            "Claude:unknown",
+            "running",
+        )],
+    );
+    assert_eq!(view.active_sessions.len(), 1);
+    assert_eq!(view.active_summary.background_running, 0);
+}
+
+#[test]
+fn background_process_ids_stay_native() -> () {
+    let view = ActiveSessionTests::background_view(
+        ActiveSessionTests::quiet(),
+        vec![ActiveSessionTests::task(
+            "watch",
+            "Claude:review",
+            "running",
+        )],
+    );
+    let wire: String = serde_json::to_string(&OverviewViewUtils::wire(view)).unwrap();
+    assert!(wire.contains("\"session_key\":\"Claude:review\""));
+    assert!(!wire.contains("pids"));
+    assert!(!wire.contains("4242"));
 }

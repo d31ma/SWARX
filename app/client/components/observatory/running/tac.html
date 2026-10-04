@@ -10,6 +10,11 @@
             <li class="agent-row" :data-agent="row.id" :data-session="row.sessionId" :data-task="row.taskId" :data-status="row.status" :data-family="row.family" :data-source="row.source"><span :class="'agent-role' + (row.subAgent ? ' is-sub-agent' : '')">{row.roleLabel}</span><span class="agent-task" :title="row.taskLabel">{row.taskLabel}</span><span :class="'agent-tool' + (row.actionDetail ? '' : ' is-idle')" :title="row.actionDetail ? row.toolLabel + ' · ' + row.actionDetail : row.toolLabel"><span class="agent-tool-name">{row.toolLabel}</span><logic :if="row.actionDetail"><span class="agent-action">{row.actionDetail}</span></logic></span></li>
           </loop>
         </ul>
+        <logic :if="session.background.length"><ul class="background-rows" aria-label="Background tasks in this session">
+          <loop :for="task of session.background">
+            <li :class="'background-row' + (task.state === 'waiting' ? ' is-waiting' : '')" :data-background="task.key" :data-state="task.state"><span class="background-badge">Background</span><span class="background-title" :title="task.title">{task.title}</span><span class="background-state">{task.state_label}</span><logic :if="task.action"><span class="background-action" :title="task.action">{task.action}</span></logic></li>
+          </loop>
+        </ul></logic>
         <logic :if="session.collapsible"><button type="button" class="session-toggle" :aria-expanded="session.expanded ? 'true' : 'false'" :data-session-focus="'toggle:' + session.key" on:click="observatory.toggleSession(session.key)">{session.toggleLabel}</button></logic>
       </article>
     </loop>

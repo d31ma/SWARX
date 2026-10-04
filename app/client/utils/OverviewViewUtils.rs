@@ -64,6 +64,7 @@ impl OverviewViewUtils {
             &logical,
             &snapshot.logical_views,
             &selection.expanded_sessions,
+            (&snapshot.background_tasks, &snapshot.session_groups),
         );
         let activity: Vec<NativeSessionActivityView> =
             SessionViewUtils::named_activity(snapshot.activity.clone(), &snapshot.harness_sessions);
