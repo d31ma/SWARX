@@ -3,7 +3,7 @@ use crate::models::{
     NativeProcessRow, NativeRuntimeView, NativeSessionActivityView, NativeSessionDetailView,
     NativeSessionResourceView, NativeSessionView,
 };
-use crate::utils::{ActiveSessionUtils, ChartDataUtils, SessionUsageUtils};
+use crate::utils::{ActiveSessionUtils, ActivityMetricsUtils, ChartDataUtils, SessionUsageUtils};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
@@ -148,6 +148,7 @@ impl SessionDetailUtils {
         detail.activity = Self::activity(&detail, activity, Self::agents(reported));
         detail.activity_label =
             Self::ACTIVITY_LABELS[usize::from(detail.activity.is_empty())].to_owned();
+        detail.activity_metrics = ActivityMetricsUtils::summary(&detail.activity);
         detail
     }
 

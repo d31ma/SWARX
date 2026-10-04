@@ -15,6 +15,106 @@
   outline-offset: -2px;
 }
 
+.activity-metrics {
+  min-width: 0;
+  margin-bottom: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.activity-average {
+  min-width: 0;
+}
+
+.activity-average span,
+.activity-fact span,
+.activity-tool-header {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.activity-average strong {
+  display: block;
+  color: #e3e9fb;
+  font-size: 22px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.activity-average p,
+.activity-fact p,
+.activity-tool-label {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.activity-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px 16px;
+  min-width: 0;
+  margin-top: 12px;
+}
+
+.activity-fact {
+  min-width: 0;
+}
+
+.activity-fact span,
+.activity-fact strong {
+  display: block;
+}
+
+.activity-fact strong {
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.activity-tool-label {
+  margin-top: 12px;
+}
+
+.activity-tools {
+  min-width: 0;
+  margin-top: 6px;
+}
+
+.activity-tool-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px 88px;
+  gap: 12px;
+  padding: 5px 0;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.activity-tool-header {
+  border-top: 0;
+}
+
+.activity-tool-row span:not(:first-child) {
+  text-align: right;
+}
+
+.activity-tool-row strong {
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.activity-tool-row em {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-style: normal;
+}
+
 .activity-label {
   margin: 0;
   color: #b4bfd8;

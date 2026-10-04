@@ -1,5 +1,6 @@
 use crate::models::{
-    NativeActivityRecord, NativeBackgroundTaskView, NativeProcessGraph, NativeSessionMetricView,
+    NativeActivityMetricsView, NativeActivityRecord, NativeBackgroundTaskView, NativeProcessGraph,
+    NativeSessionMetricView,
 };
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -37,4 +38,6 @@ pub struct NativeSessionDetailView {
     pub activity: Vec<NativeActivityRecord>,
     #[serde(rename = "activityLabel")]
     pub activity_label: String,
+    #[serde(rename = "activityMetrics")]
+    pub activity_metrics: NativeActivityMetricsView,
 }

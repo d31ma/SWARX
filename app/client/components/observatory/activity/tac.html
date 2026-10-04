@@ -1,5 +1,29 @@
 <logic :if="(observatory.sessionView === 'detail' || observatory.sessionView === 'inactive') && observatory.sessionTab === 'activity'">
   <section id="session-panel-activity" role="tabpanel" aria-labelledby="session-tab-activity" class="activity-scroll session-tab-panel" tabindex="0" :data-session="observatory.model.sessionDetail.key">
+    <logic :if="observatory.model.sessionDetail.activity.length">
+      <section class="activity-metrics" aria-label="Tool call timing for the selected session" :data-available="observatory.model.sessionDetail.activityMetrics.available ? 'true' : 'false'">
+        <h3 class="activity-subheading">Tool call timing</h3>
+        <div class="activity-average">
+          <span>Average duration</span>
+          <strong>{observatory.model.sessionDetail.activityMetrics.average}</strong>
+          <p>{observatory.model.sessionDetail.activityMetrics.averageLabel}</p>
+        </div>
+        <div class="activity-facts" role="list" aria-label="Tool call summary">
+          <loop :for="fact of observatory.model.sessionDetail.activityMetrics.facts">
+            <div class="activity-fact" role="listitem" :data-metric="fact.key"><span>{fact.label}</span><strong>{fact.value}</strong><logic :if="fact.detail"><p>{fact.detail}</p></logic></div>
+          </loop>
+        </div>
+        <p class="activity-tool-label">{observatory.model.sessionDetail.activityMetrics.toolLabel}</p>
+        <logic :if="observatory.model.sessionDetail.activityMetrics.tools.length">
+          <div class="activity-tools" role="table" aria-label="Average duration by tool">
+            <div class="activity-tool-row activity-tool-header" role="row"><span role="columnheader">Tool</span><span role="columnheader">Timed</span><span role="columnheader">Average</span></div>
+            <loop :for="tool of observatory.model.sessionDetail.activityMetrics.tools">
+              <div class="activity-tool-row" role="row" :data-tool="tool.name"><span role="cell"><strong>{tool.name}</strong><logic :if="tool.detail"><em>{tool.detail}</em></logic></span><span role="cell">{tool.count}</span><span role="cell">{tool.average}</span></div>
+            </loop>
+          </div>
+        </logic>
+      </section>
+    </logic>
     <logic :if="observatory.model.sessionDetail.background.length">
       <h3 class="activity-subheading">Background tasks now</h3>
       <div class="background-task-list" role="list" aria-label="Current background tasks for the selected session">

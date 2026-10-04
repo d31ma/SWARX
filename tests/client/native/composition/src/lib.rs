@@ -62,3 +62,5 @@ mod active_summary_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../Act
 mod active_session_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../ActiveSessionTests.rs")); }
 #[cfg(test)]
 mod background_task_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../BackgroundTaskTests.rs")); }
+#[cfg(test)]
+mod activity_metrics_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../ActivityMetricsTests.rs")); }

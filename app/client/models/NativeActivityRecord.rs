@@ -27,4 +27,15 @@ pub struct NativeActivityRecord {
     pub captured_at: f64,
     #[serde(default)]
     pub role_label: String,
+    // Native-only timing for the session Activity summary; the page reads the labels above.
+    #[serde(default, skip_serializing)]
+    pub started_at: Option<f64>,
+    #[serde(default, skip_serializing)]
+    pub finished_at: Option<f64>,
+    #[serde(default, skip_serializing)]
+    pub duration_seconds: Option<f64>,
+    #[serde(default, skip_serializing)]
+    pub duration_source: Option<String>,
+    #[serde(default, skip_serializing)]
+    pub background: bool,
 }

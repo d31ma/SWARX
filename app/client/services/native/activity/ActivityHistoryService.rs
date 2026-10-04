@@ -284,6 +284,11 @@ impl ActivityHistoryService {
             exit_code: execution.exit_code,
             captured_at: Self::ordering_time(execution.started_at),
             role_label: String::new(),
+            started_at: Some(execution.started_at).filter(Self::valid_time),
+            finished_at: execution.finished_at.filter(Self::valid_time),
+            duration_seconds: execution.duration_seconds.filter(Self::valid_duration),
+            duration_source: execution.duration_source.clone(),
+            background: execution.background == Some(true),
         }
     }
 
