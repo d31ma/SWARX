@@ -31,7 +31,9 @@ impl LinuxCollectorTestSources {
             .filter(|line: &&str| -> bool { line.trim() == Self::MARKER })
             .count();
         if markers != 1 {
-            return Err("Linux collector source must carry exactly one Tachyon Service marker.".into());
+            return Err(
+                "Linux collector source must carry exactly one Tachyon Service marker.".into(),
+            );
         }
         fs::write(output, text.replacen(Self::MARKER, "", 1))?;
         println!("cargo:rerun-if-changed={}", source.display());

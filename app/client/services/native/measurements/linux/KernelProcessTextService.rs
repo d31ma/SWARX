@@ -68,8 +68,8 @@ impl KernelProcessTextService {
         ]
         .into_iter()
         .all(std::convert::identity);
-        Some(name)
-            .filter(|_: &&str| -> bool { digits })?
+        digits
+            .then_some(name)?
             .parse::<i32>()
             .ok()
             .filter(|identifier: &i32| -> bool { *identifier >= Self::FIRST_PROCESS })

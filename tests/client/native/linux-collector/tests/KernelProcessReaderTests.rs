@@ -42,8 +42,12 @@ fn sample_contains_this_process_with_a_matching_identity() -> () {
     );
     assert_eq!(listed.user, own_user());
     assert_eq!(listed.parent, std::os::unix::process::parent_id() as i32);
-    assert!(listed.cpu_seconds.is_some_and(|value: f64| -> bool { value >= 0.0 }));
-    assert!(listed.resident_bytes.is_some_and(|value: i64| -> bool { value > 0 }));
+    assert!(listed
+        .cpu_seconds
+        .is_some_and(|value: f64| -> bool { value >= 0.0 }));
+    assert!(listed
+        .resident_bytes
+        .is_some_and(|value: i64| -> bool { value > 0 }));
 }
 
 #[test]

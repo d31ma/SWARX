@@ -3,7 +3,7 @@ use observatory_linux_collector_tests::models::NativeKernelProcess;
 use observatory_linux_collector_tests::KernelProcessTextService;
 
 fn text() -> KernelProcessTextService {
-    KernelProcessTextService::default()
+    KernelProcessTextService
 }
 
 fn stat_line(command: &str) -> String {
@@ -68,13 +68,19 @@ fn malformed_or_truncated_stat_lines_are_rejected() -> () {
 fn status_reports_the_real_user() -> () {
     let status: &str = "Name:\tbash\nUmask:\t0022\nState:\tS (sleeping)\nTgid:\t1234\nPid:\t1234\nPPid:\t1000\nUid:\t1001\t1002\t1003\t1004\nGid:\t20\t20\t20\t20\n";
     assert_eq!(text().real_user(status), Some(1001));
-    assert_eq!(text().real_user("Name:\tbash\nGid:\t20\t20\t20\t20\n"), None);
+    assert_eq!(
+        text().real_user("Name:\tbash\nGid:\t20\t20\t20\t20\n"),
+        None
+    );
     assert_eq!(text().real_user("Uid:\n"), None);
 }
 
 #[test]
 fn statm_reports_resident_pages() -> () {
-    assert_eq!(text().resident_pages("2048 512 300 20 0 400 0\n"), Some(512));
+    assert_eq!(
+        text().resident_pages("2048 512 300 20 0 400 0\n"),
+        Some(512)
+    );
     assert_eq!(text().resident_pages("2048\n"), None);
     assert_eq!(text().resident_pages(""), None);
 }

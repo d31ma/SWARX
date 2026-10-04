@@ -23,7 +23,7 @@ impl KernelProcessReaderService {
 
     pub fn new() -> Self {
         Self {
-            text: KernelProcessTextService::default(),
+            text: KernelProcessTextService,
         }
     }
 
@@ -66,14 +66,14 @@ impl KernelProcessReaderService {
     }
 
     fn read_process(&self, identifier: i32, boot: &str) -> Option<NativeProcess> {
-        let before: Option<(NativeKernelProcess, i64)> = self.identity(identifier);
+        let before: (NativeKernelProcess, i64) = self.identity(identifier)?;
         let before_path: Option<String> = self.executable(identifier);
         let resident: Option<i64> = self.resident(identifier);
         let disk: (Option<i64>, Option<i64>) = self.disk(identifier);
         let after_path: Option<String> = self.executable(identifier);
-        let after: Option<(NativeKernelProcess, i64)> = self.identity(identifier);
-        let (kernel, user): (NativeKernelProcess, i64) =
-            self.accepted((before, after), (&before_path, &after_path), identifier)?;
+        let after: (NativeKernelProcess, i64) = self.identity(identifier)?;
+        let same: bool = self.same((&before, &after), (&before_path, &after_path), identifier);
+        let (kernel, user): (NativeKernelProcess, i64) = same.then_some(before)?;
         Some(NativeProcess {
             pid: kernel.pid,
             parent: kernel.parent,
@@ -88,18 +88,15 @@ impl KernelProcessReaderService {
         })
     }
 
-    fn accepted(
+    fn same(
         &self,
-        identities: (
-            Option<(NativeKernelProcess, i64)>,
-            Option<(NativeKernelProcess, i64)>,
-        ),
+        identities: (&(NativeKernelProcess, i64), &(NativeKernelProcess, i64)),
         paths: (&Option<String>, &Option<String>),
         identifier: i32,
-    ) -> Option<(NativeKernelProcess, i64)> {
-        let (before, after): ((NativeKernelProcess, i64), (NativeKernelProcess, i64)) =
-            (identities.0?, identities.1?);
-        let same: bool = [
+    ) -> bool {
+        let (before, after): (&(NativeKernelProcess, i64), &(NativeKernelProcess, i64)) =
+            identities;
+        [
             before.1 == i64::from(unsafe { libc::getuid() }),
             before.1 == after.1,
             before.0.pid == identifier,
@@ -110,8 +107,7 @@ impl KernelProcessReaderService {
             paths.0 == paths.1,
         ]
         .into_iter()
-        .all(std::convert::identity);
-        Some(before).filter(|_: &(NativeKernelProcess, i64)| -> bool { same })
+        .all(std::convert::identity)
     }
 
     fn identity(&self, identifier: i32) -> Option<(NativeKernelProcess, i64)> {
@@ -137,7 +133,7 @@ impl KernelProcessReaderService {
         let pages: u64 = self
             .text
             .resident_pages(&self.read_text(&self.file(identifier, Self::MEMORY_FILE))?)?;
-        let page_size: i64 = i64::from(unsafe { libc::sysconf(libc::_SC_PAGESIZE) });
+        let page_size: i64 = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
         self.text.resident_bytes(pages, page_size)
     }
 
@@ -148,7 +144,7 @@ impl KernelProcessReaderService {
     }
 
     fn cpu_seconds(&self, cpu_ticks: u64) -> Option<f64> {
-        let rate: i64 = i64::from(unsafe { libc::sysconf(libc::_SC_CLK_TCK) });
+        let rate: i64 = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
         self.text.cpu_seconds(cpu_ticks, rate)
     }
 
