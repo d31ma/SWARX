@@ -929,3 +929,39 @@ test('a node inserted above keeps the viewed tree node in place across a live re
   assert.equal(viewport.scrollTop, 390);
   watcher.dispose();
 });
+
+test('a tree that briefly shrinks below the reader keeps their place for when it grows back', /** @returns {Promise<void>} */ async () => {
+  const {view, watcher} = fixture();
+  const full = () => [new GraphNode('claude', 20), new GraphNode('zsh-1', 200), new GraphNode('bash-1', 380)];
+  const viewport = new GraphViewport(full());
+  view.viewports = [viewport];
+  assert.ok(TestMutationObserver.callback);
+  TestMutationObserver.callback();
+  await ViewContinuityServiceTest.delay();
+  viewport.scrollTop = 390;
+  const scroll = view.listeners.get('scroll');
+  assert.ok(scroll);
+  scroll(/** @type {Event} */ (/** @type {unknown} */ ({target: viewport})));
+  // The short command exits: only claude is left, the tree fits and WebKit pins the view at 0.
+  viewport.place([new GraphNode('claude', 20)]);
+  viewport.scrollHeight = viewport.clientHeight;
+  viewport.scrollTop = 0;
+  scroll(/** @type {Event} */ (/** @type {unknown} */ ({target: viewport})));
+  TestMutationObserver.callback();
+  await ViewContinuityServiceTest.delay();
+  viewport.scrollTop = 0;
+  scroll(/** @type {Event} */ (/** @type {unknown} */ ({target: viewport})));
+  // The next command starts: the tree grows back and the reader is where they were.
+  viewport.place(full());
+  viewport.scrollHeight = 2000;
+  TestMutationObserver.callback();
+  await ViewContinuityServiceTest.delay();
+  assert.equal(viewport.scrollTop, 390);
+  // A deliberate scroll to the top of a scrollable tree is still remembered.
+  viewport.scrollTop = 0;
+  scroll(/** @type {Event} */ (/** @type {unknown} */ ({target: viewport})));
+  TestMutationObserver.callback();
+  await ViewContinuityServiceTest.delay();
+  assert.equal(viewport.scrollTop, 0);
+  watcher.dispose();
+});

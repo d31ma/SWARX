@@ -65,6 +65,8 @@ export default class ViewContinuityService {
   /** @type {number} */
   static _NO_VISIBLE_HEIGHT = 0;
   /** @type {number} */
+  static _SCROLL_TOLERANCE = 1;
+  /** @type {number} */
   static _RESTORE_MILLISECONDS = 0;
   /** @type {string} */
   static _PREVIOUS_KEY = 'ArrowLeft';
@@ -399,7 +401,24 @@ export default class ViewContinuityService {
     if (!element.matches(ViewContinuityService._GRAPH_SELECTOR)) {
       return;
     }
-    this.#offsets.set(ViewContinuityService._GROUP_PREFIX + element.dataset.group, {top: element.scrollTop, left: element.scrollLeft});
+    this.#storeGroupScroll(element, ViewContinuityService._GROUP_PREFIX + element.dataset.group);
+  }
+
+  /** @param {HTMLElement} element @param {string} key @returns {void} */
+  #storeGroupScroll(element, key) {
+    if (this.#pinnedByShrink(element, this.#offsets.get(key))) {
+      return;
+    }
+    this.#offsets.set(key, {top: element.scrollTop, left: element.scrollLeft});
+  }
+
+  // When short-lived processes leave, the tree can shrink below the reader's place and the browser
+  // pins the viewport at its new end. That is not the reader's choice: keep the place for the
+  // next render where the tree grows back.
+  /** @param {HTMLElement} element @param {{top: number, left: number} | undefined} saved @returns {boolean} */
+  #pinnedByShrink(element, saved) {
+    const end = element.scrollHeight - element.clientHeight;
+    return [saved !== undefined, element.scrollTop >= end - ViewContinuityService._SCROLL_TOLERANCE, Number(saved?.top) > end].every(Boolean);
   }
 
   /** @param {HTMLElement} element @returns {void} */
