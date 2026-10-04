@@ -7,6 +7,12 @@ use observatory_windows_collector_tests::{
 use std::process::{Child, Command, Stdio};
 
 const SYSTEM_PROCESS: i32 = 4;
+const SYSTEM_PROGRAMS: [&str; 4] = [
+    "\\winlogon.exe",
+    "\\wininit.exe",
+    "\\services.exe",
+    "\\lsass.exe",
+];
 
 fn own() -> i32 {
     std::process::id() as i32
@@ -93,6 +99,24 @@ fn system_and_missing_processes_are_absent() -> () {
     assert!(sample()
         .iter()
         .all(|process: &NativeProcess| -> bool { process.pid != SYSTEM_PROCESS }));
+}
+
+#[test]
+fn system_account_programs_are_absent_even_when_their_tokens_are_readable() -> () {
+    let processes: Vec<NativeProcess> = sample();
+    let system: Vec<&NativeProcess> = processes
+        .iter()
+        .filter(|process: &&NativeProcess| -> bool {
+            let path: String = process.executable.to_lowercase();
+            SYSTEM_PROGRAMS
+                .iter()
+                .any(|name: &&str| -> bool { path.ends_with(name) })
+        })
+        .collect();
+    assert!(
+        system.is_empty(),
+        "system account programs listed: {system:?}"
+    );
 }
 
 #[test]
