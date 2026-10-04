@@ -2,8 +2,8 @@
 <p class="feed-notice">{observatory.model.logicalNotice} History stays in Activity; source records are not a unique agent count.</p>
 <div :class="'logical-scroll agent-grid' + (observatory.model.logicalCount === 0 ? ' is-empty' : '')">
   <loop :for="agent of observatory.model.logical">
-    <article :class="'logical-agent-row logical-state-' + agent.status" :data-agent="agent.id" :data-session="agent.session ? agent.session.id : ''" :data-task="agent.task ? agent.task.id : ''" :data-family="agent.family" :data-source="agent.source">
-      <div class="logical-title"><h3>{agent.session ? (agent.session.name === agent.session.id ? 'Session title not reported' : agent.session.name) : 'Session not linked'}</h3><span :class="'status-pill state-' + agent.status">{agent.status}</span></div>
+    <article :class="'logical-agent-row logical-state-' + agent.status" :data-agent="agent.id" :data-session="agent.session ? agent.session.id : ''" :data-task="agent.task ? agent.task.id : ''" :data-status="agent.status" :data-family="agent.family" :data-source="agent.source">
+      <div class="logical-title"><h3>{agent.session ? (agent.session.name === agent.session.id ? 'Session title not reported' : agent.session.name) : 'Session not linked'}</h3></div>
       <p class="agent-harness">{agent.family === 'Claude' ? 'Claude Code' : agent.family}<logic :if="agent.session && agent.id !== agent.session.id"> · {agent.name} subagent</logic></p>
       <div class="assignment"><small>ASSIGNED TASK</small><strong>{agent.taskLabel}</strong></div>
       <div class="current-action"><small>CURRENT TOOL</small><strong>{agent.currentAction || 'No tool running'}</strong><logic :if="agent.currentAction"><p class="action-detail" :title="agent.actionDetail || ''">{agent.actionDetail || 'Action details not reported'}</p></logic></div>

@@ -853,7 +853,7 @@ class NativePreviewReport {
   static #logicalRecord(row) {
     const data = /** @type {HTMLElement} */ (row).dataset;
     return {id: data.agent ?? this.#EMPTY_TEXT, name: this.#text(row.querySelector('h3')),
-      status: this.#text(row.querySelector(this.#STATUS_SELECTOR)), source: data.source ?? this.#text(row.querySelector('.feed-time')),
+      status: data.status ?? this.#text(row.querySelector(this.#STATUS_SELECTOR)), source: data.source ?? this.#text(row.querySelector('.feed-time')),
       task: this.#text(row.querySelector('.assignment strong')), sessionId: data.session, taskId: data.task,
       currentAction: this.#text(row.querySelector('.current-action strong')),
       commandResourceCount: row.querySelectorAll(this.#COMMAND_RESOURCE_SELECTOR).length};
