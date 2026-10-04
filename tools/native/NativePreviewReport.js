@@ -151,6 +151,14 @@ class NativePreviewReport {
   }
 
   /** @returns {Promise<void>} */
+  static async #openFirstAgent() {
+    const started = performance.now();
+    while (document.querySelector('.agent-row') === null) await this.#waitIteration(started);
+    /** @type {HTMLElement} */ (document.querySelector('.agent-row')).click();
+    await this.#waitIteration(started);
+  }
+
+  /** @returns {Promise<void>} */
   static async #navigation() {
     const started = performance.now();
     await this.#waitNavigation(started);
@@ -197,7 +205,7 @@ class NativePreviewReport {
       case 'runtimes': throw this.#removed(action);
       case this.#POLLS: return;
       case 'settle': return;
-      case 'open-first-agent': /** @type {HTMLElement | null} */ (document.querySelector('.agent-row'))?.click(); return;
+      case 'open-first-agent': await this.#openFirstAgent(); return;
       case this.#HOLD: throw new Error('Unsupported native QA action: ' + action);
       default: throw new Error('Unknown native QA action: ' + action);
     }
