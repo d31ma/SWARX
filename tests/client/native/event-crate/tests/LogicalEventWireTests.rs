@@ -38,6 +38,7 @@ impl LogicalEventWireTests {
             session_name: None,
             depends_on: None,
             model: None,
+            detail: None,
         };
         serde_json::to_vec(&event).unwrap()
     }

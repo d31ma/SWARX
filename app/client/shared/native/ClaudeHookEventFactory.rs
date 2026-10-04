@@ -11,6 +11,10 @@ impl ClaudeHookEventFactory {
     const TASK: &'static str = "logical.task";
     const EXECUTION_START: &'static str = "logical.execution.start";
     const EXECUTION_FINISH: &'static str = "logical.execution.finish";
+    const COMMAND_TOOLS: &'static [&'static str] =
+        &["Bash", "shell", "local_shell", "exec_command"];
+    const FILE_TOOLS: &'static [&'static str] =
+        &["Read", "Write", "Edit", "MultiEdit", "NotebookEdit"];
 
     pub fn register(payload: &NativeClaudeHookPayload) -> Option<NativeLogicalEvent> {
         let mut event: NativeLogicalEvent = Self::event(Self::REGISTER, payload)?;
@@ -32,6 +36,7 @@ impl ClaudeHookEventFactory {
         let mut event: NativeLogicalEvent = Self::event(Self::TASK, payload)?;
         event.task = Some(Self::task_id(payload)?);
         event.status = Some(Self::reported(status)?);
+        event.task_name = payload.agent_id.as_ref().and(payload.agent_task.clone());
         Some(event)
     }
 
@@ -41,6 +46,7 @@ impl ClaudeHookEventFactory {
         event.task = Some(Self::task_id(payload)?);
         event.execution = Some(payload.tool_use_id.clone()?);
         event.name = payload.tool_name.clone();
+        event.detail = Self::detail(payload);
         Some(event)
     }
 
@@ -71,7 +77,21 @@ impl ClaudeHookEventFactory {
             session_name: None,
             depends_on: None,
             model: None,
+            detail: None,
         })
+    }
+
+    fn detail(payload: &NativeClaudeHookPayload) -> Option<String> {
+        let tool: &str = payload.tool_name.as_deref().unwrap_or(Self::NONE);
+        let command: Option<String> = Self::COMMAND_TOOLS
+            .contains(&tool)
+            .then(|| -> Option<String> { payload.tool_input.command.clone() })
+            .flatten();
+        let file: Option<String> = Self::FILE_TOOLS
+            .contains(&tool)
+            .then(|| -> Option<String> { payload.tool_input.file.clone() })
+            .flatten();
+        command.or(file)
     }
 
     fn agent(session: &str, subagent: Option<&str>) -> String {

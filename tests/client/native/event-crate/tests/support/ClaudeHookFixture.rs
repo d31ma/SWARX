@@ -23,6 +23,11 @@ impl ClaudeHookFixture {
         "PRIVATE-PROMPT-MARKER summarize the payroll file using sk-ant-api03-PromptSecretMarker";
     pub const COMMAND: &'static str =
         "export API_TOKEN=sk-ant-api03-CommandSecretMarker && ./deploy.sh --production";
+    pub const SANITIZED_COMMAND: &'static str =
+        "export API_TOKEN=\u{2026}redacted\u{2026} && ./deploy.sh --production";
+    pub const AGENT_TASK: &'static str = "PRIVATE-AGENT-TASK-MARKER Investigate the payroll export.\nUse sk-ant-api03-AgentTaskSecretMarker and report every finding in detail.";
+    pub const AGENT_TITLE: &'static str = "Audit hook relay privacy";
+    pub const SANITIZED_FILE: &'static str = "credentials-marker.env";
     pub const FILE_PATH: &'static str = "/Users/fixture/private/credentials-marker.env";
     pub const FILE_CONTENT: &'static str = "PRIVATE-FILE-CONTENT-MARKER password=hunter2";
     pub const SECRET: &'static str = "FIXTURE-GITHUB-TOKEN-MARKER-NOT-A-SECRET";
@@ -38,7 +43,7 @@ impl ClaudeHookFixture {
     pub const MODEL: &'static str = "PRIVATE-MODEL-MARKER with spaces";
     pub const REPORTED_MODEL: &'static str = "claude-sonnet-4-6[1m]";
     pub const TRIGGER: &'static str = "PRIVATE-TRIGGER-MARKER";
-    pub const MARKERS: [&'static str; 21] = [
+    pub const MARKERS: [&'static str; 23] = [
         Self::PROMPT_TEXT,
         Self::COMMAND,
         Self::FILE_PATH,
@@ -53,12 +58,14 @@ impl ClaudeHookFixture {
         Self::AGENT_TRANSCRIPT,
         Self::MODEL,
         Self::TRIGGER,
+        Self::AGENT_TASK,
         "PRIVATE-",
         "sk-ant-",
         "ghp_",
         "hunter2",
         "/Users/fixture",
-        "deploy.sh",
+        "CommandSecretMarker",
+        "AgentTaskSecretMarker",
         "payroll",
     ];
     pub const MAIN_HOOKS: [&'static str; 7] = [
@@ -114,6 +121,7 @@ impl ClaudeHookFixture {
         let mut payload: Value = Self::payload(event);
         payload["agent_id"] = json!(Self::SUBAGENT);
         payload["agent_type"] = json!(Self::SUBAGENT_TYPE);
+        payload["agent_task"] = json!(Self::AGENT_TASK);
         payload
     }
 
@@ -135,6 +143,7 @@ impl ClaudeHookFixture {
         let mut payload: Value = Self::codex_payload(event);
         payload["agent_id"] = json!(Self::SUBAGENT);
         payload["agent_type"] = json!(Self::SUBAGENT_TYPE);
+        payload["agent_task"] = json!(Self::AGENT_TASK);
         payload
     }
 

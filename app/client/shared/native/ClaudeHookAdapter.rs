@@ -1,8 +1,8 @@
 use crate::models::{
     NativeClaudeHookPayload, NativeHookDialect, NativeLogicalEvent, NativeLogicalReceipt,
 };
-use crate::utils::HarnessFileUtils;
-use crate::ClaudeHookMapper;
+use crate::utils::{ActionPreviewUtils, HarnessFileUtils};
+use crate::{ClaudeHookMapper, ClaudeHookToolInputReader};
 use std::io::Read;
 
 pub struct ClaudeHookAdapter {
@@ -41,6 +41,8 @@ impl ClaudeHookAdapter {
     const HARNESS_KEY: &'static str = "harness";
     const ORIGIN_KEY: &'static str = "cursor_version";
     const MODEL_KEY: &'static str = "model";
+    const TOOL_INPUT_KEY: &'static str = "tool_input";
+    const AGENT_TASK_KEY: &'static str = "agent_task";
     const SHARED_FIELDS: &'static [(&'static str, &'static str)] = &[
         (Self::EVENT_KEY, Self::EVENT_KEY),
         (Self::SESSION_KEY, Self::SESSION_KEY),
@@ -81,12 +83,13 @@ impl ClaudeHookAdapter {
         (ClaudeHookMapper::SESSION_END, ClaudeHookMapper::SESSION_END),
     ];
     const OPENCODE_FAMILIES: &'static [&'static str] = &[Self::OPENCODE_FAMILY, Self::KILO_FAMILY];
-    pub const CLAUDE: NativeHookDialect = Self::reporting_model(Self::fixed(
+    const DETAIL_KEYS: &'static [&'static str] = &[Self::TOOL_INPUT_KEY, Self::AGENT_TASK_KEY];
+    pub const CLAUDE: NativeHookDialect = Self::reporting_details(Self::fixed(
         Self::CLAUDE_FAMILY,
         Self::CLAUDE_AGENT_NAME,
         Self::SHARED_FIELDS,
     ));
-    pub const CODEX: NativeHookDialect = Self::reporting_model(Self::fixed(
+    pub const CODEX: NativeHookDialect = Self::reporting_details(Self::fixed(
         Self::CODEX_FAMILY,
         Self::CODEX_AGENT_NAME,
         Self::SHARED_FIELDS,
@@ -116,6 +119,7 @@ impl ClaudeHookAdapter {
         default_agent_name: None,
         fields: Self::OPENCODE_FIELDS,
         model_key: None,
+        detail_keys: &[],
         event_names: None,
         reported_families: Self::OPENCODE_FAMILIES,
     };
@@ -150,14 +154,16 @@ impl ClaudeHookAdapter {
             default_agent_name: Some(default_agent_name),
             fields,
             model_key: None,
+            detail_keys: &[],
             event_names: None,
             reported_families: &[],
         }
     }
 
-    const fn reporting_model(dialect: NativeHookDialect) -> NativeHookDialect {
+    const fn reporting_details(dialect: NativeHookDialect) -> NativeHookDialect {
         NativeHookDialect {
             model_key: Some(Self::MODEL_KEY),
+            detail_keys: Self::DETAIL_KEYS,
             ..dialect
         }
     }
@@ -188,6 +194,7 @@ impl ClaudeHookAdapter {
         let mut payload: NativeClaudeHookPayload = NativeClaudeHookPayload::default();
         while let Some(key) = fields.next_key::<String>()? {
             let shared: Option<&str> = Self::lookup(self.dialect.fields, &key)
+                .or_else(|| -> Option<&str> { self.detail_field(&key) })
                 .or_else(|| -> Option<&str> { self.model_field(&key) });
             Self::read_value(&mut payload, shared, &mut fields)?;
         }
@@ -211,9 +218,21 @@ impl ClaudeHookAdapter {
             Some(Self::HARNESS_KEY) => payload.harness = fields.next_value()?,
             Some(Self::ORIGIN_KEY) => payload.origin_version = fields.next_value()?,
             Some(Self::MODEL_KEY) => payload.model = fields.next_value()?,
+            Some(Self::TOOL_INPUT_KEY) => {
+                payload.tool_input = fields.next_value_seed(ClaudeHookToolInputReader {})?
+            }
+            Some(Self::AGENT_TASK_KEY) => {
+                payload.agent_task = Self::task_title(fields.next_value()?)
+            }
             _ => fields.next_value::<serde::de::IgnoredAny>().map(drop)?,
         }
         Ok(())
+    }
+
+    fn task_title(value: serde_json::Value) -> Option<String> {
+        ClaudeHookToolInputReader::text(value)
+            .as_deref()
+            .and_then(ActionPreviewUtils::task_title)
     }
 
     fn lookup(table: &'static [(&'static str, &'static str)], key: &str) -> Option<&'static str> {
@@ -221,6 +240,14 @@ impl ClaudeHookAdapter {
             .iter()
             .find(|(source, _): &&(&str, &str)| -> bool { *source == key })
             .map(|(_, shared): &(&'static str, &'static str)| -> &'static str { *shared })
+    }
+
+    fn detail_field(&self, key: &str) -> Option<&'static str> {
+        self.dialect
+            .detail_keys
+            .iter()
+            .find(|detail: &&&str| -> bool { **detail == key })
+            .copied()
     }
 
     fn model_field(&self, key: &str) -> Option<&'static str> {

@@ -92,6 +92,7 @@ impl CommandResourceViewTests {
                 source: None,
                 finished_at: None,
                 duration_source: None,
+                detail: None,
             }],
             metrics: None,
             session: Some(NativeSessionLink {

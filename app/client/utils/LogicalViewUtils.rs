@@ -16,6 +16,14 @@ impl LogicalViewUtils {
     const STATE_PREFIX: &'static str = "state-";
     const UNKNOWN_SOURCE: &'static str = "Unknown source";
     const NO_TASK: &'static str = "No task assigned by source";
+    const HOOK_SOURCE: &'static str = "Coordinator lifecycle hooks";
+    const TASK_REFERENCE: &'static str = "Task ID";
+    const REFERENCE_KINDS: [(&'static str, &'static str, &'static str); 2] = [
+        (Self::HOOK_SOURCE, "Claude", "Prompt ID"),
+        (Self::HOOK_SOURCE, "Codex", "Turn ID"),
+    ];
+    const PROMPT_TURN_UNTITLED: &'static str = "Prompt turn \u{b7} title not reported";
+    const TASK_UNTITLED: &'static str = "Task title not reported";
     const UNAVAILABLE: &'static str = "Unavailable";
     const LAST_ACTION: &'static str = "LAST CAPTURED ACTION";
     const CURRENT_ACTION: &'static str = "CURRENT TOOL / ACTION";
@@ -49,12 +57,14 @@ impl LogicalViewUtils {
             reported_status: agent.reported_status.clone(),
             model: agent.model.clone(),
             feed_label: Self::feed(&agent.feed_mode),
-            task_label: Self::task_name(agent.task.as_ref()),
+            task_label: Self::task_title(agent),
+            task_reference: Self::task_reference(agent),
             task_state: Self::task_status(agent.task.as_ref()),
             captured_label: TimeFormatUtils::local_time(agent.captured_at),
             age_label: Self::age(agent),
             current_action: None,
             action_label: Self::CURRENT_ACTION.to_owned(),
+            action_detail: None,
             action_timing: None,
         }
     }
@@ -69,6 +79,7 @@ impl LogicalViewUtils {
         let timing: Option<String> = Self::present(Self::elapsed_times(&current, now));
         let completed: Option<String> = Self::completed_time(&history);
         view.current_action = Self::selected(captured, last, action);
+        view.action_detail = Self::selected(captured, None, Self::newest_detail(&current));
         view.action_timing = Self::selected(captured, completed, timing);
         view.action_label = Self::action_label(captured);
     }
@@ -83,6 +94,7 @@ impl LogicalViewUtils {
         view.executions = Self::current_views(view);
         let records: Vec<NativeExecutionRecord> = Self::execution_records(&view.executions);
         view.current_action = Self::present(Self::current_actions(&records));
+        view.action_detail = Self::newest_detail(&records);
         view.action_timing = Self::present(Self::elapsed_times(&records, now));
         view.action_label = Self::CURRENT_ACTION.to_owned();
         view.command_resources = Self::current_resources(view);
@@ -311,17 +323,22 @@ impl LogicalViewUtils {
     fn add_elapsed(execution: &NativeExecutionRecord, now: f64, times: &mut Vec<String>) -> () {
         if Self::has_elapsed(execution, now) {
             let elapsed: String = MetricFormatUtils::elapsed(now - execution.started_at);
-            times.push(format!("{} \u{b7} elapsed {elapsed}", execution.name));
+            times.push(format!("elapsed {elapsed}"));
         }
     }
 
+    fn newest_detail(executions: &[NativeExecutionRecord]) -> Option<String> {
+        executions
+            .iter()
+            .filter(|execution: &&NativeExecutionRecord| -> bool { Self::running(execution) })
+            .last()
+            .and_then(|execution: &NativeExecutionRecord| -> Option<String> {
+                execution.detail.clone()
+            })
+    }
+
     fn completed_time(executions: &[NativeExecutionRecord]) -> Option<String> {
-        let mut completed: Option<String> = None;
-        for execution in executions {
-            let candidate: Option<String> = Self::completed_candidate(execution);
-            Self::replace_completed(candidate, &mut completed);
-        }
-        completed
+        executions.last().and_then(Self::completed_candidate)
     }
 
     fn completed_candidate(execution: &NativeExecutionRecord) -> Option<String> {
@@ -333,28 +350,15 @@ impl LogicalViewUtils {
         ]
         .into_iter()
         .all(std::convert::identity);
-        Self::completed_label(execution, duration, valid)
+        Self::completed_label(duration, valid)
     }
 
-    fn completed_label(
-        execution: &NativeExecutionRecord,
-        duration: f64,
-        valid: bool,
-    ) -> Option<String> {
+    fn completed_label(duration: f64, valid: bool) -> Option<String> {
         if !valid {
             return None;
         }
         let elapsed: String = MetricFormatUtils::elapsed(duration);
-        Some(format!(
-            "Last finished action: {} \u{b7} duration {elapsed}",
-            execution.name
-        ))
-    }
-
-    fn replace_completed(candidate: Option<String>, completed: &mut Option<String>) -> () {
-        if candidate.is_some() {
-            *completed = candidate;
-        }
+        Some(format!("Finished \u{b7} duration {elapsed}"))
     }
 
     fn feed(mode: &str) -> String {
@@ -367,9 +371,49 @@ impl LogicalViewUtils {
         }
     }
 
-    fn task_name(task: Option<&NativeTaskRecord>) -> String {
-        task.map(|task: &NativeTaskRecord| -> String { task.name.clone() })
+    fn task_title(agent: &NativeLogicalAgent) -> String {
+        agent
+            .task
+            .as_ref()
+            .map(|task: &NativeTaskRecord| -> String {
+                Self::titled(task).unwrap_or_else(|| -> String { Self::untitled(agent) })
+            })
             .unwrap_or_else(|| -> String { Self::NO_TASK.to_owned() })
+    }
+
+    fn titled(task: &NativeTaskRecord) -> Option<String> {
+        Some(task.name.trim())
+            .filter(|name: &&str| -> bool {
+                [!name.is_empty(), *name != task.id]
+                    .into_iter()
+                    .all(std::convert::identity)
+            })
+            .map(str::to_owned)
+    }
+
+    fn untitled(agent: &NativeLogicalAgent) -> String {
+        if Self::reference_kind(agent) == Self::TASK_REFERENCE {
+            return Self::TASK_UNTITLED.to_owned();
+        }
+        Self::PROMPT_TURN_UNTITLED.to_owned()
+    }
+
+    fn task_reference(agent: &NativeLogicalAgent) -> Option<String> {
+        agent
+            .task
+            .as_ref()
+            .map(|task: &NativeTaskRecord| -> String {
+                format!("{} \u{b7} {}", Self::reference_kind(agent), task.id)
+            })
+    }
+
+    fn reference_kind(agent: &NativeLogicalAgent) -> &'static str {
+        let key: (&str, &str) = (agent.source.as_str(), agent.family.as_str());
+        Self::REFERENCE_KINDS
+            .iter()
+            .find(|(source, family, _): &&(&str, &str, &str)| -> bool { (*source, *family) == key })
+            .map(|(_, _, kind): &(&str, &str, &'static str)| -> &'static str { *kind })
+            .unwrap_or(Self::TASK_REFERENCE)
     }
 
     fn task_status(task: Option<&NativeTaskRecord>) -> String {

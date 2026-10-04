@@ -1,3 +1,5 @@
+use crate::models::NativeHookToolInput;
+
 #[derive(Clone, Debug, Default)]
 pub struct NativeClaudeHookPayload {
     pub hook_event_name: Option<String>,
@@ -8,6 +10,8 @@ pub struct NativeClaudeHookPayload {
     pub agent_type: Option<String>,
     pub tool_name: Option<String>,
     pub tool_use_id: Option<String>,
+    pub tool_input: NativeHookToolInput,
+    pub agent_task: Option<String>,
     pub model: Option<String>,
     pub harness: Option<String>,
     pub origin_version: Option<serde::de::IgnoredAny>,

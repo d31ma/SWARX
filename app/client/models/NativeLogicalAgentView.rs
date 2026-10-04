@@ -24,6 +24,8 @@ pub struct NativeLogicalAgentView {
     pub feed_label: String,
     #[serde(rename = "taskLabel")]
     pub task_label: String,
+    #[serde(default, rename = "taskReference")]
+    pub task_reference: Option<String>,
     #[serde(rename = "taskState")]
     pub task_state: String,
     #[serde(rename = "capturedLabel")]
@@ -34,6 +36,8 @@ pub struct NativeLogicalAgentView {
     pub current_action: Option<String>,
     #[serde(rename = "actionLabel")]
     pub action_label: String,
+    #[serde(default, rename = "actionDetail")]
+    pub action_detail: Option<String>,
     #[serde(rename = "actionTiming")]
     pub action_timing: Option<String>,
 }

@@ -25,6 +25,7 @@ impl SessionActivityIdentityTests {
             source: Some(Self::SOURCE.to_owned()),
             finished_at: Some(11.0),
             duration_source: Some("reported".to_owned()),
+            detail: None,
         }
     }
 

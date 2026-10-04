@@ -25,6 +25,7 @@ impl LogicalPresentationTests {
             source: Some("Explicit fixture source".to_owned()),
             finished_at: None,
             duration_source: None,
+            detail: None,
         }
     }
 
@@ -137,10 +138,7 @@ fn empty_actions_and_source_age_do_not_create_an_execution_timer() -> () {
 fn actual_start_controls_elapsed_without_using_registration_age() -> () {
     let view = LogicalPresentationTests::start(100.0);
     assert_eq!(view.current_action.as_deref(), Some("cargo"));
-    assert_eq!(
-        view.action_timing.as_deref(),
-        Some("cargo \u{b7} elapsed 2m 0s")
-    );
+    assert_eq!(view.action_timing.as_deref(), Some("elapsed 2m 0s"));
     assert_eq!(view.action_label, "CURRENT TOOL / ACTION");
 }
 
@@ -183,7 +181,7 @@ fn start_at_current_clock_has_real_zero_elapsed() -> () {
         LogicalPresentationTests::start(220.0)
             .action_timing
             .as_deref(),
-        Some("cargo \u{b7} elapsed 0s")
+        Some("elapsed 0s")
     );
 }
 
@@ -230,7 +228,7 @@ fn concurrent_running_names_keep_input_order_and_individual_timers() -> () {
     assert_eq!(view.current_action.as_deref(), Some("cargo, node"));
     assert_eq!(
         view.action_timing.as_deref(),
-        Some("cargo \u{b7} elapsed 2m 0s; node \u{b7} elapsed 30s")
+        Some("elapsed 2m 0s; elapsed 30s")
     );
 }
 
@@ -513,7 +511,7 @@ fn captured_source_retains_only_genuine_finished_duration() -> () {
     assert_eq!(view.current_action.as_deref(), Some("cargo"));
     assert_eq!(
         view.action_timing.as_deref(),
-        Some("Last finished action: cargo \u{b7} duration 12s")
+        Some("Finished \u{b7} duration 12s")
     );
 }
 
@@ -668,4 +666,110 @@ fn negative_capture_clock_remains_unavailable() -> () {
 #[test]
 fn infinite_capture_clock_remains_unavailable() -> () {
     assert_eq!(TimeFormatUtils::local_time(f64::INFINITY), "Unavailable");
+}
+
+#[test]
+fn current_action_names_the_tool_once_with_its_sanitized_detail() -> () {
+    let mut execution = LogicalPresentationTests::execution("running", "Bash");
+    execution.started_at = 208.0;
+    execution.detail = Some("cargo test --quiet".to_owned());
+    let agent = LogicalPresentationTests::agent(vec![execution]);
+    let view = LogicalPresentationTests::view(&agent);
+    assert_eq!(view.current_action.as_deref(), Some("Bash"));
+    assert_eq!(view.action_detail.as_deref(), Some("cargo test --quiet"));
+    assert_eq!(view.action_timing.as_deref(), Some("elapsed 12s"));
+    let running = LogicalViewUtils::running_view(&view, LogicalPresentationTests::NOW);
+    assert_eq!(running.current_action.as_deref(), Some("Bash"));
+    assert_eq!(running.action_detail.as_deref(), Some("cargo test --quiet"));
+    assert_eq!(running.action_timing.as_deref(), Some("elapsed 12s"));
+    let wire = serde_json::to_value(&running).unwrap();
+    assert_eq!(wire["actionDetail"], "cargo test --quiet");
+    assert_eq!(wire["currentAction"], "Bash");
+    assert!(!wire["actionTiming"].as_str().unwrap().contains("Bash"));
+}
+
+#[test]
+fn action_detail_comes_only_from_the_newest_running_action() -> () {
+    let mut first = LogicalPresentationTests::execution("running", "Read");
+    first.started_at = 100.0;
+    first.detail = Some("notes.md".to_owned());
+    let mut second = LogicalPresentationTests::execution("running", "Bash");
+    second.started_at = 190.0;
+    let mut finished = LogicalPresentationTests::execution("completed", "Edit");
+    finished.detail = Some("finished.rs".to_owned());
+    finished.duration_seconds = Some(1.0);
+    let view = LogicalPresentationTests::view(&LogicalPresentationTests::agent(vec![
+        first, finished, second,
+    ]));
+    assert_eq!(view.current_action.as_deref(), Some("Read, Bash"));
+    assert!(view.action_detail.is_none());
+    let mut stale = LogicalPresentationTests::execution("running", "Bash");
+    stale.started_at = 100.0;
+    stale.detail = Some("ls".to_owned());
+    let mut agent = LogicalPresentationTests::agent(vec![stale]);
+    agent.stale = true;
+    assert!(LogicalPresentationTests::view(&agent)
+        .action_detail
+        .is_none());
+}
+
+#[test]
+fn a_reported_task_title_is_shown_with_its_identifier_as_secondary_detail() -> () {
+    let view = LogicalPresentationTests::view(&LogicalPresentationTests::agent(Vec::new()));
+    assert_eq!(view.task_label, "Fixture assignment");
+    assert_eq!(
+        view.task_reference.as_deref(),
+        Some("Task ID \u{b7} fixture-task")
+    );
+    let wire = serde_json::to_value(&view).unwrap();
+    assert_eq!(wire["taskReference"], "Task ID \u{b7} fixture-task");
+}
+
+#[test]
+fn hook_prompt_turns_without_a_title_say_so_and_keep_the_prompt_identifier() -> () {
+    let prompt = "550e8400-e29b-41d4-a716-446655440000";
+    let mut agent = LogicalPresentationTests::agent(Vec::new());
+    agent.source = "Coordinator lifecycle hooks".to_owned();
+    agent.family = "Claude".to_owned();
+    agent.task = Some(NativeTaskRecord {
+        id: prompt.to_owned(),
+        name: prompt.to_owned(),
+        status: "active".to_owned(),
+        reported_status: None,
+        depends_on: Vec::new(),
+    });
+    let view = LogicalPresentationTests::view(&agent);
+    assert_eq!(view.task_label, "Prompt turn \u{b7} title not reported");
+    assert_eq!(
+        view.task_reference.as_deref(),
+        Some("Prompt ID \u{b7} 550e8400-e29b-41d4-a716-446655440000")
+    );
+    agent.family = "Codex".to_owned();
+    let codex = LogicalPresentationTests::view(&agent);
+    assert_eq!(codex.task_label, "Prompt turn \u{b7} title not reported");
+    assert_eq!(
+        codex.task_reference.as_deref(),
+        Some("Turn ID \u{b7} 550e8400-e29b-41d4-a716-446655440000")
+    );
+    agent.family = "Qwen".to_owned();
+    let other = LogicalPresentationTests::view(&agent);
+    assert_eq!(other.task_label, "Task title not reported");
+    assert!(other.task_reference.unwrap().starts_with("Task ID"));
+    agent.family = "Claude".to_owned();
+    agent.task.as_mut().unwrap().name = "Explore hook payloads".to_owned();
+    let titled = LogicalPresentationTests::view(&agent);
+    assert_eq!(titled.task_label, "Explore hook payloads");
+    assert_eq!(
+        titled.task_reference.as_deref(),
+        Some("Prompt ID \u{b7} 550e8400-e29b-41d4-a716-446655440000")
+    );
+}
+
+#[test]
+fn no_task_has_no_task_reference() -> () {
+    let mut agent = LogicalPresentationTests::agent(Vec::new());
+    agent.task = None;
+    assert!(LogicalPresentationTests::view(&agent)
+        .task_reference
+        .is_none());
 }

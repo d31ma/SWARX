@@ -7,8 +7,8 @@
       <p class="agent-session-id">{agent.session ? 'Session ID · ' + agent.session.id : 'No verified session ID supplied'}</p>
       <details class="agent-identity"><summary>Technical identity</summary><p>{agent.id}</p></details>
       <div class="feed-time">{agent.feedLabel} · {agent.source}<br />{agent.capturedLabel} · {agent.ageLabel}</div>
-      <div class="assignment"><small>ASSIGNED TASK</small><strong>{agent.taskLabel}</strong><span>{agent.taskState}</span></div>
-      <logic :if="agent.currentAction || agent.actionTiming"><div class="current-action"><logic :if="agent.currentAction"><small>{agent.actionLabel}</small><strong>{agent.currentAction}</strong></logic><logic :if="agent.actionTiming"><p class="action-timing">{agent.actionTiming}</p></logic></div></logic>
+      <div class="assignment"><small>ASSIGNED TASK</small><strong>{agent.taskLabel}</strong><span>{agent.taskState}</span><logic :if="agent.taskReference"><p class="task-reference">{agent.taskReference}</p></logic></div>
+      <logic :if="agent.currentAction || agent.actionTiming"><div class="current-action"><logic :if="agent.currentAction"><small>{agent.actionLabel}</small><strong>{agent.currentAction}</strong></logic><logic :if="agent.actionDetail"><p class="action-detail" :title="agent.actionDetail">{agent.actionDetail}</p></logic><logic :if="agent.actionTiming"><p class="action-timing">{agent.actionTiming}</p></logic></div></logic>
       <logic :if="agent.command_resources.length">
         <div class="agent-resources">
           <loop :for="resource of agent.command_resources">

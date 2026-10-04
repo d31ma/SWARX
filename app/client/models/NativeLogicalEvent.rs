@@ -16,4 +16,6 @@ pub struct NativeLogicalEvent {
     pub depends_on: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }

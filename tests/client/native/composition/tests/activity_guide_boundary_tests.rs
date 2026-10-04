@@ -20,6 +20,7 @@ impl ActivityGuideBoundaryTests {
             source: None,
             finished_at: None,
             duration_source: None,
+            detail: None,
         };
         NativeLogicalAgent {
             id: "boundary-agent".to_string(),

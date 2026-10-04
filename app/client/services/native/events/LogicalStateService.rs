@@ -241,9 +241,14 @@ impl LogicalStateService {
         let finishing: bool = self.finishes_running(&status, running);
         self.require_finished(finishing)?;
         let dependencies: Vec<String> = self.dependencies(event.depends_on.as_deref())?;
+        let reported: Option<String> = self
+            .text
+            .title(event.task_name.as_deref())
+            .or_else(|| -> Option<String> { event.name.clone() });
+        let retained: String = Self::retained_name(agent.task.as_ref(), &identifier);
         let task: NativeTaskRecord = NativeTaskRecord {
             id: identifier.clone(),
-            name: self.text.name(event.name.as_deref(), &identifier)?,
+            name: self.text.name(reported.as_deref(), &retained)?,
             status,
             reported_status: None,
             depends_on: dependencies,
@@ -258,6 +263,13 @@ impl LogicalStateService {
         ))?;
         agent.task = Some(task);
         self.save_agent(agent, now)
+    }
+
+    fn retained_name(previous: Option<&NativeTaskRecord>, identifier: &str) -> String {
+        previous
+            .filter(|task: &&NativeTaskRecord| -> bool { task.id == identifier })
+            .map(|task: &NativeTaskRecord| -> String { task.name.clone() })
+            .unwrap_or_else(|| -> String { identifier.to_string() })
     }
 
     fn start_execution(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<(), String> {
@@ -298,6 +310,7 @@ impl LogicalStateService {
             source: Some(agent.source.clone()),
             finished_at: None,
             duration_source: None,
+            detail: self.text.detail(event.detail.as_deref()),
         });
         self.save_agent(agent, now)
     }

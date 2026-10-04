@@ -13,4 +13,5 @@ export interface LogicalExecution {
   source?: string | null;
   finished_at?: number | null;
   duration_source?: string | null;
+  detail?: string | null;
 }

@@ -68,6 +68,7 @@ impl RosterFixture {
                 source: None,
                 finished_at: None,
                 duration_source: None,
+                detail: None,
             }],
             metrics: Some(99.0),
             session: Some(NativeSessionLink {

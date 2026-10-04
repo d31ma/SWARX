@@ -14,4 +14,6 @@ pub struct NativeExecutionRecord {
     pub source: Option<String>,
     pub finished_at: Option<f64>,
     pub duration_source: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
 }

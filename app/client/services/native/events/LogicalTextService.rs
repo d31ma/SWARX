@@ -1,4 +1,4 @@
-use crate::utils::HarnessFileUtils;
+use crate::utils::{ActionPreviewUtils, HarnessFileUtils};
 use regex::Regex;
 
 #[Service]
@@ -49,8 +49,22 @@ impl LogicalTextService {
         HarnessFileUtils::reported_identifier(value)
     }
 
+    pub fn detail(&self, value: Option<&str>) -> Option<String> {
+        Self::unchanged(value, ActionPreviewUtils::command)
+    }
+
+    pub fn title(&self, value: Option<&str>) -> Option<String> {
+        Self::unchanged(value, ActionPreviewUtils::task_title)
+    }
+
     pub fn tool(&self, value: Option<&str>) -> String {
         self.safe_tool(value).unwrap_or_else(Self::tool_fallback)
+    }
+
+    fn unchanged(value: Option<&str>, preview: fn(&str) -> Option<String>) -> Option<String> {
+        value
+            .and_then(preview)
+            .filter(|safe: &String| -> bool { Some(safe.as_str()) == value })
     }
 
     fn require_text<'a>(&self, value: Option<&'a str>) -> Result<&'a str, String> {

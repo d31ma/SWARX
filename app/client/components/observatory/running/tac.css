@@ -320,6 +320,26 @@
   color: #b7c5e3;
   overflow-wrap: anywhere;
 }
+.task-reference {
+  flex-basis: 100%;
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #a6b5d1;
+  overflow-wrap: anywhere;
+}
+.action-detail {
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  font-family: var(--w-font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+  line-height: 18px;
+  color: #d5def5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .agent-identity {
   margin: 8px 0;
   color: var(--muted);

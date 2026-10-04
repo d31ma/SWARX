@@ -41,6 +41,12 @@ mod claude_hook_mapper {
         "/../../../../app/client/shared/native/ClaudeHookMapper.rs"
     ));
 }
+mod claude_hook_tool_input_reader {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../app/client/shared/native/ClaudeHookToolInputReader.rs"
+    ));
+}
 mod claude_hook_adapter {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -48,8 +54,9 @@ mod claude_hook_adapter {
     ));
 }
 pub use {
-    claude_hook_adapter::*, claude_hook_event_factory::*, claude_hook_mapper::*, clock::*,
-    identity_reader::*, process_reader::*, source::*, timebase::*,
+    claude_hook_adapter::*, claude_hook_event_factory::*, claude_hook_mapper::*,
+    claude_hook_tool_input_reader::*, clock::*, identity_reader::*, process_reader::*, source::*,
+    timebase::*,
 };
 pub mod utils {
     mod context {
@@ -66,6 +73,13 @@ pub mod utils {
         ));
     }
     pub use harness_file::*;
+    mod action_preview {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../app/client/utils/ActionPreviewUtils.rs"
+        ));
+    }
+    pub use action_preview::*;
 }
 pub mod services {
     pub mod logical_execution_history_service {
