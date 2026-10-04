@@ -21,7 +21,8 @@ impl SnapshotReaderService {
     fn open(&self, selection: NativeViewSelection) -> NativeSnapshotTransfer {
         let snapshot: NativeSnapshot = self.collector.read();
         let now: f64 = self.collector.observation_time();
-        let view: NativeOverviewView = OverviewViewUtils::view(&snapshot, &selection, now);
+        let view: NativeOverviewView =
+            OverviewViewUtils::wire(OverviewViewUtils::view(&snapshot, &selection, now));
         self.transport.borrow_mut().open_view(&view)
     }
 

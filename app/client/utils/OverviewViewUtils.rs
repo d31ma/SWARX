@@ -164,6 +164,41 @@ impl OverviewViewUtils {
         }
     }
 
+    // Wire form for the page, which renders only activeSessions, activeSummary, agentDetail and
+    // chartResources. Lists that only feed those views stay native: with verified session process
+    // trees, repeating them pushed the snapshot past its 2 MiB transfer limit.
+    pub fn wire(mut view: NativeOverviewView) -> NativeOverviewView {
+        view.chart_resources =
+            Self::drawer_charts(view.chart_resources, view.agent_detail.as_ref());
+        view.session_groups = Vec::new();
+        view.resource_sessions = Vec::new();
+        view.shared_resources = Vec::new();
+        view.logical = Vec::new();
+        view.activity = Vec::new();
+        view.sessions = Vec::new();
+        view.shared = Vec::new();
+        view.runtimes = Vec::new();
+        view.detail = None;
+        view
+    }
+
+    // Only the selected agent's drawer draws charts.
+    fn drawer_charts(
+        charts: Vec<NativeRuntimeView>,
+        detail: Option<&NativeAgentDetailView>,
+    ) -> Vec<NativeRuntimeView> {
+        let wanted: Vec<&str> = Self::detail_resources(detail)
+            .iter()
+            .map(|resource: &NativeRuntimeView| -> &str { resource.group.id.as_str() })
+            .collect();
+        charts
+            .into_iter()
+            .filter(|chart: &NativeRuntimeView| -> bool {
+                wanted.contains(&chart.group.id.as_str())
+            })
+            .collect()
+    }
+
     // The page reads chart series only from chartResources, and never raw group history.
     // Copying both into every runtime list pushed the transfer past 2 MiB after ~41 samples.
     fn transfer_views(views: Vec<NativeRuntimeView>) -> Vec<NativeRuntimeView> {
