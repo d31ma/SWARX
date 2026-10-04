@@ -33,6 +33,9 @@ export default class ObservatoryService {
     /** @type {import('/services/browser/PresentationService.js').default | undefined} */
     @Needs
     presentation;
+    /** @type {TacWindowControls | undefined} */
+    @Needs
+    windowControls;
     /** @type {import('/models/ObservatoryModel.ts').ObservatoryModel | undefined} */
     model;
     /** @type {string} */
@@ -72,6 +75,8 @@ export default class ObservatoryService {
     @OnStart
     initialize() {
         ScriptUtils.load();
+        // The title bar keeps its close, minimize and full-screen controls but shows no title text.
+        this.#windows().setTitle(ObservatoryService._EMPTY_TEXT);
         // Section components share this page singleton, and Tac rebinds `view` to each newly
         // activated component host. Keep the observatory panel host that started the service.
         this.#host = this.#provider(this.view);
@@ -355,6 +360,11 @@ export default class ObservatoryService {
     /** @returns {import('/services/browser/PresentationService.js').default} */
     #presentation() {
         return this.#provider(this.presentation);
+    }
+
+    /** @returns {TacWindowControls} */
+    #windows() {
+        return this.#provider(this.windowControls);
     }
 
     /** @returns {TacTaskScheduler} */

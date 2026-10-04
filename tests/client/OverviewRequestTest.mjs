@@ -7,7 +7,7 @@ import { BrowserServiceTestUtils } from './BrowserServiceTestUtils.mjs';
 /** @typedef {import('../../app/client/models/NativeViewSelection.ts').NativeViewSelection} NativeSelection */
 /** @typedef {Pick<import('../../app/client/models/ObservatoryModel.ts').ObservatoryModel, 'selected' | 'liveStatus' | 'detail' | 'selectedSession' | 'selectedSessionProcess' | 'resourceSessions' | 'sharedResources' | 'sessionView'>} TestResponse */
 /** @typedef {{selection: NativeSelection, resolve: (value: TestResponse | PromiseLike<TestResponse>) => void, reject: (reason?: unknown) => void}} PendingRequest */
-/** @typedef {{model?: TestResponse, series: string, selectedSession: string, sessionTab: string, sessionView: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, openSession: (event: object, key: string) => void, closeSession: (event: object) => void, toggleSession: (event: object, key: string) => void}} FixtureController *
+/** @typedef {{model?: TestResponse, series: string, selectedSession: string, sessionTab: string, sessionView: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, windowControls: {titles: string[], setTitle: (text: string) => null}, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, openSession: (event: object, key: string) => void, closeSession: (event: object) => void, toggleSession: (event: object, key: string) => void}} FixtureController *
 /** @typedef {{controller: FixtureController, requests: PendingRequest[], poll: (() => void) | null}} RequestFrame */
 /** @typedef {Omit<RequestFrame, 'controller'> & {controller: FixtureController | null}} PreparingFrame */
 
@@ -63,6 +63,7 @@ class OverviewRequestTest {
     controller.lifecycle = new AbortController().signal;
     controller.view = new RequestView();
     controller.presentation = OverviewRequestTest.presentation(context);
+    controller.windowControls = {titles: [], /** @param {string} text @returns {null} */ setTitle(text) { this.titles.push(text); return null; }};
     frame.controller = controller;
     return /** @type {RequestFrame} */ (frame);
   }
@@ -516,5 +517,14 @@ test('session expansion is sent by exact key, survives polls and never opens the
   await OverviewRequestTest.flush();
   assert.deepEqual([...frame.requests[3].selection.expanded_sessions], []);
   assert.equal(frame.controller.selectedSession, '');
+  frame.controller.dispose();
+});
+
+test('starting clears the native window title text once and keeps the window controls', /** @returns {Promise<void>} */ async () => {
+  const frame = OverviewRequestTest.frame();
+  assert.deepEqual(frame.controller.windowControls.titles, []);
+  frame.controller.initialize();
+  await OverviewRequestTest.flush();
+  assert.deepEqual(frame.controller.windowControls.titles, ['']);
   frame.controller.dispose();
 });
