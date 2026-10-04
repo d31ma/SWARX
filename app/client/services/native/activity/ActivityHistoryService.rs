@@ -22,6 +22,8 @@ impl ActivityHistoryService {
     const FAILED: &'static str = "failed";
     const CANCELLED: &'static str = "cancelled";
     const STALE: &'static str = "stale";
+    const NO_FINISH: &'static str = "no-finish";
+    const NO_FINISH_LABEL: &'static str = "No finish reported";
     const NO_RECENT_REPORT: &'static str = "No recent report";
     const EVENTS: &'static str = "events";
     const COORDINATOR_REPORT: &'static str = "coordinator-report";
@@ -416,6 +418,7 @@ impl ActivityHistoryService {
             (_, Self::COMPLETED | Self::FAILED | Self::CANCELLED) => {
                 Some(execution.status.as_str())
             }
+            (_, Self::NO_FINISH) => Some(Self::NO_FINISH_LABEL),
             _ => None,
         }
     }

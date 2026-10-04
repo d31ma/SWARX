@@ -65,11 +65,9 @@ fn restart_keeps_source_time_session_and_forces_stale() -> () {
         "Explicit coordinator session binding"
     );
     assert_eq!(row.task.as_ref().unwrap().status, "stale");
-    assert_eq!(row.executions[0].status, "stale");
-    assert_eq!(
-        row.executions[0].reported_status.as_deref(),
-        Some("running")
-    );
+    // A call left running before the restart can never receive its finish afterwards.
+    assert_eq!(row.executions[0].status, "no-finish");
+    assert_eq!(row.executions[0].reported_status, None);
     assert_eq!(row.metrics, None);
 }
 
@@ -238,8 +236,6 @@ fn restored_rows_can_be_saved_again_without_losing_original_status() -> () {
     assert_eq!(again[0].captured_at, 1000.0);
     assert_eq!(again[0].age_seconds, 20.0);
     assert_eq!(again[0].reported_status.as_deref(), Some("active"));
-    assert_eq!(
-        again[0].executions[0].reported_status.as_deref(),
-        Some("running")
-    );
+    assert_eq!(again[0].executions[0].status, "no-finish");
+    assert_eq!(again[0].executions[0].reported_status, None);
 }

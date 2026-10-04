@@ -147,7 +147,22 @@ impl LogicalStateService {
         let mapped: NativeLogicalEvent = self.coordination_event(event)?;
         let safe: String = self.text.tool(event.name.as_deref());
         Self::require_safe_action(event.name.as_deref(), &safe)?;
+        let row: NativeLogicalAgent = self.agent(&mapped.agent)?;
+        self.require_reported_room(&row.executions)?;
         self.start_execution(&mapped, now)
+    }
+
+    // A coordinator reports every finish explicitly, so its full list of running actions refuses
+    // a new one rather than dropping a running action.
+    fn require_reported_room(&self, values: &[NativeExecutionRecord]) -> Result<(), String> {
+        let full: bool = values.len() >= LogicalEventPolicyService::EXECUTION_LIMIT;
+        let settled: bool = values
+            .iter()
+            .any(|item: &NativeExecutionRecord| -> bool { self.policy.is_settled(&item.status) });
+        if full && !settled {
+            return Err("Running execution capacity reached.".to_string());
+        }
+        Ok(())
     }
 
     fn coordination_finish(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<(), String> {
@@ -241,9 +256,7 @@ impl LogicalStateService {
         let mut agent: NativeLogicalAgent = self.agent(&event.agent)?;
         let identifier: String = self.text.identifier(event.task.as_deref())?;
         let status: String = self.policy.status(event.status.as_deref())?;
-        let running: bool = Self::has_running(&agent.executions);
-        let finishing: bool = self.finishes_running(&status, running);
-        self.require_finished(finishing)?;
+        let finishing: bool = self.policy.is_final(&status);
         let dependencies: Vec<String> = self.dependencies(event.depends_on.as_deref())?;
         let reported: Option<String> = self
             .text
@@ -257,16 +270,29 @@ impl LogicalStateService {
             reported_status: None,
             depends_on: dependencies,
         };
-        let previous: Option<&str> = agent
-            .task
-            .as_ref()
-            .map(|task: &NativeTaskRecord| -> &str { task.id.as_str() });
-        self.require_finished(Self::changes_running(
-            running,
-            previous == Some(identifier.as_str()),
-        ))?;
+        // A running call keeps running only within its own unfinished assignment.
+        Self::retire_running(
+            &mut agent.executions,
+            (!finishing).then_some(identifier.as_str()),
+        );
         agent.task = Some(task);
         self.save_agent(agent, now)
+    }
+
+    /// Ends the wait for a finish that can no longer come: the reporter moved to another
+    /// assignment, finished the assignment, or finished the agent without finishing these calls
+    /// (Claude Code sends no finish for a denied or cancelled call). The record keeps no finish
+    /// time, duration or exit code; a later finish with the same exact ID still applies.
+    fn retire_running(executions: &mut [NativeExecutionRecord], kept: Option<&str>) -> () {
+        executions
+            .iter_mut()
+            .filter(|item: &&mut NativeExecutionRecord| -> bool {
+                item.status == LogicalEventPolicyService::RUNNING
+                    && (kept.is_none() || item.task_id.as_deref() != kept)
+            })
+            .for_each(|item: &mut NativeExecutionRecord| -> () {
+                item.status = LogicalEventPolicyService::NO_FINISH.to_string();
+            });
     }
 
     fn retained_name(previous: Option<&NativeTaskRecord>, identifier: &str) -> String {
@@ -284,9 +310,8 @@ impl LogicalStateService {
         self.require_matching_task(requested, &task.id)?;
         let identifier: String = self.text.identifier(event.execution.as_deref())?;
         self.require_new_execution(&agent.executions, &identifier)?;
-        let finished: Option<usize> = self.evictable(&agent.executions);
-        self.require_execution_capacity(agent.executions.len(), finished)?;
-        self.evict_finished(&mut agent.executions, finished);
+        let evicted: Option<usize> = self.evictable(&agent.executions);
+        self.evict(&mut agent.executions, evicted);
         agent.executions.push(NativeExecutionRecord {
             id: identifier,
             name: self.text.tool(event.name.as_deref()),
@@ -315,20 +340,25 @@ impl LogicalStateService {
         self.save_agent(agent, now)
     }
 
+    /// The record a full list gives up for a new start: the oldest settled foreground record,
+    /// else the oldest settled one, else the oldest call still waiting for its finish. A new
+    /// start is never refused for room, and no finish is invented to make it.
     fn evictable(&self, values: &[NativeExecutionRecord]) -> Option<usize> {
         let foreground: Option<usize> = values
             .iter()
-            .position(|item: &NativeExecutionRecord| -> bool { self.finished_foreground(item) });
-        foreground.or(values
-            .iter()
-            .position(|item: &NativeExecutionRecord| -> bool {
-                self.policy.is_final(&item.status)
-            }))
+            .position(|item: &NativeExecutionRecord| -> bool { self.settled_foreground(item) });
+        foreground
+            .or(values
+                .iter()
+                .position(|item: &NativeExecutionRecord| -> bool {
+                    self.policy.is_settled(&item.status)
+                }))
+            .or((!values.is_empty()).then_some(0))
     }
 
-    fn finished_foreground(&self, item: &NativeExecutionRecord) -> bool {
+    fn settled_foreground(&self, item: &NativeExecutionRecord) -> bool {
         [
-            self.policy.is_final(&item.status),
+            self.policy.is_settled(&item.status),
             item.background != Some(true),
         ]
         .into_iter()
@@ -357,9 +387,9 @@ impl LogicalStateService {
     fn status(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<(), String> {
         let mut agent: NativeLogicalAgent = self.agent(&event.agent)?;
         let status: String = self.policy.status(event.status.as_deref())?;
-        let running: bool = Self::has_running(&agent.executions);
-        let finishing: bool = self.finishes_running(&status, running);
-        self.require_finished(finishing)?;
+        if self.policy.is_final(&status) {
+            Self::retire_running(&mut agent.executions, None);
+        }
         agent.status = status;
         agent.model = self.text.model(event.model.as_deref()).or(agent.model);
         self.save_agent(agent, now)
@@ -496,25 +526,7 @@ impl LogicalStateService {
         Ok(())
     }
 
-    fn require_execution_capacity(
-        &self,
-        count: usize,
-        finished: Option<usize>,
-    ) -> Result<(), String> {
-        match (
-            count >= LogicalEventPolicyService::EXECUTION_LIMIT,
-            finished,
-        ) {
-            (true, None) => Err("Running execution capacity reached.".to_string()),
-            _ => Ok(()),
-        }
-    }
-
-    fn evict_finished(
-        &self,
-        values: &mut Vec<NativeExecutionRecord>,
-        position: Option<usize>,
-    ) -> () {
+    fn evict(&self, values: &mut Vec<NativeExecutionRecord>, position: Option<usize>) -> () {
         if values.len() >= LogicalEventPolicyService::EXECUTION_LIMIT {
             values.remove(position.unwrap_or_default());
         }
@@ -531,8 +543,14 @@ impl LogicalStateService {
             .ok_or_else(|| -> String { Self::NO_EXECUTION.to_string() })
     }
 
+    /// A finish matches a running call, or a call retired without a finish, by its exact ID.
     fn require_running(&self, status: &str) -> Result<(), String> {
-        if status != LogicalEventPolicyService::RUNNING {
+        let open: bool = [
+            LogicalEventPolicyService::RUNNING,
+            LogicalEventPolicyService::NO_FINISH,
+        ]
+        .contains(&status);
+        if !open {
             return Err(Self::NO_EXECUTION.to_string());
         }
         Ok(())

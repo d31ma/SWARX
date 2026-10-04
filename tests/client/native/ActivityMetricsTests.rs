@@ -287,3 +287,67 @@ fn history_records_carry_native_timing_that_never_reaches_the_page() -> () {
         "Mean of 1 timed calls · caller-reported durations"
     );
 }
+
+#[test]
+fn a_call_whose_finish_can_no_longer_arrive_is_counted_apart_from_unfinished_calls() -> () {
+    let mut records: Vec<NativeActivityRecord> = ActivityMetricsTests::calls(1);
+    let mut running: NativeActivityRecord = ActivityMetricsTests::call("running", "Bash", 0.0);
+    running.status = "running".to_owned();
+    running.finished_at = None;
+    running.duration_seconds = None;
+    let mut retired: NativeActivityRecord = ActivityMetricsTests::call("denied", "Bash", 0.0);
+    retired.status = "no-finish".to_owned();
+    retired.finished_at = None;
+    retired.duration_seconds = None;
+    records.extend([running, retired]);
+    let view: NativeActivityMetricsView = ActivityMetricsUtils::summary(&records);
+    assert_eq!(
+        ActivityMetricsTests::fact(&view, "count").detail,
+        "Of 3 tool calls · not timed: 1 unfinished, 1 no finish reported"
+    );
+    assert_eq!(
+        ActivityMetricsTests::fact(&view, "outcome").detail,
+        "1 succeeded · 2 unfinished or unknown (not counted)"
+    );
+}
+
+// Rows recovered after an app restart keep each finished call's real outcome and receipt timing,
+// so a restart never turns finished calls into unfinished ones in the session summary.
+#[test]
+fn recovered_finished_calls_stay_timed_and_retired_calls_read_no_finish_reported() -> () {
+    let mut retired: NativeExecutionRecord = ActivityMetricsTests::execution("left", "Bash");
+    retired.status = "no-finish".to_owned();
+    retired.exit_code = None;
+    retired.finished_at = None;
+    retired.duration_seconds = None;
+    retired.duration_source = None;
+    let mut agent: NativeLogicalAgent = ActivityMetricsTests::agent(vec![
+        ActivityMetricsTests::execution("read", "Read"),
+        retired,
+    ]);
+    agent.stale = true;
+    agent.status = "stale".to_owned();
+    agent.feed_mode = "recovered".to_owned();
+    let groups: Vec<NativeSessionActivityView> =
+        ActivityHistoryService::default().view(&[agent], ActivityMetricsTests::START + 500.0);
+    let records: &[NativeActivityRecord] = &groups[0].records;
+    let left: &NativeActivityRecord = records
+        .iter()
+        .find(|record: &&NativeActivityRecord| -> bool { record.id == "left" })
+        .unwrap();
+    assert_eq!(left.status_label, "No finish reported");
+    assert!(!left.running);
+    assert_eq!(left.finished_label, None);
+    assert_eq!(left.elapsed_label, None);
+    let read: &NativeActivityRecord = records
+        .iter()
+        .find(|record: &&NativeActivityRecord| -> bool { record.id == "read" })
+        .unwrap();
+    assert_eq!(read.status_label, "completed");
+    let view: NativeActivityMetricsView = ActivityMetricsUtils::summary(records);
+    assert_eq!(ActivityMetricsTests::fact(&view, "count").value, "1");
+    assert_eq!(
+        ActivityMetricsTests::fact(&view, "count").detail,
+        "Of 2 tool calls · not timed: 1 no finish reported"
+    );
+}

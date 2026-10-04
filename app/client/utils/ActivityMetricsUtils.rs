@@ -10,13 +10,17 @@ use std::collections::{BTreeMap, BTreeSet};
 // the foreground, with valid start and finish hook receipts and a duration from a known source.
 // Unfinished, cancelled, background-launch and untimed calls are counted, never averaged, and an
 // unknown outcome is never a success. Agent/Task calls span their sub-agents' own calls, so they
-// appear only as their own tool rows and stay out of the session-wide figures.
+// appear only as their own tool rows and stay out of the session-wide figures. "unfinished"
+// counts calls still waiting for a finish (running, or without a recent report); "no finish
+// reported" counts calls whose finish can no longer arrive because their turn, agent or app run
+// ended without one, as for a denied or cancelled Claude Code call.
 pub struct ActivityMetricsUtils;
 
 impl ActivityMetricsUtils {
     const SUCCESS: &'static str = "completed";
     const FAILURE: &'static str = "failed";
     const CANCELLED: &'static str = "cancelled";
+    const NO_FINISH: &'static str = "no-finish";
     const SPAN_TOOLS: &'static [&'static str] = &["Agent", "Task"];
     const SOURCES: &'static [&'static str] = &["receipt-elapsed", "reported"];
     const SOURCE_LABELS: &'static [&'static str] =
@@ -41,19 +45,21 @@ impl ActivityMetricsUtils {
     const SPAN_NOTES: &'static [&'static str] =
         &["", "Spans sub-agent work; not in the session figures"];
     // Why a call is or is not timed, and its outcome, as indexes into their label lists.
-    const REASON_COUNT: usize = 5;
+    const REASON_COUNT: usize = 6;
     const REASONS: [&'static str; Self::REASON_COUNT] = [
         "timed",
         "unfinished",
+        "no finish reported",
         "cancelled",
         "background launch (finish marks launch only)",
         "without usable timing",
     ];
     const TIMED: usize = 0;
     const UNFINISHED: usize = 1;
-    const CANCELLED_REASON: usize = 2;
-    const BACKGROUND: usize = 3;
-    const MISSING: usize = 4;
+    const NO_FINISH_REASON: usize = 2;
+    const CANCELLED_REASON: usize = 3;
+    const BACKGROUND: usize = 4;
+    const MISSING: usize = 5;
     const OUTCOME_COUNT: usize = 4;
     const OUTCOMES: [&'static str; Self::OUTCOME_COUNT] = [
         "succeeded",
@@ -115,6 +121,7 @@ impl ActivityMetricsUtils {
             (true, false, true, _) => Self::TIMED,
             (true, false, false, _) => Self::MISSING,
             (false, _, _, Self::CANCELLED) => Self::CANCELLED_REASON,
+            (false, _, _, Self::NO_FINISH) => Self::NO_FINISH_REASON,
             _ => Self::UNFINISHED,
         }
     }

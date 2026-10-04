@@ -211,7 +211,7 @@ impl LogicalRosterPolicyService {
     }
 
     fn status(&self, status: &str, reported: Option<&str>) -> Result<String, String> {
-        self.event.status(Some(reported.unwrap_or(status)))
+        self.event.recorded_status(Some(reported.unwrap_or(status)))
     }
 
     fn identifier(&self, value: &str) -> Result<String, String> {
@@ -243,7 +243,9 @@ impl LogicalRosterPolicyService {
         row.executions = row
             .executions
             .into_iter()
-            .map(Self::recover_execution)
+            .map(|item: NativeExecutionRecord| -> NativeExecutionRecord {
+                self.recover_execution(item)
+            })
             .collect();
         row
     }
@@ -254,9 +256,13 @@ impl LogicalRosterPolicyService {
         task
     }
 
-    fn recover_execution(mut item: NativeExecutionRecord) -> NativeExecutionRecord {
-        item.reported_status = Some(item.status);
-        item.status = Self::STALE.to_string();
+    /// A finished or retired record keeps its outcome across a restart. A call still waiting for
+    /// its finish can never receive it after the restart, so it is retired without a finish.
+    fn recover_execution(&self, mut item: NativeExecutionRecord) -> NativeExecutionRecord {
+        if !self.event.is_settled(&item.status) {
+            item.status = LogicalEventPolicyService::NO_FINISH.to_string();
+        }
+        item.reported_status = None;
         item
     }
 

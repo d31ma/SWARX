@@ -126,7 +126,7 @@ fn completed_history_survives_task_and_session_changes_with_original_binding() -
 }
 
 #[test]
-fn ordinary_assignment_change_cannot_erase_running_action() -> () {
+fn ordinary_assignment_change_retires_a_running_action_without_erasing_it() -> () {
     let mut state = LogicalStateService::default();
     assert!(state
         .apply(
@@ -157,13 +157,20 @@ fn ordinary_assignment_change_cannot_erase_running_action() -> () {
             .unwrap(),
             101.0
         )
-        .is_err());
-    assert_eq!(state.revision(), 3);
-    assert_eq!(state.rows(101.0)[0].executions[0].status, "running");
+        .is_ok());
+    assert_eq!(state.revision(), 4);
+    let row = &state.rows(101.0)[0];
+    assert_eq!(row.task.as_ref().unwrap().id, "second");
+    let item = &row.executions[0];
+    assert_eq!(item.id, "action");
+    assert_eq!(item.status, "no-finish");
+    assert_eq!(item.task_id.as_deref(), Some("first"));
+    assert!(item.finished_at.is_none());
+    assert!(item.duration_seconds.is_none());
 }
 
 #[test]
-fn restart_and_fresh_upsert_preserve_completed_and_stale_unfinished_history() -> () {
+fn restart_and_fresh_upsert_preserve_completed_and_retire_unfinished_history() -> () {
     let mut fixture = CoordinationExecutionFixture::new("history-restart");
     assert!(fixture.upsert(Some("original"), "running").accepted);
     assert!(
@@ -198,10 +205,12 @@ fn restart_and_fresh_upsert_preserve_completed_and_stale_unfinished_history() ->
     reopened.start().unwrap();
     let restored = reopened.rows()[0].clone();
     assert!(restored.stale);
-    assert!(restored
+    let statuses: Vec<&str> = restored
         .executions
         .iter()
-        .all(|item: &NativeExecutionRecord| -> bool { item.status == "stale" }));
+        .map(|item: &NativeExecutionRecord| -> &str { item.status.as_str() })
+        .collect();
+    assert_eq!(statuses, vec!["completed", "no-finish"]);
     assert!(fixture.upsert(Some("next"), "running").accepted);
     let fresh = reopened.rows()[0].clone();
     assert!(!fresh.stale);
@@ -212,7 +221,8 @@ fn restart_and_fresh_upsert_preserve_completed_and_stale_unfinished_history() ->
         .iter()
         .find(|item: &&event_slice::models::NativeExecutionRecord| -> bool { item.id == "done" })
         .unwrap();
-    assert_eq!(completed.reported_status.as_deref(), Some("completed"));
+    assert_eq!(completed.status, "completed");
+    assert_eq!(completed.reported_status, None);
     assert_eq!(completed.finished_at, Some(110.0));
     assert_eq!(completed.task_id.as_deref(), Some("original"));
     let unfinished = fresh
@@ -224,8 +234,8 @@ fn restart_and_fresh_upsert_preserve_completed_and_stale_unfinished_history() ->
             },
         )
         .unwrap();
-    assert_eq!(unfinished.status, "stale");
-    assert_eq!(unfinished.reported_status.as_deref(), Some("running"));
+    assert_eq!(unfinished.status, "no-finish");
+    assert_eq!(unfinished.reported_status, None);
     assert!(unfinished.finished_at.is_none());
     assert!(
         fixture

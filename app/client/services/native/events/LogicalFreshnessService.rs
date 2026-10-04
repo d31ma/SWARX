@@ -20,7 +20,7 @@ impl LogicalFreshnessService {
     }
 
     pub fn execution(&self, item: &mut NativeExecutionRecord, stale: bool) -> () {
-        let eligible: bool = self.unfinished(&item.status, stale);
+        let eligible: bool = stale && !self.policy.is_settled(&item.status);
         self.mark_execution(item, eligible);
     }
 

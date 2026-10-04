@@ -12,6 +12,8 @@ impl LogicalEventPolicyService {
     pub const RUNNING: &'static str = "running";
     pub const ACTIVE: &'static str = "active";
     pub const STALE: &'static str = "stale";
+    /// A start whose finish was never reported and can no longer be matched live.
+    pub const NO_FINISH: &'static str = "no-finish";
     const STATUSES: [&'static str; 9] = [
         "pending",
         Self::ACTIVE,
@@ -42,6 +44,19 @@ impl LogicalEventPolicyService {
 
     pub fn is_final(&self, value: &str) -> bool {
         Self::FINAL.contains(&value)
+    }
+
+    /// Final, or retired without a finish: either way no longer waiting.
+    pub fn is_settled(&self, value: &str) -> bool {
+        self.is_final(value) || value == Self::NO_FINISH
+    }
+
+    /// A status this app may have recorded itself: any reportable status or a retired call.
+    pub fn recorded_status(&self, value: Option<&str>) -> Result<String, String> {
+        match value {
+            Some(Self::NO_FINISH) => Ok(Self::NO_FINISH.to_string()),
+            _ => self.status(value),
+        }
     }
 
     pub fn exit_code(&self, value: Option<i64>) -> Result<Option<i64>, String> {
