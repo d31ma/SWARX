@@ -219,6 +219,7 @@ impl OverviewViewUtils {
 
     fn without_history(mut view: NativeRuntimeView) -> NativeRuntimeView {
         view.group.history.clear();
+        view.group.tree_history.clear();
         view
     }
 
