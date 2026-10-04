@@ -601,3 +601,22 @@
 button {
   cursor: pointer;
 }
+
+.session-tree-empty {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.context-resource-grid:has(.mode-tree) {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.context-resource-card.mode-tree .group-graph-scroll {
+  height: 460px;
+}
+
+.session-process-card .group-graph-scroll {
+  overscroll-behavior: auto;
+}

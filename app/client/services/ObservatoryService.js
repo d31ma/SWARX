@@ -263,9 +263,12 @@ export default class ObservatoryService {
         if (revision !== this.#revision) {
             return;
         }
-        this.#element().dataset.nativeFailure = this.#failureMessage(error);
-        this.problem = ObservatoryService._COLLECTOR_UNAVAILABLE;
+        const reason = this.#failureMessage(error);
+        this.#element().dataset.nativeFailure = reason;
+        this.problem = ObservatoryService._COLLECTOR_UNAVAILABLE + ' ' + reason;
         this.status = 'Disconnected';
+        // Without a render the last snapshot stays on screen and the failure is invisible.
+        void this.#scheduler().render().catch(/** @param {unknown} renderError @returns {void} */ renderError => this.#chartFailure(renderError));
     }
 
     /** @param {unknown} error @returns {void} */

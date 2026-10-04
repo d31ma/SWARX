@@ -1328,3 +1328,31 @@ h1 {
 button {
   cursor: pointer;
 }
+
+.main.overview-loading {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.loading-message {
+  max-width: 520px;
+  padding: 24px;
+}
+
+.loading-message h1 {
+  font-size: 22px;
+  line-height: 1.4;
+}
+
+.loading-message p {
+  margin-top: 6px;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.runtime-overview,.history-overview,.activity-overview {
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 16px;
+}

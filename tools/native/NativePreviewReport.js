@@ -201,6 +201,7 @@ class NativePreviewReport {
       case 'activity': this.section('Activity'); return;
       case 'runtimes': this.section('Runtimes'); return;
       case this.#POLLS: return;
+      case 'settle': return;
       case this.#HOLD: throw new Error('Unsupported native QA action: ' + action);
       default: throw new Error('Unknown native QA action: ' + action);
     }
@@ -776,7 +777,15 @@ class NativePreviewReport {
       sessionContainers: document.querySelectorAll('.session-card').length, flatAgentCards: document.querySelectorAll('.agent-grid > .logical-agent-row').length,
       historyCards: document.querySelectorAll(this.#HISTORY_CARD).length, runtimeCards: document.querySelectorAll('.runtime-card').length,
       activityCards: document.querySelectorAll(this.#ACTIVITY_CARD_SELECTOR).length, sidebarOverflow: this.#sidebarOverflow(),
-      summaryBounds: this.#summaryBounds(), logicalRecords: this.#logicalRecords(), logicalRows: document.querySelectorAll(this.#AGENT_ROW_SELECTOR).length, appIconLoaded: iconLoaded};
+      summaryBounds: this.#summaryBounds(), logicalRecords: this.#logicalRecords(), logicalRows: document.querySelectorAll(this.#AGENT_ROW_SELECTOR).length, appIconLoaded: iconLoaded, diagnostics: this.#diagnostics()};
+  }
+
+  /** @returns {{path: string, elements: number, document: Record<string, string | undefined>, failures: {tag: string, native: string | undefined, chart: string | undefined, mount: string | null}[]}} */
+  static #diagnostics() {
+    const failures = Array.from(document.querySelectorAll('[data-native-failure],[data-chart-failure],[data-tachyon-mount-error]'),
+      /** @param {Element} element @returns {{tag: string, native: string | undefined, chart: string | undefined, mount: string | null}} */ element => ({tag: element.tagName.toLowerCase(),
+        native: /** @type {HTMLElement} */ (element).dataset.nativeFailure, chart: /** @type {HTMLElement} */ (element).dataset.chartFailure, mount: element.getAttribute('data-tachyon-mount-error')}));
+    return {path: globalThis.location?.pathname ?? '', elements: document.getElementsByTagName?.('*').length ?? 0, document: {...document.documentElement?.dataset}, failures};
   }
 
   /** @returns {{id: string, height: number, textTop: number, textBottom: number, top: number, bottom: number, lineHeight: string, appearance: string}[]} */

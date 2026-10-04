@@ -10,6 +10,7 @@
         <logic :if="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></logic>
         <p class="session-label-source">Reported label source · {session.source}</p>
         <logic :if="session.model"><p class="session-label-source session-model">Model {session.model}<logic :if="session.provider"> · provider {session.provider}</logic> · reported by {session.family} (configuration, not measured usage)</p></logic>
+        <logic :if="observatory.processView === 'tree' && session.graph.nodes.length === 0"><p class="session-tree-empty">No verified process tree for this session. Shared runtime trees are under Shared / unassigned local context.</p></logic>
         <logic :if="session.tree.length"><div class="session-process-table">
           <table><thead><tr><th scope="col">Individual process</th><th scope="col">CPU</th><th scope="col">RSS</th></tr></thead><tbody>
             <loop :for="process of session.tree">

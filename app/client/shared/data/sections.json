@@ -1,5 +1,5 @@
 [
-  {"path": "/", "key": "running", "nav": "◉ What's running", "title": "What’s running.", "wrapper": "logical-panel", "label": "Reported logical agents"},
+  {"path": "/", "alias": "/index.html", "key": "running", "nav": "◉ What's running", "title": "What’s running.", "wrapper": "logical-panel", "label": "Reported logical agents"},
   {"path": "/processes", "key": "processes", "nav": "▦ Processes", "title": "Observed processes.", "wrapper": "sessions-panel", "label": "Session processes"},
   {"path": "/runtimes", "key": "runtime", "nav": "▤ Runtimes", "title": "Runtimes.", "wrapper": "runtime-overview", "label": "Session resources and separate local context"},
   {"path": "/history", "key": "history", "nav": "⌁ Resource history", "title": "Resource history.", "wrapper": "history-overview", "label": "Session command history and separate local context"},

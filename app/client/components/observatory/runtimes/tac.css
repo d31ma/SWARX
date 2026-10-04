@@ -200,3 +200,16 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+w-card>.w-card {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+w-card.session-resource-card,w-card.context-resource-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}

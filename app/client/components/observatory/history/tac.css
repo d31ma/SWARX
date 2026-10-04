@@ -390,3 +390,16 @@
 button {
   cursor: pointer;
 }
+
+w-card>.w-card {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+w-card.session-history-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}

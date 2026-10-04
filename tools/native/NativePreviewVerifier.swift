@@ -60,6 +60,8 @@ final class NativePreviewVerifier {
         ("native-restart-live-samples", "polls", "Activity", "", normalSize, "updates")
     ] + activityLayoutSteps
     private static let expiryAction: String = "current-expiry"
+    // Holds one page past the point where a long-lived page stopped refreshing (about 41 samples).
+    private static let settleAction: String = "settle"
     private static let expiryNanoseconds: UInt64 = 130_000_000_000
     private static let currentWorkSteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
         ("native-current-live", "running", "What's running", "", normalSize, "current-work-live"),
@@ -103,12 +105,20 @@ final class NativePreviewVerifier {
         ("native-roster", "running", "What's running", "", normalSize, "logical"),
         ("native-action-history", "activity", "Activity", "", normalSize, "action-history")
     ] + activityLayoutSteps
+    private static let stabilitySteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
+        ("native-stability-start", "table", "Processes", "table", normalSize, ""),
+        ("native-stability-settled", settleAction, "Processes", "table", normalSize, ""),
+        ("native-stability-new-page", "runtimes", "Runtimes", "", normalSize, ""),
+        ("native-stability-tree", "tree", "Processes", "tree", normalSize, "tree"),
+        ("native-stability-tree-small", "tree", "Processes", "tree", smallSize, "tree")
+    ]
     private static let focusedSelections: [String: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)]] = [
         "connectors": connectorSteps,
         "resources": resourceSteps,
         "descendants": descendantSteps,
         "current-work": currentWorkSteps,
-        "active-task": activeTaskSteps
+        "active-task": activeTaskSteps,
+        "stability": stabilitySteps
     ]
     private let view: WKWebView
     private let window: NSWindow
@@ -229,7 +239,7 @@ final class NativePreviewVerifier {
     }
 
     private func waitForExpiry(_ action: String) async throws -> Void {
-        guard action == Self.expiryAction else { return }
+        guard action == Self.expiryAction || action == Self.settleAction else { return }
         try await Task.sleep(nanoseconds: Self.expiryNanoseconds)
     }
 
