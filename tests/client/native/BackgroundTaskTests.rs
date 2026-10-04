@@ -149,20 +149,12 @@ fn a_reported_background_launch_names_the_shell_group_started_after_it() -> () {
     );
     assert!(task.attribution.contains("tool_use_id toolu_watch"));
     assert_eq!(task.process_count, 3);
-    let identities: Vec<(i32, String)> = task
-        .processes
-        .iter()
-        .map(|process: &NativeProcessMetrics| -> (i32, String) {
-            (process.pid, process.started.clone())
-        })
-        .collect();
-    assert_eq!(identities[0], (7100, BackgroundTaskTests::birth(400.4)));
-    assert_eq!(identities.len(), 3);
+    assert_eq!(task.pids, vec![7100, 7101, 7102]);
     assert!(task.started_label.starts_with("Started "));
     assert!(task.started_label.ends_with("ago"));
     let wire: String = serde_json::to_string(task).unwrap();
-    assert!(!wire.contains("processes"));
-    assert!(wire.contains("\"sessionKey\""));
+    assert!(!wire.contains("pids"));
+    assert!(wire.contains("\"session_key\""));
 }
 
 #[test]
@@ -175,7 +167,7 @@ fn only_shell_children_of_the_verified_harness_root_form_groups() -> () {
     ];
     let tasks: Vec<NativeBackgroundTaskView> = BackgroundTaskTests::tasks(descendants, Vec::new());
     assert_eq!(tasks.len(), 1);
-    assert_eq!(tasks[0].processes[0].pid, 7300);
+    assert_eq!(tasks[0].pids[0], 7300);
     assert_eq!(tasks[0].process_count, 1);
 }
 
@@ -195,7 +187,7 @@ fn launches_take_the_earliest_unmatched_group_inside_their_window() -> () {
     let pairs: Vec<(i32, String)> = tasks
         .iter()
         .map(|task: &NativeBackgroundTaskView| -> (i32, String) {
-            (task.processes[0].pid, task.title.clone())
+            (task.pids[0], task.title.clone())
         })
         .collect();
     assert_eq!(
@@ -287,11 +279,7 @@ fn sleeping_watchers_wait_and_real_work_runs() -> () {
     let states: Vec<(i32, String, String)> = tasks
         .iter()
         .map(|task: &NativeBackgroundTaskView| -> (i32, String, String) {
-            (
-                task.processes[0].pid,
-                task.state.clone(),
-                task.state_label.clone(),
-            )
+            (task.pids[0], task.state.clone(), task.state_label.clone())
         })
         .collect();
     let waiting: String = BackgroundTaskTests::WAITING.to_owned();

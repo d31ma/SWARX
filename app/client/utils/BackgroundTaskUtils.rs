@@ -312,7 +312,7 @@ impl BackgroundTaskUtils {
             )
             .map(
                 |(group, record): (Vec<NativeProcessMetrics>, Option<&NativeExecutionRecord>)|
-                 -> NativeBackgroundTaskView { Self::view(session_key, group, record, now) },
+                 -> NativeBackgroundTaskView { Self::view(session_key, &group, record, now) },
             )
             .collect()
     }
@@ -344,14 +344,14 @@ impl BackgroundTaskUtils {
 
     fn view(
         session_key: &str,
-        group: Vec<NativeProcessMetrics>,
+        group: &[NativeProcessMetrics],
         record: Option<&NativeExecutionRecord>,
         now: f64,
     ) -> NativeBackgroundTaskView {
-        let busy: bool = Self::busy(&group);
-        let started: f64 = Self::launch_time(&group, record);
+        let busy: bool = Self::busy(group);
+        let started: f64 = Self::launch_time(group, record);
         NativeBackgroundTaskView {
-            key: Self::task_key(session_key, &group, record),
+            key: Self::task_key(session_key, group, record),
             session_key: session_key.to_owned(),
             title: Self::title(record),
             action: record.and_then(|record: &NativeExecutionRecord| -> Option<String> {
@@ -361,9 +361,16 @@ impl BackgroundTaskUtils {
             state_label: Self::state_label(busy).to_owned(),
             started_label: Self::started_label(started, now),
             process_count: group.len() as i64,
+            pids: Self::pids(group),
             attribution: Self::attribution(record),
-            processes: group,
         }
+    }
+
+    fn pids(group: &[NativeProcessMetrics]) -> Vec<i32> {
+        group
+            .iter()
+            .map(|process: &NativeProcessMetrics| -> i32 { process.pid })
+            .collect()
     }
 
     fn busy(group: &[NativeProcessMetrics]) -> bool {
