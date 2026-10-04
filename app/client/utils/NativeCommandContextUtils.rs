@@ -7,6 +7,9 @@ pub struct NativeCommandContextUtils;
 
 impl NativeCommandContextUtils {
     const EVENTS: &'static str = "events";
+    const RECOVERED: &'static str = "recovered";
+    // A recovered roster row keeps an already verified session link after a restart.
+    const SESSION_FEEDS: [&'static str; 2] = [Self::EVENTS, Self::RECOVERED];
     const COORDINATOR: &'static str = "coordinator-report";
     const RUNNING: &'static str = "running";
     const ACTIVE: &'static str = "active";
@@ -108,7 +111,7 @@ impl NativeCommandContextUtils {
     fn require_session(row: &NativeLogicalAgent, owner: &NativeCommandOwner) -> Result<(), String> {
         let valid: bool = [
             Self::current_session(row),
-            row.feed_mode == Self::EVENTS,
+            Self::SESSION_FEEDS.contains(&row.feed_mode.as_str()),
             owner.agent_id == owner.session_id,
             Self::session_identifier(row) == Some(owner.session_id.as_str()),
         ]

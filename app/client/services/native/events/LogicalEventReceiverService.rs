@@ -2,7 +2,7 @@ use crate::ObservationClock;
 use crate::models::{
     NativeCommandBinding, NativeCommandBindingEvent, NativeCommandBindingReceipt,
     NativeCommandContext, NativeCommandDiscriminator, NativeLogicalAgent, NativeLogicalEvent,
-    NativeLogicalReceipt,
+    NativeLogicalReceipt, NativeSessionBindingRecord,
 };
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
@@ -45,17 +45,23 @@ impl LogicalEventReceiverService {
     pub fn rows(&self) -> Vec<NativeLogicalAgent> {
         let now: f64 = self.clock.now().0;
         let state: MutexGuard<'_, LogicalStateService> = self.state_lock();
-        let live: Vec<NativeLogicalAgent> = state.rows(now);
-        self.recovery_lock().rows(&live, now)
+        self.current_rows(&state, now)
     }
 
     pub fn revision(&self) -> i64 {
         self.state_lock().revision()
     }
 
+    // Startup: the roster first, then the previous run's session links, each re-validated
+    // against its recovered owner row and the live OS process before it is bound again.
     pub fn restore(&self) -> () {
-        let _state: MutexGuard<'_, LogicalStateService> = self.state_lock();
-        self.recovery_lock().restore(self.clock.now().0);
+        let state: MutexGuard<'_, LogicalStateService> = self.state_lock();
+        let time: (f64, f64) = self.clock.now();
+        self.recovery_lock().restore(time.0);
+        let rows: Vec<NativeLogicalAgent> = self.current_rows(&state, time.0);
+        let records: Vec<NativeSessionBindingRecord> = self.saved_bindings();
+        self.commands.restore(&records, &rows);
+        self.retained_bindings(&rows, time);
     }
 
     pub fn errors(&self) -> Vec<String> {
@@ -67,7 +73,33 @@ impl LogicalEventReceiverService {
     pub fn command_bindings(&self) -> Vec<NativeCommandBinding> {
         let time: (f64, f64) = self.clock.now();
         let state: MutexGuard<'_, LogicalStateService> = self.state_lock();
-        self.commands.bindings(&state.rows(time.0), time)
+        let rows: Vec<NativeLogicalAgent> = self.current_rows(&state, time.0);
+        self.retained_bindings(&rows, time)
+    }
+
+    // Live rows plus recovered roster rows: a recovered session keeps its verified link.
+    fn current_rows(&self, state: &LogicalStateService, now: f64) -> Vec<NativeLogicalAgent> {
+        let live: Vec<NativeLogicalAgent> = state.rows(now);
+        self.recovery_lock().rows(&live, now)
+    }
+
+    fn retained_bindings(
+        &self,
+        rows: &[NativeLogicalAgent],
+        time: (f64, f64),
+    ) -> Vec<NativeCommandBinding> {
+        let bindings: Vec<NativeCommandBinding> = self.commands.bindings(rows, time);
+        let records: Vec<NativeSessionBindingRecord> =
+            NativeCommandEventService::session_records(&bindings, rows);
+        self.recovery_lock().persist_bindings(records);
+        bindings
+    }
+
+    fn saved_bindings(&self) -> Vec<NativeSessionBindingRecord> {
+        match self.commands.enabled() {
+            true => self.recovery_lock().restored_bindings(),
+            false => Vec::new(),
+        }
     }
 
     fn apply(&self, data: &[u8]) -> Result<NativeLogicalReceipt, String> {
@@ -117,7 +149,8 @@ impl LogicalEventReceiverService {
         let mut state: MutexGuard<'_, LogicalStateService> = self.state_lock();
         let revision: i64 = state.apply(&event, time.0)?;
         let live: Vec<NativeLogicalAgent> = state.rows(time.0);
-        self.commands.bindings(&live, time);
+        let rows: Vec<NativeLogicalAgent> = self.current_rows(&state, time.0);
+        self.retained_bindings(&rows, time);
         self.recovery_lock().persist(&live, time.0);
         Ok(self.wire.accepted(revision))
     }
@@ -142,7 +175,8 @@ impl LogicalEventReceiverService {
         let prepared = self.commands.prepare(&event, &context)?;
         let mut state: MutexGuard<'_, LogicalStateService> = self.state_lock();
         let time: (f64, f64) = self.clock.now();
-        self.commands.bindings(&state.rows(time.0), time);
+        let rows: Vec<NativeLogicalAgent> = self.current_rows(&state, time.0);
+        self.retained_bindings(&rows, time);
         let current: NativeCommandContext =
             state.command_context(&event.owner, NativeCommandEventService::user(), time.0)?;
         let binding = self.commands.commit(&prepared, &current)?;

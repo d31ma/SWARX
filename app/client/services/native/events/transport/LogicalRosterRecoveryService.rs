@@ -1,4 +1,4 @@
-use crate::models::NativeLogicalAgent;
+use crate::models::{NativeLogicalAgent, NativeSessionBindingRecord};
 use std::collections::HashSet;
 
 #[Service]
@@ -7,11 +7,14 @@ pub struct LogicalRosterRecoveryService {
     recovered: Vec<NativeLogicalAgent>,
     failure: Option<String>,
     history: LogicalExecutionHistoryService,
+    bindings: Option<Vec<NativeSessionBindingRecord>>,
+    binding_failure: Option<String>,
 }
 
 impl LogicalRosterRecoveryService {
     const LIMIT: usize = 100;
     const FAILURE_PREFIX: &'static str = "Roster recovery unavailable";
+    const BINDING_PREFIX: &'static str = "Session link recovery unavailable";
 
     pub fn new(store: Result<LogicalRosterStoreService, String>) -> Self {
         let failure: Option<String> = store.as_ref().err().cloned().map(Self::failure_text);
@@ -20,6 +23,8 @@ impl LogicalRosterRecoveryService {
             recovered: Vec::new(),
             failure,
             history: LogicalExecutionHistoryService::default(),
+            bindings: None,
+            binding_failure: None,
         }
     }
 
@@ -43,7 +48,53 @@ impl LogicalRosterRecoveryService {
     }
 
     pub fn errors(&self) -> Vec<String> {
-        Self::error_rows(&self.failure)
+        let mut errors: Vec<String> = Self::error_rows(&self.failure);
+        errors.extend(Self::error_rows(&self.binding_failure));
+        errors
+    }
+
+    // The previous run's session links, read once at startup; persisting starts only after this,
+    // so a new run never overwrites them before they are re-validated.
+    pub fn restored_bindings(&mut self) -> Vec<NativeSessionBindingRecord> {
+        // Without a roster store the roster failure already explains the missing recovery.
+        let result: Result<Vec<NativeSessionBindingRecord>, String> = self
+            .store
+            .as_ref()
+            .map_or(Ok(Vec::new()), LogicalRosterStoreService::load_bindings);
+        self.binding_failure = result.as_ref().err().cloned().map(Self::binding_text);
+        let records: Vec<NativeSessionBindingRecord> = result.unwrap_or_default();
+        self.bindings = Some(records.clone());
+        records
+    }
+
+    // Writes the current session links when they differ from the last saved set.
+    pub fn persist_bindings(&mut self, records: Vec<NativeSessionBindingRecord>) -> () {
+        let changed: bool = self
+            .bindings
+            .as_ref()
+            .is_some_and(|saved: &Vec<NativeSessionBindingRecord>| -> bool { *saved != records });
+        self.save_changed(records, changed);
+    }
+
+    fn save_changed(&mut self, records: Vec<NativeSessionBindingRecord>, changed: bool) -> () {
+        if changed {
+            let result: Result<(), String> = self.store.as_ref().map_or(
+                Ok(()),
+                |store: &LogicalRosterStoreService| -> Result<(), String> {
+                    store.save_bindings(&records)
+                },
+            );
+            // A failed write keeps the old set, so the next read retries it.
+            self.binding_failure = result.as_ref().err().cloned().map(Self::binding_text);
+            self.bindings = result
+                .map(|_saved: ()| -> Vec<NativeSessionBindingRecord> { records })
+                .ok()
+                .or(self.bindings.take());
+        }
+    }
+
+    fn binding_text(failure: String) -> String {
+        Self::prefixed(Self::BINDING_PREFIX, failure)
     }
 
     fn load(&self, now: f64) -> Result<Vec<NativeLogicalAgent>, String> {
@@ -154,6 +205,10 @@ impl LogicalRosterRecoveryService {
     }
 
     fn failure_text(failure: String) -> String {
-        format!("{}: {failure}", Self::FAILURE_PREFIX)
+        Self::prefixed(Self::FAILURE_PREFIX, failure)
+    }
+
+    fn prefixed(prefix: &str, failure: String) -> String {
+        format!("{prefix}: {failure}")
     }
 }

@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 pub struct LogicalRosterFileService {
     directory: PathBuf,
     owner_identifier: u32,
+    file_name: String,
 }
 
 impl LogicalRosterFileService {
@@ -28,12 +29,18 @@ impl LogicalRosterFileService {
     const IO_FAILURE: &'static str = "Roster storage is unavailable.";
 
     pub fn new(endpoint: &str) -> Result<Self, String> {
+        Self::named(endpoint, Self::FILE_NAME)
+    }
+
+    // Another app-owned file in the same private directory, with the same rules.
+    pub fn named(endpoint: &str, file_name: &'static str) -> Result<Self, String> {
         let path: &Path = Path::new(endpoint);
         Self::require_endpoint(path)?;
         let directory: PathBuf = path.parent().ok_or_else(Self::unsafe_error)?.to_path_buf();
         Ok(Self {
             directory,
             owner_identifier: unsafe { libc::geteuid() },
+            file_name: file_name.to_owned(),
         })
     }
 
@@ -95,7 +102,7 @@ impl LogicalRosterFileService {
     }
 
     fn existing(&self, directory: &File) -> Result<Option<File>, String> {
-        let name: CString = Self::native_string(Self::FILE_NAME.as_bytes())?;
+        let name: CString = Self::native_string(self.file_name.as_bytes())?;
         self.open_optional(directory, &name)
     }
 
@@ -168,7 +175,7 @@ impl LogicalRosterFileService {
         file.write_all(bytes).map_err(Self::io_failure)?;
         file.sync_all().map_err(Self::io_failure)?;
         self.existing(directory)?;
-        let final_name: CString = Self::native_string(Self::FILE_NAME.as_bytes())?;
+        let final_name: CString = Self::native_string(self.file_name.as_bytes())?;
         let result: i32 = unsafe {
             libc::renameat(
                 directory.as_raw_fd(),

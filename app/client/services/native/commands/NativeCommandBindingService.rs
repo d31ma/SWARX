@@ -87,6 +87,23 @@ impl NativeCommandBindingService {
         self.commit_observation(&prepared.event, current, time)
     }
 
+    // A session link saved by the previous run: bound again only when the live process still has
+    // the same pid, start time, user and executable, exactly as the receiver checks a new link.
+    pub fn restore(
+        &mut self,
+        event: &NativeCommandBindingEvent,
+        user: i64,
+    ) -> Result<Option<NativeCommandBinding>, String> {
+        Self::require(event.kind == Self::SESSION, Self::INVALID_SCHEMA)?;
+        Self::validate_event(event)?;
+        let observed: Result<(), String> =
+            self.observe(event)
+                .and_then(|process: Option<NativeProcess>| -> Result<(), String> {
+                    Self::validate_observed(event, user, process)
+                });
+        self.commit_observation(event, observed, self.clock.now())
+    }
+
     fn validate_event(event: &NativeCommandBindingEvent) -> Result<(), String> {
         Self::require(event.version == Self::VERSION, Self::INVALID_SCHEMA)?;
         Self::validate_owner(event)?;
