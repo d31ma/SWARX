@@ -814,3 +814,60 @@ fn latest_hook_reported_model_wins_within_one_session() -> () {
     let sessions: Vec<NativeSessionView> = SessionViewUtils::sessions(&[silent, older]);
     assert_eq!(sessions[0].model.as_deref(), Some("gpt-5.1-codex"));
 }
+
+#[test]
+fn live_agents_show_the_exact_harness_session_title_without_changing_agent_identity() -> () {
+    let session: &str = SessionIdentityTests::CLAUDE_SESSION;
+    let reported = SessionIdentityTests::link(session, session, SessionIdentityTests::SOURCE);
+    let main = SessionIdentityTests::agent(session, "Claude", Some(reported.clone()), 10.0);
+    let delegated_id: String = format!("{session}:ab46ed1e45b8a1b4a");
+    let delegated = SessionIdentityTests::agent(&delegated_id, "Claude", Some(reported), 10.0);
+    let harness = SessionIdentityTests::harness(session, Some("SWARX"), Some("Implement"));
+    let named: Vec<NativeLogicalAgentView> =
+        SessionViewUtils::named_agents(vec![main, delegated], &[harness]);
+    for agent in &named {
+        let link: &NativeSessionLink = agent.session.as_ref().unwrap();
+        assert_eq!(link.name, "SWARX/Implement");
+        assert_eq!(link.id, session);
+        assert_eq!(link.source, SessionIdentityTests::HARNESS_SOURCE);
+        assert_eq!(agent.name, "Fixture role");
+    }
+    assert_eq!(named[0].id, session);
+    assert_eq!(named[1].id, delegated_id);
+}
+
+#[test]
+fn live_agent_without_a_matching_harness_title_keeps_its_reported_session() -> () {
+    let reported = SessionIdentityTests::link(
+        "unmatched-session",
+        "unmatched-session",
+        SessionIdentityTests::SOURCE,
+    );
+    let agent =
+        SessionIdentityTests::agent("unmatched-session", "Claude", Some(reported.clone()), 10.0);
+    let harness = SessionIdentityTests::harness(
+        SessionIdentityTests::CLAUDE_SESSION,
+        Some("SWARX"),
+        Some("Implement"),
+    );
+    let named = SessionViewUtils::named_agents(vec![agent], &[harness]);
+    let link: &NativeSessionLink = named[0].session.as_ref().unwrap();
+    assert_eq!(
+        (link.id.as_str(), link.name.as_str(), link.source.as_str()),
+        (
+            reported.id.as_str(),
+            reported.name.as_str(),
+            reported.source.as_str()
+        )
+    );
+}
+
+#[test]
+fn live_agent_title_requires_the_same_provider_family() -> () {
+    let session: &str = SessionIdentityTests::CLAUDE_SESSION;
+    let reported = SessionIdentityTests::link(session, session, SessionIdentityTests::SOURCE);
+    let agent = SessionIdentityTests::agent(session, "Codex", Some(reported), 10.0);
+    let harness = SessionIdentityTests::harness(session, Some("SWARX"), Some("Implement"));
+    let named = SessionViewUtils::named_agents(vec![agent], &[harness]);
+    assert_eq!(named[0].session.as_ref().unwrap().name, session);
+}

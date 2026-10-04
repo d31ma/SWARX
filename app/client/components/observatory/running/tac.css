@@ -391,3 +391,10 @@
   font-size: 14px;
   line-height: 1.6;
 }
+
+.agent-role {
+  margin: 2px 0 4px;
+  color: #c9d3ec;
+  font-size: 13px;
+  line-height: 1.5;
+}

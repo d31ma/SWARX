@@ -49,6 +49,20 @@ impl SessionViewUtils {
             .collect()
     }
 
+    // Live agent cards carry the harness session title for their exact family and session ID.
+    pub fn named_agents(
+        agents: Vec<NativeLogicalAgentView>,
+        harness: &[NativeHarnessSession],
+    ) -> Vec<NativeLogicalAgentView> {
+        let ordered: Vec<NativeHarnessSession> = Self::newest_first(harness);
+        agents
+            .into_iter()
+            .map(|agent: NativeLogicalAgentView| -> NativeLogicalAgentView {
+                Self::rename_agent(agent, &ordered)
+            })
+            .collect()
+    }
+
     pub fn linked_count(sessions: &[NativeSessionView]) -> i64 {
         Self::linked(sessions)
     }
@@ -265,6 +279,22 @@ impl SessionViewUtils {
             session.provider = candidate.provider.clone();
         }
         session
+    }
+
+    fn rename_agent(
+        mut agent: NativeLogicalAgentView,
+        harness: &[NativeHarnessSession],
+    ) -> NativeLogicalAgentView {
+        let id: Option<String> = agent
+            .session
+            .as_ref()
+            .map(|session: &NativeSessionLink| -> String { session.id.clone() });
+        let label: Option<NativeSessionLink> =
+            Self::harness_label(harness, &agent.family, id.as_deref());
+        if let Some(label) = label {
+            agent.session = Some(label);
+        }
+        agent
     }
 
     fn rename_activity(

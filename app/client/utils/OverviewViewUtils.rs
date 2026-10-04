@@ -54,8 +54,10 @@ impl OverviewViewUtils {
         let available: String = Self::available(snapshot.ready);
         let sample_age: f64 = Self::age(snapshot.sampled_at, now);
         let live_status: String = Self::fresh(sample_age, available);
-        let logical: Vec<NativeLogicalAgentView> =
-            Self::running_agents(&snapshot.logical_views, now);
+        let logical: Vec<NativeLogicalAgentView> = SessionViewUtils::named_agents(
+            Self::running_agents(&snapshot.logical_views, now),
+            &snapshot.harness_sessions,
+        );
         let logical_count: i64 = logical.len() as i64;
         let all_resource_sessions: Vec<NativeSessionResourceView> =
             SessionResourceUtils::build(&snapshot.session_groups, now);

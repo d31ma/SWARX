@@ -3,7 +3,7 @@
 <div :class="'logical-scroll agent-grid' + (observatory.model.logicalCount === 0 ? ' is-empty' : '')">
   <loop :for="agent of observatory.model.logical">
     <article :class="'logical-agent-row logical-state-' + agent.status" :data-agent="agent.id" :data-session="agent.session ? agent.session.id : ''" :data-task="agent.task ? agent.task.id : ''" :data-family="agent.family" :data-source="agent.source">
-      <div class="logical-title"><div><h3>{agent.name}</h3><small>{agent.family} · {agent.session ? agent.session.name : 'Session not linked'}</small></div><span :class="'status-pill state-' + agent.status">{agent.status}</span></div>
+      <div class="logical-title"><div><h3>{agent.session ? (agent.session.name === agent.session.id ? 'Session title not reported' : agent.session.name) : 'Session not linked'}</h3><p class="agent-role">{agent.session && agent.id === agent.session.id ? 'Main agent' : 'Agent'} · {agent.name}</p><small>{agent.family} · {agent.session && agent.session.name !== agent.session.id ? 'Title from ' + agent.session.source : 'No local session title'}</small></div><span :class="'status-pill state-' + agent.status">{agent.status}</span></div>
       <p class="agent-session-id">{agent.session ? 'Session ID · ' + agent.session.id : 'No verified session ID supplied'}</p>
       <details class="agent-identity"><summary>Technical identity</summary><p>{agent.id}</p></details>
       <div class="feed-time">{agent.feedLabel} · {agent.source}<br />{agent.capturedLabel} · {agent.ageLabel}</div>
