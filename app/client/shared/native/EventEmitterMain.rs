@@ -22,7 +22,7 @@ impl EventEmitterMain {
     const USAGE: &'static str = "Usage: observatory-event [--socket /absolute/private/path] < event.json; or observatory-event --claude-hook|--codex-hook|--qwen-hook|--pi-hook|--goose-hook|--gemini-hook|--opencode-hook [--socket /absolute/private/path] < hook.json; or observatory-event --identity <positive-decimal-pid>";
     const INVALID_PID: &'static str = "Identity query requires a positive decimal PID.";
     const UNSUPPORTED: &'static str =
-        "Process identity query unavailable: this target is not supported; macOS or Linux is required.";
+        "Process identity query unavailable: this target is not supported; macOS, Linux or Windows is required.";
     const IDENTITY_UNAVAILABLE: &'static str = "Process identity unavailable or changed.";
     const SUCCESS_CODE: i32 = 0;
 
@@ -71,16 +71,16 @@ impl EventEmitterMain {
         Self::hook_adapter(ClaudeHookAdapter::new(endpoint, dialect)).deliver(&mut input)
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(any(target_os = "macos", target_os = "linux", windows))]
     fn hook_adapter(adapter: ClaudeHookAdapter) -> ClaudeHookAdapter {
-        let user: i64 = i64::from(unsafe { libc::getuid() });
-        let origin: i32 = std::os::unix::process::parent_id() as i32;
+        let user: i64 = crate::services::NativePlatformCompositionService::current_user();
+        let origin: i32 = crate::services::NativePlatformCompositionService::parent_process();
         let reader: Box<dyn ProcessIdentityReader> =
             crate::services::NativePlatformCompositionService::identity_reader();
         adapter.with_process_root(reader, user, origin)
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     fn hook_adapter(adapter: ClaudeHookAdapter) -> ClaudeHookAdapter {
         adapter
     }
@@ -145,7 +145,7 @@ impl EventEmitterMain {
         Ok(())
     }
 
-    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[cfg(any(target_os = "macos", target_os = "linux", windows))]
     fn platform_identity(pid: i32) -> Result<NativeCommandIdentity, String> {
         Self::require_platform(true)?;
         let mut reader: Box<dyn ProcessIdentityReader> =
@@ -153,7 +153,7 @@ impl EventEmitterMain {
         Self::read_identity(reader.as_mut(), pid)
     }
 
-    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux", windows)))]
     fn platform_identity(_pid: i32) -> Result<NativeCommandIdentity, String> {
         Self::require_platform(false)?;
         Err(Self::UNSUPPORTED.to_owned())

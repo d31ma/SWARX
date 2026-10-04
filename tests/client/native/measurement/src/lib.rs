@@ -61,6 +61,25 @@ mod kernel_reader {
 mod kernel_network {
     include!(concat!(env!("OUT_DIR"), "/KernelNetworkReaderService.rs"));
 }
+mod owned_handle {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../app/client/shared/native/WindowsOwnedHandle.rs"
+    ));
+}
+pub use owned_handle::*;
+mod windows_conversion {
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/WindowsProcessConversionService.rs"
+    ));
+}
+#[cfg_attr(not(windows), allow(unused_imports, dead_code))]
+mod windows_reader {
+    use super::*;
+    include!(concat!(env!("OUT_DIR"), "/WindowsProcessReaderService.rs"));
+}
+pub use {windows_conversion::*, windows_reader::*};
 mod platform {
     use super::*;
     include!(concat!(

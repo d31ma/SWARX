@@ -21,20 +21,25 @@ export class NativeRustPackager {
   private static readonly FIXTURE_NAME: string = 'overview-fixture';
   private static readonly FIXTURE_FEATURE: string = 'native-fixture';
   private static readonly EXECUTABLE_MODE: number = 0o755;
+  private static readonly WINDOWS_PLATFORM: NodeJS.Platform = 'win32';
+  private static readonly WINDOWS_DEPENDENCIES: string = [`[target.'cfg(windows)'.dependencies]`,
+    'windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_ProcessStatus", "Win32_System_Threading"] }', ''].join('\n');
   private readonly root: string;
   private readonly artifacts: string;
   private readonly source: string;
   private readonly cache: string;
   private readonly target: string;
   private readonly run: (command: readonly string[], quiet?: boolean) => void;
+  private readonly platform: NodeJS.Platform;
 
-  constructor(root: string, run: (command: readonly string[], quiet?: boolean) => void = ToolCommandUtils.run) {
+  constructor(root: string, run: (command: readonly string[], quiet?: boolean) => void = ToolCommandUtils.run, platform: NodeJS.Platform = process.platform) {
     this.root = path.resolve(root);
     this.artifacts = ToolPathUtils.external(this.root, 'OBSERVATORY_NATIVE_ARTIFACTS');
     this.source = path.join(this.artifacts, NativeRustPackager.SOURCE_PATH);
     this.cache = ToolPathUtils.external(this.root, 'OBSERVATORY_RUST_CACHE_PATH');
     this.target = ToolPathUtils.cargoTarget(this.root, this.cache);
     this.run = run;
+    this.platform = platform;
   }
 
   static main(source: string): void {
@@ -62,7 +67,7 @@ export class NativeRustPackager {
       NativeRustPackager.BINARY_SECTION, `name = "${NativeRustPackager.EMITTER_NAME}"`, 'path = "emitter.rs"', NativeRustPackager.BINARY_SECTION, `name = "${NativeRustPackager.FIXTURE_NAME}"`,
       'path = "overview-fixture/main.rs"', `required-features = ["${NativeRustPackager.FIXTURE_FEATURE}"]`,
       '[features]', `${NativeRustPackager.FIXTURE_FEATURE} = []`, '[dependencies]', 'libc = "=0.2.189"',
-      'serde = { version = "=1.0.229", features = ["derive"] }', 'serde_json = "=1.0.151"', 'regex = "=1.13.1"', ''].join('\n');
+      'serde = { version = "=1.0.229", features = ["derive"] }', 'serde_json = "=1.0.151"', 'regex = "=1.13.1"', ''].join('\n') + this.platformDependencies();
   }
 
   boundaryExports(): string {
@@ -76,6 +81,11 @@ export class NativeRustPackager {
   emitterExports(): string {
     return `${NativeRustPackager.MARKER}pub use crate::TachyonRustServices::{LogicalEventClientService, LogicalEventWireService, LogicalSocketService};\n`
       + 'pub use crate::TachyonRustServices::NativePlatformCompositionService;\n}\n';
+  }
+
+  private platformDependencies(): string {
+    if (this.platform !== NativeRustPackager.WINDOWS_PLATFORM) return '';
+    return NativeRustPackager.WINDOWS_DEPENDENCIES;
   }
 
   private static buildRoot(root: string): void {
