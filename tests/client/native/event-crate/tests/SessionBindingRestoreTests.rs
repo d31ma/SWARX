@@ -4,13 +4,15 @@ mod clock;
 mod identity_reader;
 use clock::CommandBindingClock;
 use event_slice::models::{
-    NativeClaudeHookPayload, NativeCommandBinding, NativeCommandBindingEvent,
-    NativeCommandIdentity, NativeLogicalAgent, NativeLogicalReceipt, NativeProcess,
+    NativeClaudeHookPayload, NativeCommandBinding, NativeCommandBindingEvent, NativeCommandContext,
+    NativeCommandIdentity, NativeCommandOwner, NativeLogicalAgent, NativeLogicalReceipt,
+    NativeProcess,
 };
 use event_slice::services::{
     LogicalEventReceiverService, LogicalRosterStoreService, NativeCommandBindingRegistryService,
     NativeCommandEventService,
 };
+use event_slice::utils::NativeCommandContextUtils;
 use event_slice::{ClaudeHookAdapter, ClaudeHookEventFactory, ClaudeHookMapper};
 use identity_reader::CommandBindingIdentityReader;
 use std::fs;
@@ -110,8 +112,34 @@ impl SessionBindingRestoreTests {
     }
 
     fn hook(app: &AppRun, event: &str) -> () {
-        let payload: NativeClaudeHookPayload = Self::payload(event);
-        for logical in ClaudeHookMapper::events(&payload) {
+        let receipt: NativeLogicalReceipt = Self::linked(app, &Self::payload(event));
+        assert!(receipt.accepted, "{:?}", receipt.error);
+    }
+
+    // A sub-agent of the same session: its own row, the same session harness process.
+    fn subagent(event: &str, family: &str) -> NativeClaudeHookPayload {
+        let mut payload: NativeClaudeHookPayload = Self::payload(event);
+        payload.agent_id = Some("a17f0c2e9b4d5e61".to_owned());
+        payload.agent_type = Some("general-purpose".to_owned());
+        payload.tool_use_id = Some("toolu_01FixtureSubagentCall".to_owned());
+        payload.family = family.to_owned();
+        payload
+    }
+
+    // The hook's logical events, then its session link; returns the link receipt.
+    fn linked(app: &AppRun, payload: &NativeClaudeHookPayload) -> NativeLogicalReceipt {
+        Self::events(app, payload);
+        Self::link(app, payload)
+    }
+
+    fn link(app: &AppRun, payload: &NativeClaudeHookPayload) -> NativeLogicalReceipt {
+        let link: NativeCommandBindingEvent =
+            ClaudeHookEventFactory::session_process(payload, Self::identity()).unwrap();
+        app.receiver.receive(&serde_json::to_vec(&link).unwrap())
+    }
+
+    fn events(app: &AppRun, payload: &NativeClaudeHookPayload) -> () {
+        for logical in ClaudeHookMapper::events(payload) {
             let receipt: NativeLogicalReceipt =
                 app.receiver.receive(&serde_json::to_vec(&logical).unwrap());
             assert!(
@@ -120,11 +148,32 @@ impl SessionBindingRestoreTests {
                 receipt.error
             );
         }
-        let link: NativeCommandBindingEvent =
-            ClaudeHookEventFactory::session_process(&payload, Self::identity()).unwrap();
-        let receipt: NativeLogicalReceipt =
-            app.receiver.receive(&serde_json::to_vec(&link).unwrap());
-        assert!(receipt.accepted, "{:?}", receipt.error);
+    }
+
+    // A restart after a run whose session link was never saved (the main agent then waits
+    // while only its sub-agents send hooks): the main row is recovered, nothing is bound.
+    // The session owner's command context over the receiver's current rows.
+    fn context(app: &AppRun) -> NativeCommandContext {
+        let owner: NativeCommandOwner = NativeCommandOwner {
+            agent_id: Self::SESSION.to_owned(),
+            session_id: Self::SESSION.to_owned(),
+            task_id: String::new(),
+            execution_id: String::new(),
+        };
+        NativeCommandContextUtils::context(
+            &app.receiver.rows(),
+            &owner,
+            NativeCommandEventService::user(),
+        )
+        .unwrap()
+    }
+
+    fn unsaved_restart(directory: &PathBuf) -> AppRun {
+        Self::first_run(directory);
+        fs::remove_file(directory.join(Self::FILE)).unwrap();
+        let app: AppRun = Self::restarted(directory);
+        assert!(Self::restored(&app).is_empty());
+        app
     }
 
     // The first run: a Claude session starts a long foreground Bash call and links its harness.
@@ -290,5 +339,131 @@ fn a_saved_record_must_name_a_session_root_and_a_recovered_owner_row() -> () {
     SessionBindingRestoreTests::rewrite(&directory, &original);
     let app: AppRun = SessionBindingRestoreTests::restarted(&directory);
     assert_eq!(SessionBindingRestoreTests::restored(&app).len(), 1);
+    let _ = fs::remove_dir_all(&directory);
+}
+
+#[test]
+fn a_sub_agent_hook_after_a_restart_links_the_recovered_session_and_the_link_survives_the_next_restart()
+-> () {
+    let directory: PathBuf = SessionBindingRestoreTests::directory("subagent");
+    let app: AppRun = SessionBindingRestoreTests::unsaved_restart(&directory);
+    let main: NativeLogicalAgent = app
+        .receiver
+        .rows()
+        .into_iter()
+        .find(|row: &NativeLogicalAgent| -> bool { row.id == SessionBindingRestoreTests::SESSION })
+        .unwrap();
+    assert_eq!(main.feed_mode, "recovered");
+    let receipt: NativeLogicalReceipt = SessionBindingRestoreTests::linked(
+        &app,
+        &SessionBindingRestoreTests::subagent(
+            ClaudeHookMapper::BEFORE_TOOL_USE,
+            ClaudeHookAdapter::CLAUDE_FAMILY,
+        ),
+    );
+    assert!(receipt.accepted, "{:?}", receipt.error);
+    let bindings: Vec<NativeCommandBinding> = app.receiver.command_bindings();
+    assert_eq!(bindings.len(), 1);
+    assert_eq!(
+        bindings[0].owner.agent_id,
+        SessionBindingRestoreTests::SESSION
+    );
+    assert_eq!(bindings[0].scope, "session-harness-process");
+    assert_eq!(bindings[0].validation, "os-identity-matched");
+    assert_eq!(bindings[0].run_id, "second-run");
+    let saved: serde_json::Value = SessionBindingRestoreTests::saved(&directory);
+    assert_eq!(
+        saved["bindings"][0]["owner"]["agent_id"],
+        SessionBindingRestoreTests::SESSION
+    );
+    // The next restart restores it while the same OS process is still alive.
+    let next: AppRun = SessionBindingRestoreTests::run(&directory, "third-run", (450.0, 360.0));
+    let restored: Vec<NativeCommandBinding> = SessionBindingRestoreTests::restored(&next);
+    assert_eq!(restored.len(), 1);
+    assert_eq!(restored[0].run_id, "third-run");
+    assert_eq!(restored[0].identity, SessionBindingRestoreTests::identity());
+    // The first live event's owners/retain pass keeps it: the recovered main row is an owner.
+    let mut later: NativeClaudeHookPayload = SessionBindingRestoreTests::subagent(
+        ClaudeHookMapper::BEFORE_TOOL_USE,
+        ClaudeHookAdapter::CLAUDE_FAMILY,
+    );
+    later.tool_use_id = Some("toolu_01FixtureAfterSecondRestart".to_owned());
+    SessionBindingRestoreTests::events(&next, &later);
+    assert_eq!(next.receiver.command_bindings().len(), 1);
+    assert_eq!(
+        SessionBindingRestoreTests::saved(&directory)["bindings"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+    let _ = fs::remove_dir_all(&directory);
+}
+
+#[test]
+fn a_session_link_needs_its_main_row_and_a_live_hook_row_of_the_same_session_and_family() -> () {
+    // No main row at all, live or recovered: a sub-agent hook alone does not link.
+    let directory: PathBuf = SessionBindingRestoreTests::directory("no-main");
+    let app: AppRun = SessionBindingRestoreTests::run(&directory, "first-run", (100.0, 10.0));
+    app.receiver.restore();
+    let claude: NativeClaudeHookPayload = SessionBindingRestoreTests::subagent(
+        ClaudeHookMapper::BEFORE_TOOL_USE,
+        ClaudeHookAdapter::CLAUDE_FAMILY,
+    );
+    assert!(!SessionBindingRestoreTests::linked(&app, &claude).accepted);
+    assert!(app.receiver.command_bindings().is_empty());
+    let _ = fs::remove_dir_all(&directory);
+    // A recovered main row without any live hook row of its session: no fresh evidence.
+    let directory: PathBuf = SessionBindingRestoreTests::directory("no-live");
+    let app: AppRun = SessionBindingRestoreTests::unsaved_restart(&directory);
+    assert!(!SessionBindingRestoreTests::link(&app, &claude).accepted);
+    assert!(app.receiver.command_bindings().is_empty());
+    assert!(SessionBindingRestoreTests::context(&app).recovered);
+    // A live hook row of another Claude session is not this session's evidence.
+    let mut other: NativeClaudeHookPayload =
+        SessionBindingRestoreTests::payload(ClaudeHookMapper::SESSION_START);
+    other.session_id = Some("0b1c2d3e-4f50-4a55-9e6a-7f8c2a401d3b".to_owned());
+    SessionBindingRestoreTests::events(&app, &other);
+    assert!(!SessionBindingRestoreTests::link(&app, &claude).accepted);
+    // A fresh coordinator-reported row of the session is a report, not a hook of its process.
+    let report: String = format!(
+        r#"{{"type":"logical.coordination.upsert","agent":"/root/worker","session_id":"{}","family":"Claude","status":"running"}}"#,
+        SessionBindingRestoreTests::SESSION
+    );
+    assert!(app.receiver.receive(report.as_bytes()).accepted);
+    assert!(!SessionBindingRestoreTests::link(&app, &claude).accepted);
+    // A live row of the same session id from another family is not this session's hook.
+    let mut codex: NativeClaudeHookPayload = SessionBindingRestoreTests::subagent(
+        ClaudeHookMapper::BEFORE_TOOL_USE,
+        ClaudeHookAdapter::CODEX_FAMILY,
+    );
+    codex.agent_id = Some("c0dex0agent".to_owned());
+    codex.tool_use_id = Some("call_FixtureCodexCall".to_owned());
+    SessionBindingRestoreTests::events(&app, &codex);
+    assert!(!SessionBindingRestoreTests::link(&app, &claude).accepted);
+    // A sub-agent hook row that has gone stale is no longer fresh evidence.
+    SessionBindingRestoreTests::events(&app, &claude);
+    app.clock.set(530.0, 440.0);
+    assert!(!SessionBindingRestoreTests::link(&app, &claude).accepted);
+    assert!(app.receiver.command_bindings().is_empty());
+    // A fresh sub-agent hook still needs the exact live OS identity (pid reuse refused).
+    let finished: NativeClaudeHookPayload = SessionBindingRestoreTests::subagent(
+        ClaudeHookMapper::POST_TOOL_USE,
+        ClaudeHookAdapter::CLAUDE_FAMILY,
+    );
+    let mut reused: NativeProcess =
+        SessionBindingRestoreTests::process(&SessionBindingRestoreTests::identity());
+    reused.started = "1791070000:1".to_owned();
+    *app.observed.lock().unwrap() = Ok(Some(reused));
+    assert!(!SessionBindingRestoreTests::linked(&app, &finished).accepted);
+    assert!(app.receiver.command_bindings().is_empty());
+    *app.observed.lock().unwrap() = Ok(Some(SessionBindingRestoreTests::process(
+        &SessionBindingRestoreTests::identity(),
+    )));
+    assert!(SessionBindingRestoreTests::link(&app, &finished).accepted);
+    assert_eq!(app.receiver.command_bindings().len(), 1);
+    let context: NativeCommandContext = SessionBindingRestoreTests::context(&app);
+    assert!(!context.recovered);
+    assert_eq!(context.feed_mode, "events");
     let _ = fs::remove_dir_all(&directory);
 }

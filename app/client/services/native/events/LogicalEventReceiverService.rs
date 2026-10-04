@@ -4,6 +4,7 @@ use crate::models::{
     NativeCommandContext, NativeCommandDiscriminator, NativeLogicalAgent, NativeLogicalEvent,
     NativeLogicalReceipt, NativeSessionBindingRecord,
 };
+use crate::utils::NativeCommandContextUtils;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 #[Service]
@@ -160,11 +161,12 @@ impl LogicalEventReceiverService {
         incoming: &NativeCommandBindingEvent,
     ) -> Result<(NativeCommandBindingEvent, NativeCommandContext), String> {
         let state: MutexGuard<'_, LogicalStateService> = self.state_lock();
-        let event: NativeCommandBindingEvent = state.command_event(incoming)?;
-        let context: NativeCommandContext = state.command_context(
+        let rows: Vec<NativeLogicalAgent> = self.current_rows(&state, self.clock.now().0);
+        let event: NativeCommandBindingEvent = state.command_event(incoming, &rows)?;
+        let context: NativeCommandContext = NativeCommandContextUtils::context(
+            &rows,
             &event.owner,
             NativeCommandEventService::user(),
-            self.clock.now().0,
         )?;
         Ok((event, context))
     }
@@ -177,8 +179,11 @@ impl LogicalEventReceiverService {
         let time: (f64, f64) = self.clock.now();
         let rows: Vec<NativeLogicalAgent> = self.current_rows(&state, time.0);
         self.retained_bindings(&rows, time);
-        let current: NativeCommandContext =
-            state.command_context(&event.owner, NativeCommandEventService::user(), time.0)?;
+        let current: NativeCommandContext = NativeCommandContextUtils::context(
+            &rows,
+            &event.owner,
+            NativeCommandEventService::user(),
+        )?;
         let binding = self.commands.commit(&prepared, &current)?;
         let revision: i64 = state.command_revision();
         let command: NativeCommandBindingReceipt = NativeCommandBindingReceipt {

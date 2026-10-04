@@ -1,6 +1,6 @@
 use crate::models::{
-    NativeCommandBindingEvent, NativeCommandContext, NativeCommandOwner, NativeExecutionRecord,
-    NativeLogicalAgent, NativeLogicalEvent, NativeSessionLink, NativeTaskRecord,
+    NativeCommandBindingEvent, NativeCommandOwner, NativeExecutionRecord, NativeLogicalAgent,
+    NativeLogicalEvent, NativeSessionLink, NativeTaskRecord,
 };
 use crate::utils::NativeCommandContextUtils;
 use std::collections::BTreeMap;
@@ -40,27 +40,20 @@ impl LogicalStateService {
         self.revision
     }
 
+    // The owner row comes from the current rows, live or recovered: after a restart a session's
+    // main agent may only be a recovered row while its sub-agents send the hooks.
     pub fn command_event(
         &self,
         event: &NativeCommandBindingEvent,
+        rows: &[NativeLogicalAgent],
     ) -> Result<NativeCommandBindingEvent, String> {
         let mut normalized: NativeCommandBindingEvent = event.clone();
         normalized.owner.agent_id = self.command_identity(&event.owner)?;
-        NativeCommandContextUtils::require_session_root(
-            self.agents.get(&normalized.owner.agent_id),
-            &normalized,
-        )?;
+        let owner: Option<&NativeLogicalAgent> = rows
+            .iter()
+            .find(|row: &&NativeLogicalAgent| -> bool { row.id == normalized.owner.agent_id });
+        NativeCommandContextUtils::require_session_root(owner, &normalized)?;
         Ok(normalized)
-    }
-
-    pub fn command_context(
-        &self,
-        owner: &NativeCommandOwner,
-        user: i64,
-        now: f64,
-    ) -> Result<NativeCommandContext, String> {
-        let rows: Vec<NativeLogicalAgent> = self.rows(now);
-        NativeCommandContextUtils::context(&rows, owner, user)
     }
 
     pub fn command_revision(&mut self) -> i64 {

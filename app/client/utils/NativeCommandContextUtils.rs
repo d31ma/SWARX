@@ -38,12 +38,13 @@ impl NativeCommandContextUtils {
             .find(|row: &&NativeLogicalAgent| -> bool { row.id == owner.agent_id })
             .ok_or_else(|| -> String { Self::UNAVAILABLE.to_owned() })?;
         Self::owner_check(owner)(row, owner)?;
+        let evidence: &NativeLogicalAgent = Self::evidence(rows, row);
         Ok(NativeCommandContext {
             owner: owner.clone(),
             active: true,
             fresh: true,
-            recovered: false,
-            feed_mode: row.feed_mode.clone(),
+            recovered: evidence.feed_mode == Self::RECOVERED,
+            feed_mode: evidence.feed_mode.clone(),
             user,
         })
     }
@@ -118,6 +119,31 @@ impl NativeCommandContextUtils {
         .into_iter()
         .all(std::convert::identity);
         Self::require_valid(valid)
+    }
+
+    // A recovered session row is current again only through a live hook row of the same session
+    // and family, such as a sub-agent's after a restart; without one it stays recovered.
+    fn evidence<'a>(
+        rows: &'a [NativeLogicalAgent],
+        row: &'a NativeLogicalAgent,
+    ) -> &'a NativeLogicalAgent {
+        if row.feed_mode != Self::RECOVERED {
+            return row;
+        }
+        rows.iter()
+            .find(|live: &&NativeLogicalAgent| -> bool { Self::live_hook(live, row) })
+            .unwrap_or(row)
+    }
+
+    fn live_hook(live: &NativeLogicalAgent, row: &NativeLogicalAgent) -> bool {
+        [
+            live.feed_mode == Self::EVENTS,
+            !live.stale,
+            live.family == row.family,
+            Self::session_identifier(live) == Self::session_identifier(row),
+        ]
+        .into_iter()
+        .all(std::convert::identity)
     }
 
     fn current_session(row: &NativeLogicalAgent) -> bool {
