@@ -10,6 +10,10 @@ unknown. Shared desktop processes and remote model work are not divided into
 invented per-agent resource totals. Missing, denied, stale and reset measurements
 keep their availability labels.
 
+Swarx monitors agent work that runs on this machine. Cloud agent sessions, such as Codex
+desktop cloud threads, run remotely and send no local events, so they do not appear; an open
+desktop client by itself is not counted as active work.
+
 The application keeps measurements and opt-in task events local. The collectors
 do not read prompts, session transcripts or terminal output. Event adapters must
 provide safe, already-sanitized action labels. Supported redaction covers bounded
