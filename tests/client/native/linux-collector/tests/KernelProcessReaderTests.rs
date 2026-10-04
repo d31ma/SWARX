@@ -28,12 +28,21 @@ fn sample_contains_this_process_with_a_matching_identity() -> () {
         ProcessIdentityReader::read_identity(&mut KernelProcessReaderService::new(), own)
             .expect("identity read")
             .expect("own pid identity");
-    let boot: String = std::fs::read_to_string("/proc/sys/kernel/random/boot_id")
+    let stat: String = std::fs::read_to_string("/proc/stat").unwrap();
+    let boot_seconds: u64 = stat
+        .lines()
+        .find_map(|line: &str| -> Option<&str> { line.strip_prefix("btime ") })
         .unwrap()
         .trim()
-        .to_owned();
+        .parse()
+        .unwrap();
+    let started_seconds: u64 = listed.started.split_once(':').unwrap().0.parse().unwrap();
     assert_eq!(listed.started, identity.started);
-    assert!(listed.started.starts_with(&format!("{boot}:")));
+    assert!(
+        started_seconds + 2 >= boot_seconds,
+        "{} after boot {boot_seconds}",
+        listed.started
+    );
     assert_eq!(listed.usage_start, identity.usage_start);
     assert!(!listed.executable.is_empty());
     assert_eq!(

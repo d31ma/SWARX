@@ -15,7 +15,13 @@ pub mod models {
             "/../../../../app/client/models/NativeKernelProcess.rs"
         ));
     }
-    pub use {native_kernel_process::*, native_process::*};
+    mod native_process_metrics {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../app/client/models/NativeProcessMetrics.rs"
+        ));
+    }
+    pub use {native_kernel_process::*, native_process::*, native_process_metrics::*};
 }
 
 mod process_reader {
@@ -53,3 +59,14 @@ mod network {
     include!(concat!(env!("OUT_DIR"), "/KernelNetworkReaderService.rs"));
 }
 pub use {network::*, reader::*};
+
+// The shared lineage walk that parses `started` as an epoch birth; Linux tests run it over /proc.
+pub mod utils {
+    mod lineage {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../app/client/utils/ProcessLineageUtils.rs"
+        ));
+    }
+    pub use lineage::*;
+}

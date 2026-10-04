@@ -17,6 +17,8 @@ impl KernelProcessTextService {
     const USER_LABEL: &'static str = "Uid:";
     const READ_LABEL: &'static str = "read_bytes:";
     const WRITE_LABEL: &'static str = "write_bytes:";
+    const BOOT_TIME_LABEL: &'static str = "btime ";
+    const MICROSECONDS: u64 = 1_000_000;
     const FIRST_PROCESS: i32 = 1;
     const NO_RATE: i64 = 0;
 
@@ -56,8 +58,25 @@ impl KernelProcessTextService {
             .map(str::to_owned)
     }
 
-    pub fn started(&self, boot: &str, start_ticks: u64) -> String {
-        format!("{boot}:{start_ticks}")
+    // Boot time in epoch seconds from the `btime` line of /proc/stat.
+    pub fn boot_seconds(&self, text: &str) -> Option<u64> {
+        self.labelled(text, Self::BOOT_TIME_LABEL)
+    }
+
+    // Process birth as "<epoch seconds>:<microseconds>", the format shared lineage, shell and
+    // command-binding code parses (macOS libproc and Windows creation time use it too).
+    pub fn started(
+        &self,
+        boot_seconds: u64,
+        start_ticks: u64,
+        ticks_per_second: i64,
+    ) -> Option<String> {
+        let rate: u64 = u64::try_from(ticks_per_second)
+            .ok()
+            .filter(|rate: &u64| -> bool { *rate > Self::NO_RATE as u64 })?;
+        let seconds: u64 = boot_seconds.checked_add(start_ticks / rate)?;
+        let microseconds: u64 = (start_ticks % rate).checked_mul(Self::MICROSECONDS)? / rate;
+        Some(format!("{seconds}:{microseconds}"))
     }
 
     pub fn identifier(&self, name: &str) -> Option<i32> {

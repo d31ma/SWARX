@@ -5,10 +5,19 @@ use std::path::{Path, PathBuf};
 // Unprivileged Linux process reader over /proc. Mirrors the macOS reader: only processes owned by
 // this user, with a stable identity and a readable executable, are returned. A process that exits
 // or changes identity mid-read is skipped; missing optional counters stay None (unavailable).
+//
+// `started` is the epoch birth "<seconds>:<microseconds>": the kernel boot time (`btime` in
+// /proc/stat) plus the process start ticks. The kernel derives btime from the wall clock minus
+// uptime, so it can move by about a second when the clock is adjusted. The reader keeps the first
+// btime it reads for each boot id, so one process keeps one identity for the life of the reader,
+// and reads btime again only after a reboot (a new boot id). A session link persisted by an
+// earlier run can therefore fail revalidation if btime moved in between; it binds again on the
+// next hook event.
 #[derive(Default)]
 #[Service]
 pub struct KernelProcessReaderService {
     text: KernelProcessTextService,
+    boot_clock: Option<(String, u64)>,
 }
 
 #[cfg(target_os = "linux")]
@@ -24,25 +33,51 @@ impl KernelProcessReaderService {
     pub fn new() -> Self {
         Self {
             text: KernelProcessTextService,
+            boot_clock: None,
         }
     }
 
-    fn read(&self) -> Result<Vec<NativeProcess>, String> {
-        let boot: String = self.boot()?;
+    fn read(&mut self) -> Result<Vec<NativeProcess>, String> {
+        let boot: u64 = self.boot_seconds()?;
         let entries: std::fs::ReadDir =
             std::fs::read_dir(Self::ROOT).map_err(|_: std::io::Error| -> String {
                 "Process collection unavailable: /proc could not be listed.".to_owned()
             })?;
         let mut processes: Vec<NativeProcess> = Vec::new();
         for entry in entries.flatten() {
-            self.append(self.entry_process(&entry, &boot), &mut processes);
+            self.append(self.entry_process(&entry, boot), &mut processes);
         }
         Ok(processes)
     }
 
-    fn read_identity(&self, identifier: i32) -> Result<Option<NativeProcess>, String> {
+    fn read_identity(&mut self, identifier: i32) -> Result<Option<NativeProcess>, String> {
+        let boot: u64 = self.boot_seconds()?;
+        Ok(self.read_process(identifier, boot))
+    }
+
+    // Boot time for this boot id: cached on first use, read again only after a reboot.
+    fn boot_seconds(&mut self) -> Result<u64, String> {
         let boot: String = self.boot()?;
-        Ok(self.read_process(identifier, &boot))
+        let seconds: u64 = self
+            .cached_boot_seconds(&boot)
+            .map_or_else(|| -> Result<u64, String> { self.boot_time() }, Ok)?;
+        self.boot_clock = Some((boot, seconds));
+        Ok(seconds)
+    }
+
+    fn cached_boot_seconds(&self, boot: &str) -> Option<u64> {
+        self.boot_clock
+            .as_ref()
+            .filter(|clock: &&(String, u64)| -> bool { clock.0 == boot })
+            .map(|clock: &(String, u64)| -> u64 { clock.1 })
+    }
+
+    fn boot_time(&self) -> Result<u64, String> {
+        self.read_text(&Path::new(Self::ROOT).join(Self::KERNEL_FILE))
+            .and_then(|text: String| -> Option<u64> { self.text.boot_seconds(&text) })
+            .ok_or_else(|| -> String {
+                "Process collection unavailable: the Linux boot time could not be read.".to_owned()
+            })
     }
 
     fn boot(&self) -> Result<String, String> {
@@ -53,7 +88,7 @@ impl KernelProcessReaderService {
             })
     }
 
-    fn entry_process(&self, entry: &std::fs::DirEntry, boot: &str) -> Option<NativeProcess> {
+    fn entry_process(&self, entry: &std::fs::DirEntry, boot: u64) -> Option<NativeProcess> {
         let name: std::ffi::OsString = entry.file_name();
         let identifier: i32 = self.text.identifier(name.to_str()?)?;
         self.read_process(identifier, boot)
@@ -65,7 +100,7 @@ impl KernelProcessReaderService {
         }
     }
 
-    fn read_process(&self, identifier: i32, boot: &str) -> Option<NativeProcess> {
+    fn read_process(&self, identifier: i32, boot: u64) -> Option<NativeProcess> {
         let before: (NativeKernelProcess, i64) = self.identity(identifier)?;
         let before_path: Option<String> = self.executable(identifier);
         let resident: Option<i64> = self.resident(identifier);
@@ -78,7 +113,9 @@ impl KernelProcessReaderService {
             pid: kernel.pid,
             parent: kernel.parent,
             user,
-            started: self.text.started(boot, kernel.start_ticks),
+            started: self
+                .text
+                .started(boot, kernel.start_ticks, self.clock_rate())?,
             executable: before_path?,
             cpu_seconds: self.cpu_seconds(kernel.cpu_ticks),
             resident_bytes: resident,
@@ -144,8 +181,11 @@ impl KernelProcessReaderService {
     }
 
     fn cpu_seconds(&self, cpu_ticks: u64) -> Option<f64> {
-        let rate: i64 = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
-        self.text.cpu_seconds(cpu_ticks, rate)
+        self.text.cpu_seconds(cpu_ticks, self.clock_rate())
+    }
+
+    fn clock_rate(&self) -> i64 {
+        unsafe { libc::sysconf(libc::_SC_CLK_TCK) }
     }
 
     fn file(&self, identifier: i32, name: &str) -> PathBuf {

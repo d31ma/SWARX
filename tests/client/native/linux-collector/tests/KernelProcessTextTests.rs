@@ -109,16 +109,66 @@ fn io_reports_storage_bytes_and_missing_lines_stay_unavailable() -> () {
 }
 
 #[test]
-fn boot_id_and_start_identity() -> () {
-    let boot: String = text()
-        .boot("  6a1f0c2e-1111-4222-8333-944455556666\n")
-        .unwrap();
-    assert_eq!(boot, "6a1f0c2e-1111-4222-8333-944455556666");
-    assert_eq!(text().boot("\n"), None);
+fn boot_id_is_trimmed_and_empty_is_unavailable() -> () {
     assert_eq!(
-        text().started(&boot, 98765),
-        "6a1f0c2e-1111-4222-8333-944455556666:98765"
+        text().boot("  6a1f0c2e-1111-4222-8333-944455556666\n"),
+        Some("6a1f0c2e-1111-4222-8333-944455556666".to_owned())
     );
+    assert_eq!(text().boot("\n"), None);
+}
+
+#[test]
+fn proc_stat_btime_line_gives_boot_seconds() -> () {
+    let stat: &str = "cpu  4705 356 584 3699 23 23 0 0 0 0\ncpu0 1393280 32966 572056 13343292 6130 0 17875 0 0 0\nintr 114930548 113199788 3 0 5 263 0 4 [...]\nctxt 1990473\nbtime 1062191376\nprocesses 2915\nprocs_running 1\nprocs_blocked 0\nsoftirq 229245889 94 60001584 13619 5175704 2471304 28 51212741 59130143 0 51240672\n";
+    assert_eq!(text().boot_seconds(stat), Some(1_062_191_376));
+    assert_eq!(text().boot_seconds("cpu 1 2 3\nctxt 9\n"), None);
+    assert_eq!(text().boot_seconds("btime\n"), None);
+    assert_eq!(text().boot_seconds("btime -5\n"), None);
+    assert_eq!(text().boot_seconds("btimes 7\n"), None);
+    assert_eq!(text().boot_seconds(""), None);
+}
+
+#[test]
+fn start_ticks_become_epoch_seconds_and_microseconds() -> () {
+    let boot: u64 = 1_700_000_000;
+    assert_eq!(
+        text().started(boot, 98765, 100),
+        Some("1700000987:650000".to_owned())
+    );
+    assert_eq!(
+        text().started(boot, 0, 100),
+        Some("1700000000:0".to_owned())
+    );
+    assert_eq!(
+        text().started(boot, 101, 100),
+        Some("1700000001:10000".to_owned())
+    );
+    assert_eq!(
+        text().started(boot, 2_501, 250),
+        Some("1700000010:4000".to_owned())
+    );
+    assert_eq!(
+        text().started(boot, 7, 1_000_000),
+        Some("1700000000:7".to_owned())
+    );
+}
+
+#[test]
+fn start_identity_needs_a_positive_clock_rate_and_no_overflow() -> () {
+    assert_eq!(text().started(1_700_000_000, 98765, 0), None);
+    assert_eq!(text().started(1_700_000_000, 98765, -1), None);
+    assert_eq!(text().started(u64::MAX, 100, 100), None);
+}
+
+#[test]
+fn start_identity_matches_the_shared_birth_format() -> () {
+    let started: String = text().started(1_700_000_000, 12_345, 100).unwrap();
+    let (seconds, microseconds): (&str, &str) = started.split_once(':').unwrap();
+    let seconds: u64 = seconds.parse().unwrap();
+    let microseconds: u64 = microseconds.parse().unwrap();
+    assert!(microseconds < 1_000_000);
+    assert_eq!(format!("{seconds}:{microseconds}"), started);
+    assert_eq!((seconds, microseconds), (1_700_000_123, 450_000));
 }
 
 #[test]
