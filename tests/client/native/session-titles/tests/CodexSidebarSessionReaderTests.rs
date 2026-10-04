@@ -281,7 +281,7 @@ fn equal_ids_from_claude_and_codex_stay_separate_sessions() -> () {
         fixture.root.join(STATE_FILE),
     ));
     let sessions: Vec<NativeHarnessSession> =
-        HarnessSessionService::new(vec![codex, claude]).sessions();
+        HarnessSessionService::new(vec![codex, claude]).discover();
     let families: Vec<String> = sessions
         .iter()
         .map(|session: &NativeHarnessSession| -> String { session.family.clone() })

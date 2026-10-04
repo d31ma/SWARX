@@ -1,7 +1,7 @@
-use crate::{ObservationClock, EventSource, MetricSource};
-use crate::TachyonRustServices::{ActivityHistoryService, MonitorService};
-use crate::models::{NativeGroup, NativeLogicalAgent, NativeResourceTotals};
-use std::sync::Arc;
+use crate::{ObservationClock, EventSource, HarnessSessionSource, MetricSource};
+use crate::TachyonRustServices::{ActivityHistoryService, HarnessSessionService, MonitorService};
+use crate::models::{NativeGroup, NativeHarnessSession, NativeLogicalAgent, NativeResourceTotals};
+use std::sync::{Arc, Condvar, Mutex};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
@@ -166,4 +166,86 @@ fn denied_event_endpoint_stays_unavailable() -> () {
     assert!(!snapshot.capabilities.logical_lifecycle_hooks);
     assert!(!snapshot.errors.is_empty());
     monitor.stop();
+}
+
+// Session discovery that blocks like an open() on a stalled cloud folder until the gate opens.
+struct BlockedSessions {
+    gate: Arc<(Mutex<bool>, Condvar)>,
+    calls: Arc<AtomicUsize>,
+}
+impl HarnessSessionSource for BlockedSessions {
+    fn sessions(&self) -> Vec<NativeHarnessSession> {
+        self.calls.fetch_add(1, Ordering::SeqCst);
+        let mut open = self.gate.0.lock().unwrap();
+        while !*open {
+            open = self.gate.1.wait(open).unwrap();
+        }
+        vec![NativeHarnessSession {
+            family: "Claude".to_owned(),
+            id: "blocked".to_owned(),
+            title_source: "test report".to_owned(),
+            ..Default::default()
+        }]
+    }
+}
+
+// Runs work on its own thread so a call that blocks fails the test instead of hanging it.
+fn within_limit<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) -> Option<T> {
+    let (sender, receiver) = std::sync::mpsc::channel::<T>();
+    std::thread::spawn(move || -> () {
+        let _ = sender.send(work());
+    });
+    receiver.recv_timeout(Duration::from_secs(2)).ok()
+}
+
+fn blocked_monitor() -> (MonitorService, Arc<(Mutex<bool>, Condvar)>, Arc<AtomicUsize>) {
+    let gate: Arc<(Mutex<bool>, Condvar)> = Arc::new((Mutex::new(false), Condvar::new()));
+    let calls: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
+    let source: Box<dyn HarnessSessionSource> = Box::new(BlockedSessions {
+        gate: Arc::clone(&gate),
+        calls: Arc::clone(&calls),
+    });
+    let monitor: MonitorService = MonitorService::new(
+        Box::new(TestMetrics {
+            dropped: Arc::new(AtomicUsize::new(0)),
+        }),
+        Box::new(CacheWarningEvents),
+        Arc::new(TestClock),
+        ActivityHistoryService::default(),
+    )
+    .with_sessions(HarnessSessionService::new(vec![source]));
+    let deadline: Instant = Instant::now() + Duration::from_secs(2);
+    while calls.load(Ordering::SeqCst) == 0 && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    (monitor, gate, calls)
+}
+
+#[test]
+fn blocked_session_discovery_does_not_delay_reads() -> () {
+    let (monitor, gate, calls) = blocked_monitor();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    let monitor: Arc<MonitorService> = Arc::new(monitor);
+    let reader: Arc<MonitorService> = Arc::clone(&monitor);
+    let snapshot = within_limit(move || reader.read()).expect("read waited for session discovery");
+    assert!(snapshot.harness_sessions.is_empty());
+    assert_eq!(snapshot.harness_sessions_captured_at, None);
+    *gate.0.lock().unwrap() = true;
+    gate.1.notify_all();
+    let deadline: Instant = Instant::now() + Duration::from_secs(2);
+    while monitor.read().harness_sessions.is_empty() && Instant::now() < deadline {
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let snapshot = monitor.read();
+    assert_eq!(snapshot.harness_sessions.len(), 1);
+    assert_eq!(snapshot.harness_sessions[0].id, "blocked");
+    assert_eq!(snapshot.harness_sessions_captured_at, Some(1234.0));
+    monitor.stop();
+}
+
+#[test]
+fn quit_does_not_wait_for_blocked_session_discovery() -> () {
+    let (monitor, _gate, calls) = blocked_monitor();
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    assert_eq!(within_limit(move || -> () { monitor.stop() }), Some(()));
 }

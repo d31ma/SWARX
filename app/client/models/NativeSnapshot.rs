@@ -26,6 +26,9 @@ pub struct NativeSnapshot {
     pub command_bindings: Vec<NativeCommandBinding>,
     #[serde(default)]
     pub harness_sessions: Vec<NativeHarnessSession>,
+    // When the harness sessions above were discovered; None before the first discovery.
+    #[serde(default)]
+    pub harness_sessions_captured_at: Option<f64>,
     #[serde(default)]
     pub session_groups: Vec<NativeSessionView>,
     pub linked_session_count: i64,

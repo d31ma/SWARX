@@ -22,6 +22,7 @@ pub struct MonitorService {
 
 impl MonitorService {
     const INTERVAL_SECONDS: u64 = 2;
+    const SESSION_INTERVAL_SECONDS: u64 = 5;
     const PROCESS_FAILURE: &'static str = "Process sampling unavailable; last values are stale.";
     const EVENT_FAILURE: &'static str =
         "Task event endpoint unavailable; no new reports can arrive.";
@@ -63,7 +64,10 @@ impl MonitorService {
         }
     }
 
+    // Session discovery refreshes on its own thread; page reads take only its latest result.
     pub fn with_sessions(mut self, sessions: HarnessSessionService) -> Self {
+        let interval: Duration = Duration::from_secs(Self::SESSION_INTERVAL_SECONDS);
+        sessions.start(Arc::clone(&self.clock), interval);
         self.sessions = sessions;
         self
     }
@@ -95,7 +99,7 @@ impl MonitorService {
         Self::add_process_rows(&mut result.groups);
         result.runtime_views = Self::runtime_views(&result.groups);
         ChartDataUtils::present(&mut result.runtime_views, now);
-        result.harness_sessions = self.sessions.sessions();
+        (result.harness_sessions, result.harness_sessions_captured_at) = self.sessions.latest();
         result.session_groups = SessionViewUtils::named(
             SessionViewUtils::sessions(&result.logical_views),
             &result.harness_sessions,
@@ -140,6 +144,7 @@ impl MonitorService {
     }
 
     fn close_sources(&self) -> () {
+        self.sessions.stop();
         Self::stop_events(&self.events);
         Self::stop_sampling(&self.sampling);
     }

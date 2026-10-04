@@ -327,7 +327,7 @@ fn duplicate_id_from_the_sidebar_cache_keeps_the_newest_record() -> () {
     let local: Box<dyn HarnessSessionSource> =
         Box::new(CodexLocalSessionReaderService::for_home(&fixture.root));
     let sessions: Vec<NativeHarnessSession> =
-        HarnessSessionService::new(vec![first, local, second]).sessions();
+        HarnessSessionService::new(vec![first, local, second]).discover();
     assert_eq!(
         ids(&sessions),
         vec!["newer-local".to_owned(), "older-local".to_owned()]
