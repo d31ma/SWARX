@@ -30,7 +30,7 @@ impl OverviewTransportTests {
 fn overview_transfer_contains_only_the_projected_view_and_preserves_unicode() -> () {
     let mut transport: NativeSnapshotTransportService = NativeSnapshotTransportService::default();
     let mut view: NativeOverviewView = OverviewTransportTests::view();
-    view.logical_notice = "Reported Unicode \u{2193} \u{2191} \u{b7} ".repeat(500);
+    view.logical_notice = "Reported Unicode \u{2193} \u{2191} \u{b7} ".repeat(2000);
     let ticket: NativeSnapshotTransfer = transport.open_view(&view);
     let content: String = OverviewTransportTests::content(&transport, &ticket);
     let decoded: serde_json::Value = serde_json::from_str(&content).unwrap();

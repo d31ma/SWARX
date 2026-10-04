@@ -1,5 +1,8 @@
+use crate::models::{
+    NativeOverviewView, NativeSnapshot, NativeSnapshotPage, NativeSnapshotTransfer,
+    NativeViewSelection,
+};
 use crate::TachyonRustServices::NativeSnapshotTransportService;
-use crate::models::{NativeOverviewView, NativeSnapshot, NativeSnapshotTransfer, NativeViewSelection};
 
 struct SnapshotTransportTests;
 
@@ -13,6 +16,71 @@ impl SnapshotTransportTests {
     }
 
     const PAGE_WIRE_LIMIT: usize = 65536;
+    const MAXIMUM_BYTES: i64 = 2_097_152;
+    const PAGE_BYTES: usize = 24576;
+    const SHORTEST_FULL_PAGE: usize = 24573;
+    const MAXIMUM_PAGES: i64 = 86;
+    const MARKER: &'static str = "transfer-text-marker";
+    const WIDE_CHARACTER: char = '🟣';
+
+    fn text_view(text: String) -> NativeOverviewView {
+        NativeOverviewView {
+            limitations: vec![text],
+            ..Self::view()
+        }
+    }
+
+    fn text_offset() -> usize {
+        serde_json::to_string(&Self::text_view(Self::MARKER.to_owned()))
+            .unwrap()
+            .find(Self::MARKER)
+            .unwrap()
+    }
+
+    fn misaligned_text(units: usize) -> String {
+        let lead: String = "x".repeat(Self::SHORTEST_FULL_PAGE - Self::text_offset());
+        let filler: String = "x".repeat(Self::SHORTEST_FULL_PAGE - Self::WIDE_CHARACTER.len_utf8());
+        let unit: String = format!("{}{filler}", Self::WIDE_CHARACTER);
+        lead + &unit.repeat(units)
+    }
+
+    fn tachyon_quote(text: &str) -> String {
+        format!("\"{}\"", text.replace('\\', "\\\\").replace('"', "\\\""))
+    }
+
+    fn tachyon_reply(page: &NativeSnapshotPage) -> String {
+        format!(
+            "{{\"value\":{{\"id\":{},\"index\":{},\"content\":{},\"error\":{}}}}}",
+            i64::MIN,
+            i64::MIN,
+            Self::tachyon_quote(&page.content),
+            Self::tachyon_quote(&page.error)
+        )
+    }
+
+    fn largest_reply(
+        transport: &NativeSnapshotTransportService,
+        ticket: &NativeSnapshotTransfer,
+    ) -> usize {
+        (0..ticket.pages)
+            .map(|index: i64| -> usize {
+                Self::tachyon_reply(&transport.page(ticket.id, index)).len()
+            })
+            .max()
+            .unwrap_or_default()
+    }
+
+    fn has_control_character(page: &NativeSnapshotPage) -> bool {
+        page.content
+            .chars()
+            .any(|character: char| -> bool { character < ' ' })
+    }
+
+    fn only_quotes_and_backslashes(page: &NativeSnapshotPage) -> bool {
+        page.content
+            .bytes()
+            .all(|byte: u8| -> bool { byte == b'"' || byte == b'\\' })
+    }
 
     fn collect_pages(
         transport: &NativeSnapshotTransportService,
@@ -123,4 +191,45 @@ fn retiring_the_page_refuses_its_transfer_and_preserves_fresh_generation() -> ()
     assert_ne!(retired.id, current.id);
     assert!(transport.page(current.id, 0).error.is_empty());
     assert!(!transport.page(retired.id, 0).error.is_empty());
+}
+
+#[test]
+fn quote_and_backslash_pages_stay_under_the_reply_limit_after_tachyon_escaping() -> () {
+    let source = SnapshotTransportTests::text_view("\"\\".repeat(520_000));
+    let mut transport = NativeSnapshotTransportService::default();
+    let ticket = transport.open_view(&source);
+    let full_page = transport.page(ticket.id, 1);
+    let largest = SnapshotTransportTests::largest_reply(&transport, &ticket);
+    assert!(ticket.error.is_empty());
+    assert!(ticket.bytes <= SnapshotTransportTests::MAXIMUM_BYTES);
+    assert!(ticket.pages <= SnapshotTransportTests::MAXIMUM_PAGES);
+    assert_eq!(full_page.content.len(), SnapshotTransportTests::PAGE_BYTES);
+    assert!(SnapshotTransportTests::only_quotes_and_backslashes(
+        &full_page
+    ));
+    assert!(!SnapshotTransportTests::has_control_character(&full_page));
+    assert!(largest > 2 * SnapshotTransportTests::PAGE_BYTES);
+    assert!(largest < SnapshotTransportTests::PAGE_WIRE_LIMIT);
+}
+
+#[test]
+fn wide_characters_on_every_page_edge_still_fit_the_page_limit() -> () {
+    let source = SnapshotTransportTests::text_view(SnapshotTransportTests::misaligned_text(84));
+    let mut transport = NativeSnapshotTransportService::default();
+    let ticket = transport.open_view(&source);
+    assert!(ticket.error.is_empty());
+    assert!(ticket.bytes <= SnapshotTransportTests::MAXIMUM_BYTES);
+    assert_eq!(ticket.pages, SnapshotTransportTests::MAXIMUM_PAGES);
+    assert_eq!(
+        transport.page(ticket.id, 0).content.len(),
+        SnapshotTransportTests::SHORTEST_FULL_PAGE
+    );
+    assert_eq!(
+        transport.page(ticket.id, 1).content.len(),
+        SnapshotTransportTests::SHORTEST_FULL_PAGE
+    );
+    assert!(
+        SnapshotTransportTests::largest_reply(&transport, &ticket)
+            < SnapshotTransportTests::PAGE_WIRE_LIMIT
+    );
 }

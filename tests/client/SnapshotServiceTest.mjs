@@ -8,9 +8,20 @@ import { test } from 'node:test';
 /** @typedef {import('../../app/client/models/SnapshotPage.ts').SnapshotPage} SnapshotPage */
 /** @typedef {Pick<import('../../app/client/models/ObservatoryModel.ts').ObservatoryModel, 'selected'>} FixtureResponse */
 /** @typedef {{releases: number[], reads: number[], selection?: FixtureSelection, open: (selection: FixtureSelection) => Promise<SnapshotTransfer>, page: (id: number, index: number) => Promise<SnapshotPage>, release: (id: number) => Promise<boolean>}} ReaderFixture */
-/** @typedef {{snapshotReader?: ReaderFixture, read: (selection: FixtureSelection) => Promise<FixtureResponse>}} SnapshotFixture */
+/** @typedef {{snapshotReader?: ReaderFixture, read: (selection: FixtureSelection) => Promise<FixtureResponse>, constructor: {_MAXIMUM_BYTES: number, _MAXIMUM_PAGES: number}}} SnapshotFixture */
 
 class SnapshotServiceTest {
+  /** @type {number} */
+  static LONGEST_CHARACTER_BACKOFF = 3;
+
+  /** @param {string} name @returns {number} */
+  static rustLimit(name) {
+    const url = new URL('../../app/client/services/native/monitoring/NativeSnapshotTransportService.rs', import.meta.url);
+    const found = readFileSync(url, 'utf8').match(new RegExp('const ' + name + ': usize = ([0-9_]+);'));
+    assert.ok(found, name + ' is declared in the Rust transport');
+    return Number(found[1].replaceAll('_', ''));
+  }
+
   /** @returns {SnapshotFixture} */
   static service() {
     const url = new URL('../../app/client/services/native/monitoring/SnapshotService.js', import.meta.url);
@@ -41,6 +52,14 @@ class SnapshotServiceTest {
     };
   }
 }
+
+test('browser transfer limits match the Rust page size and 2 MiB cap', /** @returns {void} */ () => {
+  const limits = SnapshotServiceTest.service().constructor;
+  const pageBytes = SnapshotServiceTest.rustLimit('PAGE_BYTES');
+  const maximumBytes = SnapshotServiceTest.rustLimit('MAXIMUM_BYTES');
+  assert.equal(limits._MAXIMUM_BYTES, maximumBytes);
+  assert.equal(limits._MAXIMUM_PAGES, Math.ceil(maximumBytes / (pageBytes - SnapshotServiceTest.LONGEST_CHARACTER_BACKOFF)));
+});
 
 test('snapshot transfer uses and releases the provider that opened its ticket', /** @returns {Promise<void>} */ async () => {
   const service = SnapshotServiceTest.service();
@@ -89,7 +108,7 @@ test('missing provider and invalid ticket reject without releasing an unopened t
   const service = SnapshotServiceTest.service();
   await assert.rejects(service.read({}), /Required native snapshot provider/);
   const reader = SnapshotServiceTest.reader();
-  reader.open = /** @returns {Promise<SnapshotTransfer>} */ async () => ({ id: 7, pages: 258, bytes: 10, error: '' });
+  reader.open = /** @returns {Promise<SnapshotTransfer>} */ async () => ({ id: 7, pages: 87, bytes: 10, error: '' });
   service.snapshotReader = reader;
   await assert.rejects(service.read({}), /Invalid local snapshot transfer/);
   assert.deepEqual(reader.reads, []);

@@ -3,7 +3,7 @@ export default class SnapshotService {
     /** @type {number} */
     static _MAXIMUM_BYTES = 2_097_152;
     /** @type {number} */
-    static _MAXIMUM_PAGES = 257;
+    static _MAXIMUM_PAGES = 86;
     /** @type {number} */
     static _MINIMUM = 0;
     /** @type {string} */

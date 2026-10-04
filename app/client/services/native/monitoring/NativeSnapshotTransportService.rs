@@ -9,7 +9,7 @@ pub struct NativeSnapshotTransportService {
 }
 
 impl NativeSnapshotTransportService {
-    const PAGE_BYTES: usize = 8192;
+    const PAGE_BYTES: usize = 24576;
     const MAXIMUM_BYTES: usize = 2_097_152;
     const FIRST_OFFSET: usize = 0;
 
