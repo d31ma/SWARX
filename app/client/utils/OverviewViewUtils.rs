@@ -74,9 +74,12 @@ impl OverviewViewUtils {
             SessionResourceUtils::selected_process(&all_resource_sessions, selection);
         NativeOverviewView {
             session_groups: snapshot.session_groups.clone(),
-            resource_sessions,
-            shared_resources,
-            chart_resources,
+            resource_sessions: Self::transfer_sessions(resource_sessions),
+            shared_resources: Self::transfer_views(shared_resources),
+            chart_resources: chart_resources
+                .into_iter()
+                .map(Self::without_history)
+                .collect(),
             selected_session,
             selected_session_process,
             linked_session_count: snapshot.linked_session_count,
@@ -97,11 +100,11 @@ impl OverviewViewUtils {
             logical_notice: Self::notice(logical_count),
             session_count: sessions.len() as i64,
             shared_count: shared.len() as i64,
-            sessions,
-            shared,
-            runtimes: groups.clone(),
+            sessions: Self::transfer_views(sessions),
+            shared: Self::transfer_views(shared),
+            runtimes: Self::transfer_views(groups.clone()),
             process_label: Self::process_label(detail.as_ref(), selection.pid),
-            detail,
+            detail: detail.map(Self::without_charts),
             selected: identifier,
             sampled: Self::sample_label(snapshot.sampled_at),
             sample_age,
@@ -136,6 +139,36 @@ impl OverviewViewUtils {
             limitations: snapshot.limitations.clone(),
             live_status,
         }
+    }
+
+    // The page reads chart series only from chartResources, and never raw group history.
+    // Copying both into every runtime list pushed the transfer past 2 MiB after ~41 samples.
+    fn transfer_views(views: Vec<NativeRuntimeView>) -> Vec<NativeRuntimeView> {
+        views.into_iter().map(Self::without_charts).collect()
+    }
+
+    fn transfer_sessions(
+        sessions: Vec<NativeSessionResourceView>,
+    ) -> Vec<NativeSessionResourceView> {
+        sessions
+            .into_iter()
+            .map(Self::session_without_charts)
+            .collect()
+    }
+
+    fn session_without_charts(mut session: NativeSessionResourceView) -> NativeSessionResourceView {
+        session.commands = Self::transfer_views(session.commands);
+        session
+    }
+
+    fn without_charts(mut view: NativeRuntimeView) -> NativeRuntimeView {
+        view.charts.clear();
+        Self::without_history(view)
+    }
+
+    fn without_history(mut view: NativeRuntimeView) -> NativeRuntimeView {
+        view.group.history.clear();
+        view
     }
 
     fn age(sampled_at: f64, now: f64) -> f64 {

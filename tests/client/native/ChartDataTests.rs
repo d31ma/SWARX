@@ -318,6 +318,47 @@ fn representative_chart_grid_round_trips_within_existing_transfer_budget() -> ()
     let text = ChartDataTests::content(&transport, ticket.id, ticket.pages);
     let decoded: NativeOverviewView = serde_json::from_str(&text).unwrap();
     assert_eq!(decoded.runtimes.len(), 16);
-    assert_eq!(decoded.runtimes[0].charts[2].measured_count, 61);
-    assert_eq!(decoded.runtimes[0].charts[2].series[0].points[0].y, None);
+    assert!(decoded
+        .runtimes
+        .iter()
+        .all(|runtime| runtime.charts.is_empty() && runtime.group.history.is_empty()));
+    assert!(decoded
+        .shared
+        .iter()
+        .all(|runtime| runtime.charts.is_empty()));
+    assert!(!decoded.chart_resources.is_empty());
+    assert!(decoded
+        .chart_resources
+        .iter()
+        .all(|runtime| runtime.group.history.is_empty()));
+    assert_eq!(decoded.chart_resources[0].charts[2].measured_count, 61);
+    assert_eq!(
+        decoded.chart_resources[0].charts[2].series[0].points[0].y,
+        None
+    );
+}
+
+#[test]
+fn chart_series_are_sent_once_so_a_long_running_page_stays_under_the_transfer_limit() -> () {
+    // 41 two-second samples froze the page: each runtime list repeated every chart series.
+    let view = ChartDataTests::overview();
+    let charted: usize = view
+        .chart_resources
+        .iter()
+        .map(|runtime| runtime.charts.len())
+        .sum();
+    let elsewhere: usize = view
+        .runtimes
+        .iter()
+        .chain(view.sessions.iter())
+        .chain(view.shared.iter())
+        .chain(view.shared_resources.iter())
+        .map(|runtime| runtime.charts.len())
+        .sum();
+    assert!(charted > 0);
+    assert_eq!(elsewhere, 0);
+    assert!(view
+        .detail
+        .as_ref()
+        .map_or(true, |runtime| runtime.charts.is_empty()));
 }

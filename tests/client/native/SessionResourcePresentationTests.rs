@@ -1,10 +1,10 @@
-use crate::TachyonRustServices::{
-    CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionViewUtils,
-};
 use crate::command_resource_tests::CommandResourceViewTests;
 use crate::models::{
     NativeCommandBinding, NativeCommandObservation, NativeLogicalAgentView, NativeOverviewView,
     NativeProcessMetrics, NativeRuntimeView, NativeSnapshot, NativeViewSelection,
+};
+use crate::TachyonRustServices::{
+    CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionViewUtils,
 };
 
 struct SessionResourcePresentationTests;
@@ -161,16 +161,17 @@ fn session_root_history_keeps_real_missing_sample_gaps() -> () {
         SessionResourcePresentationTests::linked(SessionResourcePresentationTests::observation());
     let wire = SessionResourcePresentationTests::wire(vec![agent], Vec::new(), 100.0);
     assert_eq!(
-        wire["resourceSessions"][0]["commands"][0]["charts"][0]["series"][0]["points"][0]["y"],
+        wire["chartResources"][0]["charts"][0]["series"][0]["points"][0]["y"],
         1.0
     );
-    assert!(
-        wire["resourceSessions"][0]["commands"][0]["charts"][0]["series"][0]["points"][1]["y"]
-            .is_null()
-    );
+    assert!(wire["chartResources"][0]["charts"][0]["series"][0]["points"][1]["y"].is_null());
     assert_eq!(
         wire["resourceSessions"][0]["commands"][0]["networkNote"],
         "Network collection unavailable"
+    );
+    assert_eq!(
+        wire["resourceSessions"][0]["commands"][0]["charts"],
+        serde_json::json!([])
     );
 }
 
