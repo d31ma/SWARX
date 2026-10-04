@@ -21,7 +21,9 @@ impl OverviewViewUtils {
     const RUNNING: &'static str = "running";
     const ACTIVE: &'static str = "active";
     const SNAPSHOT_SOURCE: &'static str = "Codex app-server thread/read snapshot";
-    const RUNNING_CHECK_COUNT: usize = 7;
+    const RUNNING_CHECK_COUNT: usize = 8;
+    // A lifecycle hook for an unfinished turn counts as current work for this long; a running tool counts until it finishes or the row goes stale.
+    const WORK_WINDOW_SECONDS: f64 = 45.0;
     const NO_RECENT_REPORT: &'static str = "No recent report";
     const OLD_MISSING_REPORT: &'static str = "stale";
     const OLD_MISSING_LABEL: &'static str = "Stale";
@@ -361,14 +363,14 @@ impl OverviewViewUtils {
     fn running_agents(agents: &[NativeLogicalAgentView], now: f64) -> Vec<NativeLogicalAgentView> {
         agents
             .iter()
-            .filter(|agent: &&NativeLogicalAgentView| -> bool { Self::running_agent(agent) })
+            .filter(|agent: &&NativeLogicalAgentView| -> bool { Self::running_agent(agent, now) })
             .map(|agent: &NativeLogicalAgentView| -> NativeLogicalAgentView {
                 LogicalViewUtils::running_view(agent, now)
             })
             .collect()
     }
 
-    fn running_agent(agent: &NativeLogicalAgentView) -> bool {
+    fn running_agent(agent: &NativeLogicalAgentView, now: f64) -> bool {
         let conditions: [bool; Self::RUNNING_CHECK_COUNT] = [
             !agent.stale,
             [Self::ACTIVE, Self::RUNNING].contains(&agent.status.as_str()),
@@ -377,8 +379,38 @@ impl OverviewViewUtils {
             Self::reported_identifier(&agent.source),
             agent.task.as_ref().is_some_and(Self::active_assignment),
             agent.session.as_ref().is_some_and(Self::reported_session),
+            Self::current_work(agent, now),
         ];
         conditions.into_iter().all(std::convert::identity)
+    }
+
+    // Process existence, connection or a coordinator heartbeat is not work: an agent needs an
+    // unfinished execution, or a recent lifecycle hook for its open turn.
+    fn current_work(agent: &NativeLogicalAgentView, now: f64) -> bool {
+        [Self::open_execution(agent), Self::recent_hook(agent, now)]
+            .into_iter()
+            .any(std::convert::identity)
+    }
+
+    fn open_execution(agent: &NativeLogicalAgentView) -> bool {
+        agent
+            .executions
+            .iter()
+            .any(|view: &crate::models::NativeExecutionView| -> bool {
+                [Self::ACTIVE, Self::RUNNING].contains(&view.execution.status.as_str())
+            })
+    }
+
+    fn recent_hook(agent: &NativeLogicalAgentView, now: f64) -> bool {
+        let age: f64 = now - agent.captured_at;
+        [
+            agent.feed_mode == Self::EVENT_FEED,
+            age.is_finite(),
+            age >= 0.0,
+            age <= Self::WORK_WINDOW_SECONDS,
+        ]
+        .into_iter()
+        .all(std::convert::identity)
     }
 
     fn active_assignment(task: &NativeTaskRecord) -> bool {
@@ -424,7 +456,7 @@ impl OverviewViewUtils {
 
     fn notice(count: i64) -> String {
         if count > Self::NO_RECORDS {
-            return "Fresh verified active assignments appear here, including work between commands. Current tool/action details require a matching unfinished command report. Activity retains previously reported work.".to_owned();
+            return "Only verified current work appears here: a running tool, or a lifecycle hook for an unfinished turn in the last 45 seconds. Idle, completed and stale work leaves this view and stays in Activity.".to_owned();
         }
         "This feed does not prove no agents are working. Reopened apps need a fresh coordinator report; history stays in Activity."
             .to_owned()

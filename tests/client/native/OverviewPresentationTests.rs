@@ -361,11 +361,54 @@ fn running_projection_keeps_fresh_active_task_without_commands() -> () {
 }
 
 #[test]
-fn running_projection_keeps_fresh_coordinator_task_without_commands() -> () {
-    OverviewPresentationTests::task_only(OverviewPresentationTests::task_source(
-        "active",
-        "coordinator-report",
-    ));
+fn running_projection_hides_coordinator_heartbeat_without_an_unfinished_command() -> () {
+    let source: NativeLogicalAgentView =
+        OverviewPresentationTests::task_source("active", "coordinator-report");
+    assert!(OverviewPresentationTests::source_view(source)
+        .logical
+        .is_empty());
+}
+
+#[test]
+fn running_projection_hides_an_open_turn_after_the_hook_work_window() -> () {
+    let mut source: NativeLogicalAgentView =
+        OverviewPresentationTests::task_source("active", "events");
+    source.captured_at = OverviewPresentationTests::NOW - 46.0;
+    assert!(OverviewPresentationTests::source_view(source.clone())
+        .logical
+        .is_empty());
+    source.captured_at = OverviewPresentationTests::NOW - 44.0;
+    OverviewPresentationTests::task_only(source);
+}
+
+#[test]
+fn running_projection_keeps_a_long_running_tool_until_it_finishes_or_goes_stale() -> () {
+    let mut source: NativeLogicalAgentView =
+        OverviewPresentationTests::running_source("worker", "events");
+    source.captured_at = OverviewPresentationTests::NOW - 100.0;
+    assert_eq!(
+        OverviewPresentationTests::source_view(source.clone()).logical_count,
+        1
+    );
+    source.executions[0].execution.status = "completed".to_owned();
+    assert!(OverviewPresentationTests::source_view(source.clone())
+        .logical
+        .is_empty());
+    source.executions[0].execution.status = "running".to_owned();
+    source.stale = true;
+    assert!(OverviewPresentationTests::source_view(source)
+        .logical
+        .is_empty());
+}
+
+#[test]
+fn running_projection_keeps_a_coordinator_agent_with_an_unfinished_command() -> () {
+    let source: NativeLogicalAgentView =
+        OverviewPresentationTests::running_source("worker", "coordinator-report");
+    assert_eq!(
+        OverviewPresentationTests::source_view(source).logical_count,
+        1
+    );
 }
 
 #[test]
@@ -1069,11 +1112,16 @@ fn session_pages_group_by_harness_and_keep_order_within_each() -> () {
         .iter()
         .map(|session: &crate::models::NativeSessionResourceView| -> &str { session.key.as_str() })
         .collect();
-    assert_eq!(keys, ["codex-a", "codex-b", "claude-new", "claude-old", "local"]);
+    assert_eq!(
+        keys,
+        ["codex-a", "codex-b", "claude-new", "claude-old", "local"]
+    );
     let headers: Vec<bool> = view
         .resource_sessions
         .iter()
-        .map(|session: &crate::models::NativeSessionResourceView| -> bool { session.harness_header })
+        .map(
+            |session: &crate::models::NativeSessionResourceView| -> bool { session.harness_header },
+        )
         .collect();
     assert_eq!(headers, [true, false, true, false, true]);
 }
@@ -1099,13 +1147,20 @@ fn activity_groups_by_harness_and_keeps_running_first_order_within_each() -> () 
     let order: Vec<(&str, bool)> = view
         .activity
         .iter()
-        .map(|session: &crate::models::NativeSessionActivityView| -> (&str, bool) {
-            (session.id.as_str(), session.harness_header)
-        })
+        .map(
+            |session: &crate::models::NativeSessionActivityView| -> (&str, bool) {
+                (session.id.as_str(), session.harness_header)
+            },
+        )
         .collect();
     assert_eq!(
         order,
-        [("codex-running", true), ("claude-running", true), ("claude-finished", false), ("unreported", true)]
+        [
+            ("codex-running", true),
+            ("claude-running", true),
+            ("claude-finished", false),
+            ("unreported", true)
+        ]
     );
 }
 
