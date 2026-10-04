@@ -149,7 +149,7 @@ fn identity_arguments_are_not_accepted_as_event_socket_options() -> () {
     assert!(EventEmitterMain::selected_endpoint(EmitterIdentityFixture::arguments("42")).is_err());
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[test]
 fn native_identity_mode_reads_only_its_own_existing_process() -> () {
     let pid = i32::try_from(std::process::id()).unwrap();

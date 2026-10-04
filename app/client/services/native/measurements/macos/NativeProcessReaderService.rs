@@ -3,10 +3,13 @@ use crate::{NativeMachTimebase, ProcessIdentityReader, ProcessReader};
 use std::ffi::CStr;
 use std::mem::{size_of, zeroed};
 
+// macOS libproc reader. Its impls are compiled only on macOS; the struct stays on every target
+// because the compiler collects every service into one module.
 #[derive(Default)]
 #[Service]
 pub struct NativeProcessReaderService;
 
+#[cfg(target_os = "macos")]
 impl NativeProcessReaderService {
     const LIST_PADDING: usize = 128;
     const ALL_PIDS: u32 = 1;
@@ -268,12 +271,14 @@ impl NativeProcessReaderService {
     }
 }
 
+#[cfg(target_os = "macos")]
 impl ProcessReader for NativeProcessReaderService {
     fn read(&mut self) -> Result<Vec<NativeProcess>, String> {
         NativeProcessReaderService::read(self)
     }
 }
 
+#[cfg(target_os = "macos")]
 impl ProcessIdentityReader for NativeProcessReaderService {
     fn read_identity(&mut self, pid: i32) -> Result<Option<NativeProcess>, String> {
         Ok(self.read_process(pid))

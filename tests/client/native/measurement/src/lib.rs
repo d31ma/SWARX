@@ -43,9 +43,32 @@ mod system_clock {
     include!(concat!(env!("OUT_DIR"), "/SystemClockService.rs"));
 }
 pub use system_clock::*;
+// Every platform reader is compiled on every host, as in the bundle; each reader only has impls on
+// its own operating system, so the other host sees an unused struct and imports.
+#[cfg_attr(not(target_os = "macos"), allow(unused_imports, dead_code))]
 mod reader {
     include!(concat!(env!("OUT_DIR"), "/NativeProcessReaderService.rs"));
 }
+mod kernel_text {
+    include!(concat!(env!("OUT_DIR"), "/KernelProcessTextService.rs"));
+}
+#[cfg_attr(not(target_os = "linux"), allow(unused_imports, dead_code))]
+mod kernel_reader {
+    use super::*;
+    include!(concat!(env!("OUT_DIR"), "/KernelProcessReaderService.rs"));
+}
+#[cfg_attr(not(target_os = "linux"), allow(unused_imports, dead_code))]
+mod kernel_network {
+    include!(concat!(env!("OUT_DIR"), "/KernelNetworkReaderService.rs"));
+}
+mod platform {
+    use super::*;
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/NativePlatformCompositionService.rs"
+    ));
+}
+pub use {kernel_network::*, kernel_reader::*, kernel_text::*, platform::*};
 mod provider {
     include!(concat!(env!("OUT_DIR"), "/NativeProviderService.rs"));
 }
@@ -150,7 +173,7 @@ pub use native_command_run_service::*;
 mod native_command_composition_service {
     use super::{
         NativeCommandBindingRegistryService, NativeCommandEventService,
-        NativeCommandMeasurementService, NativeCommandRunService, NativeProcessReaderService,
+        NativeCommandMeasurementService, NativeCommandRunService, NativePlatformCompositionService,
     };
     include!(concat!(
         env!("OUT_DIR"),

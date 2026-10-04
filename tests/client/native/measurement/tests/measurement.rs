@@ -410,6 +410,7 @@ fn process_reader_errors_are_not_fabricated_empty_samples() -> () {
     assert!(MetricSource::command_observations(&sampler).is_empty());
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn live_mac_identity_cpu_memory_and_storage_probe() -> () {
     let mut before: libc::rusage = unsafe { std::mem::zeroed() };
@@ -455,6 +456,7 @@ fn live_mac_identity_cpu_memory_and_storage_probe() -> () {
     );
 }
 
+#[cfg(target_os = "macos")]
 #[test]
 fn live_mac_network_availability_probe_is_bounded() -> () {
     let began = std::time::Instant::now();
@@ -467,6 +469,7 @@ fn live_mac_network_availability_probe_is_bounded() -> () {
     );
 }
 
+#[cfg(target_os = "macos")]
 fn network_probe_description(result: &Result<BTreeMap<i32, (i64, i64)>, String>) -> String {
     match result {
         Ok(counters) => format!("available, {} per-PID counter rows", counters.len()),
@@ -475,11 +478,11 @@ fn network_probe_description(result: &Result<BTreeMap<i32, (i64, i64)>, String>)
 }
 
 #[test]
-fn live_mac_facade_returns_real_groups_and_rolling_samples() -> () {
+fn live_platform_facade_returns_real_groups_and_rolling_samples() -> () {
     let clock = Arc::new(SystemClockService::new());
     let mut sampler = ProcessMeasurementService::new(
-        Box::new(NativeProcessReaderService::new()),
-        Box::new(NativeNetworkReaderService::new()),
+        NativePlatformCompositionService::process_reader(),
+        NativePlatformCompositionService::network_reader(),
         clock,
     );
     let first = MetricSource::sample(&mut sampler).unwrap();

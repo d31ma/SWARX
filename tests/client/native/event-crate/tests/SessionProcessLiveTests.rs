@@ -1,4 +1,4 @@
-#![cfg(target_os = "macos")]
+#![cfg(any(target_os = "macos", target_os = "linux"))]
 
 #[allow(dead_code)]
 #[path = "support/ClaudeHookFixture.rs"]
@@ -9,7 +9,7 @@ mod test_clock;
 use event_slice::models::{NativeCommandBinding, NativeCommandIdentity};
 use event_slice::services::{
     LogicalEventService, NativeCommandBindingRegistryService, NativeCommandEventService,
-    NativeProcessReaderService,
+    NativePlatformCompositionService,
 };
 use event_slice::{ClaudeHookAdapter, EventSource, HarnessProcessRootReader, ObservationClock};
 use fixture::ClaudeHookFixture;
@@ -19,9 +19,10 @@ use std::process::Output;
 use std::sync::{Arc, Mutex};
 use test_clock::TestClock;
 
-/// The real sender binary walks its real macOS ancestry with libproc and the real receiver
-/// re-reads the reported process before linking it. The expected root is what this test process
-/// itself finds: a Claude Code session when the test runs inside one, otherwise nothing.
+/// The real sender binary walks its real ancestry with the platform reader (libproc on macOS,
+/// /proc on Linux) and the real receiver re-reads the reported process before linking it. The
+/// expected root is what this test process itself finds: a Claude Code session when the test runs
+/// inside one, otherwise nothing.
 struct SessionProcessLiveTests {
     source: LogicalEventService,
     directory: PathBuf,
@@ -38,7 +39,7 @@ impl SessionProcessLiveTests {
         ));
         let commands: NativeCommandEventService = NativeCommandEventService::new(
             Ok(registry),
-            Box::new(NativeProcessReaderService::new()),
+            NativePlatformCompositionService::identity_reader(),
             clock.clone(),
         );
         let directory: PathBuf = PathBuf::from(format!(
@@ -63,8 +64,8 @@ impl SessionProcessLiveTests {
     fn expected() -> Option<NativeCommandIdentity> {
         let user: i64 = NativeCommandEventService::user();
         let origin: i32 = std::process::id() as i32;
-        HarnessProcessRootReader::new(Box::new(NativeProcessReaderService::new()), user, origin)
-            .root(ClaudeHookAdapter::CLAUDE_FAMILY)
+        let reader = NativePlatformCompositionService::identity_reader();
+        HarnessProcessRootReader::new(reader, user, origin).root(ClaudeHookAdapter::CLAUDE_FAMILY)
     }
 }
 

@@ -6,7 +6,7 @@ pub struct EventServiceTestSources {}
 
 impl EventServiceTestSources {
     const MARKER: &'static str = "#[Service]";
-    const FILES: [&'static str; 21] = [
+    const FILES: [&'static str; 27] = [
         "events/LogicalEventService.rs",
         "events/LogicalEventReceiverService.rs",
         "events/LogicalStateService.rs",
@@ -28,6 +28,12 @@ impl EventServiceTestSources {
         "commands/NativeCommandBindingService.rs",
         "commands/NativeCommandEventService.rs",
         "measurements/macos/NativeProcessReaderService.rs",
+        "measurements/macos/NativeNetworkReaderService.rs",
+        "measurements/macos/NativeNetworkCsvService.rs",
+        "measurements/linux/KernelProcessReaderService.rs",
+        "measurements/linux/KernelProcessTextService.rs",
+        "measurements/linux/KernelNetworkReaderService.rs",
+        "composition/NativePlatformCompositionService.rs",
     ];
 
     pub fn run() -> Result<(), Box<dyn Error>> {

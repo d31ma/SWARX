@@ -23,6 +23,12 @@ mod identity_reader {
         "/../../../../app/client/shared/native/ProcessIdentityReader.rs"
     ));
 }
+mod network_reader {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../app/client/shared/native/NetworkReader.rs"
+    ));
+}
 mod timebase {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -55,8 +61,8 @@ mod claude_hook_adapter {
 }
 pub use {
     claude_hook_adapter::*, claude_hook_event_factory::*, claude_hook_mapper::*,
-    claude_hook_tool_input_reader::*, clock::*, identity_reader::*, process_reader::*, source::*,
-    timebase::*,
+    claude_hook_tool_input_reader::*, clock::*, identity_reader::*, network_reader::*,
+    process_reader::*, source::*, timebase::*,
 };
 mod harness_process_root_reader {
     include!(concat!(
@@ -198,11 +204,48 @@ pub mod services {
         include!(concat!(env!("OUT_DIR"), "/NativeCommandEventService.rs"));
     }
     pub use native_command_event_service::*;
-    #[cfg(target_os = "macos")]
+    // Every platform reader compiles on every host, as in the bundle; each has impls only on its
+    // own operating system, so the other host sees an unused struct and imports.
+    #[cfg_attr(not(target_os = "macos"), allow(unused_imports, dead_code))]
     mod native_process_reader_service {
         include!(concat!(env!("OUT_DIR"), "/NativeProcessReaderService.rs"));
     }
-    #[cfg(target_os = "macos")]
     pub use native_process_reader_service::*;
+    mod native_network_csv_service {
+        include!(concat!(env!("OUT_DIR"), "/NativeNetworkCsvService.rs"));
+    }
+    pub use native_network_csv_service::*;
+    mod native_network_reader_service {
+        use super::NativeNetworkCsvService;
+        include!(concat!(env!("OUT_DIR"), "/NativeNetworkReaderService.rs"));
+    }
+    pub use native_network_reader_service::*;
+    mod kernel_process_text_service {
+        include!(concat!(env!("OUT_DIR"), "/KernelProcessTextService.rs"));
+    }
+    pub use kernel_process_text_service::*;
+    #[cfg_attr(not(target_os = "linux"), allow(unused_imports, dead_code))]
+    mod kernel_process_reader_service {
+        use super::KernelProcessTextService;
+        include!(concat!(env!("OUT_DIR"), "/KernelProcessReaderService.rs"));
+    }
+    pub use kernel_process_reader_service::*;
+    #[cfg_attr(not(target_os = "linux"), allow(unused_imports, dead_code))]
+    mod kernel_network_reader_service {
+        include!(concat!(env!("OUT_DIR"), "/KernelNetworkReaderService.rs"));
+    }
+    pub use kernel_network_reader_service::*;
+    mod native_platform_composition_service {
+        #[allow(unused_imports)]
+        use super::{
+            KernelNetworkReaderService, KernelProcessReaderService, NativeNetworkReaderService,
+            NativeProcessReaderService,
+        };
+        include!(concat!(
+            env!("OUT_DIR"),
+            "/NativePlatformCompositionService.rs"
+        ));
+    }
+    pub use native_platform_composition_service::*;
 }
 pub use services::NativeCommandBindingRegistryService;

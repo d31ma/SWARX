@@ -10,8 +10,8 @@ impl NativeMeasurementFactoryService {
         clock: Arc<dyn ObservationClock>,
         commands: &NativeCommandCompositionService,
     ) -> Box<dyn MetricSource> {
-        let process: Box<dyn ProcessReader> = Box::new(NativeProcessReaderService::new());
-        let network: Box<dyn NetworkReader> = Box::new(NativeNetworkReaderService::new());
+        let process: Box<dyn ProcessReader> = NativePlatformCompositionService::process_reader();
+        let network: Box<dyn NetworkReader> = NativePlatformCompositionService::network_reader();
         let state = NativeMeasurementStateService::with_commands(commands.measurements());
         Box::new(ProcessMeasurementService::with_state(
             process, network, clock, state,

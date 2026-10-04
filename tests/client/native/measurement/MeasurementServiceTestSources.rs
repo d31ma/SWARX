@@ -6,9 +6,10 @@ pub struct MeasurementServiceTestSources;
 
 impl MeasurementServiceTestSources {
     const MARKER: &'static str = "#[Service]";
-    const FILES: [&'static str; 16] = [
+    const FILES: [&'static str; 20] = [
         "composition/SystemClockService.rs",
         "composition/NativeCommandCompositionService.rs",
+        "composition/NativePlatformCompositionService.rs",
         "commands/NativeCommandBindingRegistryService.rs",
         "commands/NativeCommandBindingService.rs",
         "commands/NativeCommandEventService.rs",
@@ -21,6 +22,9 @@ impl MeasurementServiceTestSources {
         "measurements/macos/NativeProcessReaderService.rs",
         "measurements/macos/NativeNetworkReaderService.rs",
         "measurements/macos/NativeNetworkCsvService.rs",
+        "measurements/linux/KernelProcessReaderService.rs",
+        "measurements/linux/KernelProcessTextService.rs",
+        "measurements/linux/KernelNetworkReaderService.rs",
         "providers/NativeProcessGroupService.rs",
         "providers/NativeProviderService.rs",
     ];

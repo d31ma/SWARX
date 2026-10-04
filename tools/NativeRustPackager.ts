@@ -75,7 +75,7 @@ export class NativeRustPackager {
 
   emitterExports(): string {
     return `${NativeRustPackager.MARKER}pub use crate::TachyonRustServices::{LogicalEventClientService, LogicalEventWireService, LogicalSocketService};\n`
-      + '#[cfg(target_os = "macos")]\npub use crate::TachyonRustServices::NativeProcessReaderService;\n}\n';
+      + 'pub use crate::TachyonRustServices::NativePlatformCompositionService;\n}\n';
   }
 
   private static buildRoot(root: string): void {

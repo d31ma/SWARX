@@ -14,7 +14,8 @@ impl NativeCommandCompositionService {
     }
 
     pub fn events(&self) -> NativeCommandEventService {
-        let reader: Box<dyn ProcessIdentityReader> = Box::new(NativeProcessReaderService::new());
+        let reader: Box<dyn ProcessIdentityReader> =
+            NativePlatformCompositionService::identity_reader();
         NativeCommandEventService::new(self.registry.clone(), reader, Arc::clone(&self.clock))
     }
 
