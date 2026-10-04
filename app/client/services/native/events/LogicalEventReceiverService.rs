@@ -84,7 +84,7 @@ impl LogicalEventReceiverService {
                 "Invalid logical event or receipt.".to_owned()
             })?;
         let type_command: bool = discriminator
-            .r#type
+            .event_type
             .as_deref()
             .map(|kind: &str| -> bool { kind.starts_with("logical.command.") })
             .unwrap_or(false);

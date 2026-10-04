@@ -24,7 +24,7 @@ impl LogicalEventWireTests {
 
     fn request() -> Vec<u8> {
         let event: NativeLogicalEvent = NativeLogicalEvent {
-            r#type: Self::EVENT_TYPE.to_string(),
+            event_type: Self::EVENT_TYPE.to_string(),
             agent: Self::AGENT.to_string(),
             name: None,
             family: None,
@@ -78,7 +78,7 @@ fn nonblocking_server_receives_delayed_same_user_exchange_and_returns_receipt() 
     assert_eq!(received, Ok(request));
     let event: NativeLogicalEvent = wire.decode(&received.unwrap()).unwrap();
     assert_eq!(event.agent, LogicalEventWireTests::AGENT);
-    assert_eq!(event.r#type, LogicalEventWireTests::EVENT_TYPE);
+    assert_eq!(event.event_type, LogicalEventWireTests::EVENT_TYPE);
     let response: Result<(), String> =
         wire.respond(&mut server, &wire.accepted(LogicalEventWireTests::REVISION));
     assert_eq!(response, Ok(()));
@@ -103,5 +103,5 @@ fn nonblocking_server_waits_for_delayed_fragments_until_the_complete_newline() -
     assert_eq!(received, Ok(request));
     let event: NativeLogicalEvent = wire.decode(&received.unwrap()).unwrap();
     assert_eq!(event.agent, LogicalEventWireTests::AGENT);
-    assert_eq!(event.r#type, LogicalEventWireTests::EVENT_TYPE);
+    assert_eq!(event.event_type, LogicalEventWireTests::EVENT_TYPE);
 }

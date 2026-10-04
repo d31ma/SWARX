@@ -23,7 +23,7 @@ impl HarnessHookMapperTests {
 
     fn line(event: &NativeLogicalEvent) -> String {
         [
-            Some(event.r#type.clone()),
+            Some(event.event_type.clone()),
             Some(event.agent.clone()),
             event.task.clone(),
             event.execution.clone(),

@@ -22,7 +22,7 @@ impl LogicalStateService {
     const NO_EXECUTION: &'static str = "No running execution with this ID.";
     const FIRST_OBSERVATION: f64 = 0.0;
     pub fn apply(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<i64, String> {
-        let kind: String = self.text.identifier(Some(&event.r#type))?;
+        let kind: String = self.text.identifier(Some(&event.event_type))?;
         let handler: fn(&mut Self, &NativeLogicalEvent, f64) -> Result<(), String> =
             Self::handler(&kind)?;
         self.require_time(now)?;

@@ -77,7 +77,7 @@ fn typed_semantic_rejection_returns_a_receipt_without_mutating_source_state() ->
     let fixture: LogicalEventClientFixture =
         LogicalEventClientFixture::new("rejected-event").unwrap();
     let mut event: NativeLogicalEvent = LogicalEventClientFixture::registration();
-    event.r#type = LogicalEventClientTests::UNKNOWN_EVENT.to_owned();
+    event.event_type = LogicalEventClientTests::UNKNOWN_EVENT.to_owned();
     let receipt: NativeLogicalReceipt = fixture.client.send(&event).unwrap();
     assert!(!receipt.accepted);
     assert!(receipt.revision.is_none());

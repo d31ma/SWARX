@@ -55,7 +55,7 @@ impl ClaudeHookEventFactory {
         Self::require_direct_harness(payload)?;
         let session: &str = payload.session_id.as_deref()?;
         Some(NativeLogicalEvent {
-            r#type: kind.to_owned(),
+            event_type: kind.to_owned(),
             agent: Self::agent(session, payload.agent_id.as_deref()),
             name: None,
             family: None,

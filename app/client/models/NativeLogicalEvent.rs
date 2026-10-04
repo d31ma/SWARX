@@ -1,6 +1,7 @@
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NativeLogicalEvent {
-    pub r#type: String,
+    #[serde(rename = "type")]
+    pub event_type: String,
     pub agent: String,
     pub name: Option<String>,
     pub family: Option<String>,

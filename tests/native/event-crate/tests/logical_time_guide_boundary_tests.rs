@@ -6,7 +6,7 @@ struct LogicalTimeGuideBoundaryTests;
 impl LogicalTimeGuideBoundaryTests {
     fn registration() -> NativeLogicalEvent {
         NativeLogicalEvent {
-            r#type: "logical.register".to_string(),
+            event_type: "logical.register".to_string(),
             agent: "time-boundary-agent".to_string(),
             name: None,
             family: None,

@@ -62,7 +62,7 @@ impl LogicalEventClientFixture {
 
     pub fn registration() -> NativeLogicalEvent {
         NativeLogicalEvent {
-            r#type: Self::REGISTER.to_owned(),
+            event_type: Self::REGISTER.to_owned(),
             agent: Self::AGENT.to_owned(),
             name: Some(Self::NAME.to_owned()),
             family: Some(Self::FAMILY.to_owned()),
@@ -80,7 +80,7 @@ impl LogicalEventClientFixture {
 
     pub fn task() -> NativeLogicalEvent {
         NativeLogicalEvent {
-            r#type: Self::TASK_EVENT.to_owned(),
+            event_type: Self::TASK_EVENT.to_owned(),
             name: Some(Self::TASK_NAME.to_owned()),
             task: Some(Self::TASK.to_owned()),
             status: Some(Self::TASK_STATUS.to_owned()),
