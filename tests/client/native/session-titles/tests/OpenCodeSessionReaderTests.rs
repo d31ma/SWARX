@@ -15,13 +15,15 @@ use std::path::PathBuf;
 
 const SESSION_ID: &str = "ses_23a1f0c4dffeAbCdEf0123456789";
 const PROJECT_FOLDER: &str = "/Users/example/Projects/SWARX";
+const DATA_FOLDER: &str = ".local/share";
 
 fn database(fixture: &SessionFolderFixture) -> PathBuf {
     fixture.root.join(Database::OPENCODE_DATABASE)
 }
 
 fn read(fixture: &SessionFolderFixture) -> Vec<NativeHarnessSession> {
-    OpenCodeSessionReaderService::for_home(&fixture.root).sessions()
+    OpenCodeSessionReaderService::for_data(&fixture.root, &fixture.root.join(DATA_FOLDER))
+        .sessions()
 }
 
 fn ids(sessions: &[NativeHarnessSession]) -> Vec<String> {
@@ -379,4 +381,21 @@ fn rows_are_capped_and_the_most_recent_are_kept() -> () {
     assert_eq!(sessions.len(), 5_000);
     assert_eq!(sessions[0].id, "ses_5010");
     assert_eq!(sessions[4_999].id, "ses_11");
+}
+
+#[test]
+fn chosen_data_folder_replaces_the_home_default() -> () {
+    let fixture: SessionFolderFixture = SessionFolderFixture::new("opencode-data-folder");
+    let data: PathBuf = fixture.root.join("xdg-data");
+    Database::older(
+        &database(&fixture),
+        &[Database::row(Some("ses_home"), "Home default", "/", 10)],
+    );
+    Database::older(
+        &data.join("opencode/opencode.db"),
+        &[Database::row(Some("ses_data"), "Data folder", "/", 20)],
+    );
+    let sessions: Vec<NativeHarnessSession> =
+        OpenCodeSessionReaderService::for_data(&fixture.root, &data).sessions();
+    assert_eq!(ids(&sessions), vec!["ses_data".to_owned()]);
 }

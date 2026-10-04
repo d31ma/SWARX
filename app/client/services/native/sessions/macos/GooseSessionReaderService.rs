@@ -5,12 +5,12 @@ use std::path::{Path, PathBuf};
 
 #[Service]
 pub struct GooseSessionReaderService {
+    home: PathBuf,
     path: PathBuf,
 }
 
 impl GooseSessionReaderService {
-    const HOME_PATH: &'static str = ".local/share/goose/sessions/sessions.db";
-    const HOME_DEPTH: usize = 5;
+    const DATA_PATH: &'static str = "goose/sessions/sessions.db";
     const FAMILY: &'static str = "Goose";
     const TITLE_SOURCE: &'static str = "Goose session name";
     const QUERY: &'static str = "SELECT id, name, working_dir, unixepoch(updated_at),
@@ -22,20 +22,20 @@ impl GooseSessionReaderService {
          FROM sessions WHERE session_type IN ('user', 'scheduled')
          ORDER BY unixepoch(updated_at) DESC, id";
 
-    pub fn for_home(home: &Path) -> Self {
-        Self::new(home.join(Self::HOME_PATH))
+    // `data` is the data folder the platform composition chose (XDG data on Linux).
+    pub fn for_data(home: &Path, data: &Path) -> Self {
+        Self::new(home, data.join(Self::DATA_PATH))
     }
 
-    pub fn new(path: PathBuf) -> Self {
-        Self { path }
+    pub fn new(home: &Path, path: PathBuf) -> Self {
+        Self {
+            home: home.to_path_buf(),
+            path,
+        }
     }
 
     fn prepare(connection: &SqliteReadOnlyConnection) -> Option<SqliteReadOnlyStatement<'_>> {
         SqliteReadOnlyStatement::prepare(Self::QUERY, connection)
-    }
-
-    fn home(&self) -> Option<&Path> {
-        self.path.ancestors().nth(Self::HOME_DEPTH)
     }
 }
 
@@ -48,7 +48,7 @@ impl HarnessSessionSource for GooseSessionReaderService {
                 family: Self::FAMILY,
                 title_source: Self::TITLE_SOURCE,
             },
-            self.home(),
+            Some(&self.home),
         )
     }
 }

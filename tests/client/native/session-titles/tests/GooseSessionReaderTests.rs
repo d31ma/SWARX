@@ -16,6 +16,7 @@ const PROJECT_FOLDER: &str = "/Users/example/Projects/SWARX";
 const UPDATED_AT: &str = "2026-10-03 12:00:00";
 const UPDATED_SECONDS: f64 = 1_791_028_800.0;
 const MODEL_CONFIG: &str = "{\"model_name\":\"claude-sonnet-4-5\",\"temperature\":0.5,\"toolshim\":false,\"request_params\":{\"header\":\"PRIVATE-REQUEST-PARAMETER\"}}";
+const DATA_FOLDER: &str = ".local/share";
 const COLUMNS: &str = "id, name, working_dir, updated_at, session_type, archived_at, provider_name, model_config_json";
 
 fn database(fixture: &SessionFolderFixture) -> PathBuf {
@@ -27,7 +28,7 @@ fn write(fixture: &SessionFolderFixture, rows: &[String]) -> () {
 }
 
 fn read(fixture: &SessionFolderFixture) -> Vec<NativeHarnessSession> {
-    GooseSessionReaderService::for_home(&fixture.root).sessions()
+    GooseSessionReaderService::for_data(&fixture.root, &fixture.root.join(DATA_FOLDER)).sessions()
 }
 
 fn full_row(
@@ -124,7 +125,7 @@ fn explicit_path_constructor_reads_the_same_store() -> () {
         &[Database::row("a", "Named", PROJECT_FOLDER, UPDATED_AT)],
     );
     let sessions: Vec<NativeHarnessSession> =
-        GooseSessionReaderService::new(database(&fixture)).sessions();
+        GooseSessionReaderService::new(&fixture.root, database(&fixture)).sessions();
     assert_eq!(ids(&sessions), vec!["a".to_owned()]);
 }
 
@@ -385,9 +386,12 @@ fn missing_table_or_columns_yield_no_sessions() -> () {
          INSERT INTO sessions VALUES ('a', 'A', 'PRIVATE-DESCRIPTION', 'user', '/', '2026-10-03 12:00:00', NULL, NULL);",
     );
     let empty: Vec<NativeHarnessSession> = Vec::new();
-    assert_eq!(GooseSessionReaderService::new(no_table).sessions(), empty);
     assert_eq!(
-        GooseSessionReaderService::new(no_provider).sessions(),
+        GooseSessionReaderService::new(&fixture.root, no_table).sessions(),
+        empty
+    );
+    assert_eq!(
+        GooseSessionReaderService::new(&fixture.root, no_provider).sessions(),
         empty
     );
 }
@@ -408,7 +412,7 @@ fn symbolic_link_database_file_is_refused() -> () {
     std::os::unix::fs::symlink(&target, database(&fixture)).unwrap();
     assert_eq!(read(&fixture), Vec::<NativeHarnessSession>::new());
     assert_eq!(
-        ids(&GooseSessionReaderService::new(target).sessions()),
+        ids(&GooseSessionReaderService::new(&fixture.root, target).sessions()),
         vec!["a".to_owned()]
     );
 }
@@ -422,4 +426,23 @@ fn write_ahead_log_database_is_read_without_changing_it() -> () {
     let before: Vec<u8> = std::fs::read(database(&fixture)).unwrap();
     assert_eq!(ids(&read(&fixture)), vec!["wal".to_owned()]);
     assert_eq!(std::fs::read(database(&fixture)).unwrap(), before);
+}
+
+#[test]
+fn chosen_data_folder_keeps_the_given_home_for_project_names() -> () {
+    let fixture: SessionFolderFixture = SessionFolderFixture::new("goose-data-folder");
+    let home: String = fixture.root.to_str().unwrap().to_owned();
+    let data: PathBuf = fixture.root.join("xdg-data");
+    write(
+        &fixture,
+        &[Database::row("home", "Home default", "/", UPDATED_AT)],
+    );
+    Database::sessions(
+        &data.join("goose/sessions/sessions.db"),
+        &[Database::row("data", "Data folder", &home, UPDATED_AT)],
+    );
+    let sessions: Vec<NativeHarnessSession> =
+        GooseSessionReaderService::for_data(&fixture.root, &data).sessions();
+    assert_eq!(ids(&sessions), vec!["data".to_owned()]);
+    assert_eq!(projects(&sessions), vec![None]);
 }

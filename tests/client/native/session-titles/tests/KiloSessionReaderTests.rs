@@ -13,6 +13,11 @@ use observatory_session_title_tests::{
 };
 use open_code_database_fixture::OpenCodeDatabaseFixture as Database;
 use session_folder_fixture::SessionFolderFixture;
+use std::path::PathBuf;
+
+fn data(fixture: &SessionFolderFixture) -> PathBuf {
+    fixture.root.join(".local/share")
+}
 
 fn ids(sessions: &[NativeHarnessSession]) -> Vec<String> {
     sessions
@@ -46,7 +51,7 @@ fn reads_kilo_database_as_kilo_sessions() -> () {
         provider: Some("kilo".to_owned()),
     };
     let sessions: Vec<NativeHarnessSession> =
-        KiloSessionReaderService::for_home(&fixture.root).sessions();
+        KiloSessionReaderService::for_data(&fixture.root, &data(&fixture)).sessions();
     assert_eq!(sessions, vec![expected]);
     assert!(!format!("{sessions:?}").contains(Database::PRIVATE_MARKER));
 }
@@ -68,9 +73,9 @@ fn kilo_and_opencode_stores_stay_separate() -> () {
         &[Database::row(Some("ses_kilo"), "Kilo work", "/", 10)],
     );
     let kilo: Vec<NativeHarnessSession> =
-        KiloSessionReaderService::for_home(&fixture.root).sessions();
+        KiloSessionReaderService::for_data(&fixture.root, &data(&fixture)).sessions();
     let opencode: Vec<NativeHarnessSession> =
-        OpenCodeSessionReaderService::for_home(&fixture.root).sessions();
+        OpenCodeSessionReaderService::for_data(&fixture.root, &data(&fixture)).sessions();
     assert_eq!(ids(&kilo), vec!["ses_kilo".to_owned()]);
     assert_eq!(ids(&opencode), vec!["ses_opencode".to_owned()]);
     assert_eq!(kilo[0].family, "Kilo");
@@ -81,7 +86,7 @@ fn kilo_and_opencode_stores_stay_separate() -> () {
 fn missing_kilo_database_yields_no_sessions() -> () {
     let fixture: SessionFolderFixture = SessionFolderFixture::new("kilo-missing");
     assert_eq!(
-        KiloSessionReaderService::for_home(&fixture.root).sessions(),
+        KiloSessionReaderService::for_data(&fixture.root, &data(&fixture)).sessions(),
         Vec::<NativeHarnessSession>::new()
     );
 }

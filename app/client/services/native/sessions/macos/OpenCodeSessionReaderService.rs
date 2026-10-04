@@ -12,7 +12,7 @@ pub struct OpenCodeSessionReaderService {
 }
 
 impl OpenCodeSessionReaderService {
-    const HOME_PATH: &'static str = ".local/share/opencode/opencode.db";
+    const DATA_PATH: &'static str = "opencode/opencode.db";
     const FAMILY: &'static str = "OpenCode";
     const TITLE_SOURCE: &'static str = "OpenCode session title";
     const MODEL_QUERY: &'static str = "SELECT id, title, directory, time_updated / 1000, \
@@ -26,20 +26,22 @@ impl OpenCodeSessionReaderService {
 
     pub fn new(
         home: &Path,
-        database: &str,
+        path: PathBuf,
         family: &'static str,
         title_source: &'static str,
     ) -> Self {
         Self {
             home: home.to_path_buf(),
-            path: home.join(database),
+            path,
             family,
             title_source,
         }
     }
 
-    pub fn for_home(home: &Path) -> Self {
-        Self::new(home, Self::HOME_PATH, Self::FAMILY, Self::TITLE_SOURCE)
+    // `data` is the data folder the platform composition chose (XDG data on Linux).
+    pub fn for_data(home: &Path, data: &Path) -> Self {
+        let path: PathBuf = data.join(Self::DATA_PATH);
+        Self::new(home, path, Self::FAMILY, Self::TITLE_SOURCE)
     }
 
     fn prepare(connection: &SqliteReadOnlyConnection) -> Option<SqliteReadOnlyStatement<'_>> {
