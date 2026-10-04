@@ -774,7 +774,7 @@ class NativePreviewReport {
       graphGroups: document.querySelectorAll(this.#GROUP_SELECTOR).length, graphNodes: document.querySelectorAll(this.#GRAPH_NODE_SELECTOR).length, graphTabBounds: this.#tabBounds(),
       tableLayout: this.#grid(this.#TABLE_GRID, this.#TABLE_CARD), contextTableLayout: this.#grid('.context-resource-grid', this.#TABLE_CARD), historyLayout: this.#grid(this.#HISTORY_GRID, this.#HISTORY_CARD), contextHistoryLayout: this.#grid('.context-history-grid', this.#HISTORY_CARD),
       interaction: this.#interaction(), chartPoints: this.#points(canvas), chartUnit: this.#chartUnit(canvas),
-      sessionContainers: document.querySelectorAll('.session-card').length, flatAgentCards: document.querySelectorAll('.session-grid > .agent-row').length,
+      sessionContainers: document.querySelectorAll('.session-card').length, flatAgentCards: document.querySelectorAll('.session-grid > .agent-row, .session-grid > * > .agent-row').length,
       historyCards: document.querySelectorAll(this.#HISTORY_CARD).length, runtimeCards: document.querySelectorAll('.runtime-card').length,
       activityCards: document.querySelectorAll(this.#ACTION_ROW_SELECTOR).length, sidebarOverflow: this.#sidebarOverflow(),
       summaryBounds: this.#summaryBounds(), logicalRecords: this.#logicalRecords(), logicalRows: document.querySelectorAll(this.#AGENT_ROW_SELECTOR).length, appIconLoaded: iconLoaded, diagnostics: this.#diagnostics()};

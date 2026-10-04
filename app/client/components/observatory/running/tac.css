@@ -42,6 +42,20 @@
   align-content: start;
 }
 
+/* Beside the open session panel, cards of different heights pack into columns (top to bottom,
+   then the next column) so no row leaves a hole under a shorter card. */
+.session-area.has-session .session-grid {
+  display: block;
+  columns: 2 300px;
+  column-gap: 14px;
+}
+
+.session-area.has-session .session-card {
+  display: block;
+  margin: 0 0 14px;
+  break-inside: avoid;
+}
+
 .session-card {
   position: relative;
   min-width: 0;
