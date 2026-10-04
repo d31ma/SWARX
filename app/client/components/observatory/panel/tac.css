@@ -665,7 +665,7 @@
     font-size: 13px;
     min-height: 44px;
   }
-  button:focus-visible {
+  button:focus-visible,.nav-item:focus-visible {
     outline: 2px solid #b7c4ff;
     outline-offset: 3px;
   }
@@ -1105,6 +1105,9 @@ h1 {
   gap: 5px;
 }
 .nav-item {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
   background: transparent;
   text-align: left;
   padding: 11px 10px;

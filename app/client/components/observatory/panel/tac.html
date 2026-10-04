@@ -2,11 +2,11 @@
 <w-container fluid class="observatory">
   <aside class="sidebar" aria-label="Application information">
     <div class="brand"><img class="brand-symbol" src="/shared/assets/observatory.svg" alt="" role="presentation" /><div><strong>Swarx Agent Observatory</strong></div></div>
-    <nav class="section-navigation" aria-label="Monitor sections"><button :class="'nav-item ' + (observatory.section === 'running' ? 'selected' : '')" on:click="observatory.setSection('running')">◉ What's running</button><button :class="'nav-item ' + (observatory.section === 'processes' ? 'selected' : '')" on:click="observatory.setSection('processes')">▦ Processes</button><button :class="'nav-item ' + (observatory.section === 'runtime' ? 'selected' : '')" on:click="observatory.setSection('runtime')">▤ Runtimes</button><button :class="'nav-item ' + (observatory.section === 'history' ? 'selected' : '')" on:click="observatory.setSection('history')">⌁ Resource history</button><button :class="'nav-item ' + (observatory.section === 'activity' ? 'selected' : '')" on:click="observatory.setSection('activity')">›_ Activity</button></nav>
+    <nav class="section-navigation" aria-label="Monitor sections"><a href="/" :class="'nav-item ' + (page.path === '/' ? 'selected' : '')" :aria-current="page.path === '/' ? 'page' : null">◉ What's running</a><a href="/processes" :class="'nav-item ' + (page.path === '/processes' ? 'selected' : '')" :aria-current="page.path === '/processes' ? 'page' : null">▦ Processes</a><a href="/runtimes" :class="'nav-item ' + (page.path === '/runtimes' ? 'selected' : '')" :aria-current="page.path === '/runtimes' ? 'page' : null">▤ Runtimes</a><a href="/history" :class="'nav-item ' + (page.path === '/history' ? 'selected' : '')" :aria-current="page.path === '/history' ? 'page' : null">⌁ Resource history</a><a href="/activity" :class="'nav-item ' + (page.path === '/activity' ? 'selected' : '')" :aria-current="page.path === '/activity' ? 'page' : null">›_ Activity</a></nav>
   </aside>
-  <main :class="'main section-' + observatory.section">
+  <main :class="'main section-' + data.sections[page.path].key">
     <w-app-bar class="topbar"><span class="eyebrow">LOCAL AGENT &amp; RESOURCE MONITOR</span><div class="status-controls"><span :class="'live-state state-' + observatory.status"><i class="dot"></i>{observatory.status}</span></div></w-app-bar>
-    <section class="page-heading"><div><h1>{observatory.section === 'running' ? "What’s running." : observatory.section === 'processes' ? 'Observed processes.' : observatory.section === 'runtime' ? 'Runtimes.' : observatory.section === 'history' ? 'Resource history.' : 'Activity.'}</h1><p>Reported sessions and tasks; measured local processes where supported.</p></div><div class="sample-info">Updated {observatory.model.sampled}<br /><span>Observed for {observatory.model.elapsed}</span></div></section>
+    <section class="page-heading"><div><h1>{data.sections[page.path].title}</h1><p>Reported sessions and tasks; measured local processes where supported.</p></div><div class="sample-info">Updated {observatory.model.sampled}<br /><span>Observed for {observatory.model.elapsed}</span></div></section>
     <logic :if="observatory.problem"><w-alert variant="warning" class="alert" role="status">{observatory.problem}</w-alert></logic>
     <loop :for="error of observatory.model.errors"><w-alert variant="warning" class="alert" role="status">{error}</w-alert></loop>
     <section class="summary-grid grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Reported session sources">
@@ -16,20 +16,8 @@
       <w-card variant="outlined" class="metric-card"><div class="metric-label">RECOVERED RECORDS</div><strong>{observatory.model.recoveredSourceCount}</strong><p>Saved locally · awaiting a new report</p></w-card>
     </section>
     <section class="workspace-grid">
-      <section class="logical-panel" aria-label="Reported logical agents">
-        <observatory-running />
-      </section>
-      <section class="runtime-overview" aria-label="Session resources and separate local context">
-        <observatory-runtimes />
-      </section>
-      <div class="sessions-panel">
-        <observatory-processes />
-      </div>
-      <section class="history-overview" aria-label="Session command history and separate local context">
-        <observatory-history />
-      </section>
-      <section class="activity-overview" aria-label="Reported action history">
-        <observatory-activity />
+      <section :class="data.sections[page.path].wrapper" :aria-label="data.sections[page.path].label">
+        <slot></slot>
       </section>
     </section>
     <footer class="main-footer"><span><i class="dot green"></i> Read-only collection · no administrator permissions</span><span>{observatory.model.samples} samples · 2s collection target</span></footer>

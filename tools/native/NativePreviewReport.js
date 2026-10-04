@@ -208,6 +208,7 @@ class NativePreviewReport {
 
   /** @param {string} name @returns {void} */
   static section(name) {
+    if (this.#text(document.querySelector(this.#SELECTED_NAV_SELECTOR)).includes(name)) return;
     this.#click(this.#NAV_SELECTOR, name);
   }
 

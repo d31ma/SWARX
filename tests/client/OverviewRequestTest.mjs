@@ -7,7 +7,7 @@ import { BrowserServiceTestUtils } from './BrowserServiceTestUtils.mjs';
 /** @typedef {import('../../app/client/models/NativeViewSelection.ts').NativeViewSelection} NativeSelection */
 /** @typedef {Pick<import('../../app/client/models/ObservatoryModel.ts').ObservatoryModel, 'selected' | 'liveStatus' | 'detail' | 'selectedSession' | 'selectedSessionProcess'>} TestResponse */
 /** @typedef {{selection: NativeSelection, resolve: (value: TestResponse | PromiseLike<TestResponse>) => void, reject: (reason?: unknown) => void}} PendingRequest */
-/** @typedef {{model?: TestResponse, series: string, section: string, processView: string, query: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, session: string, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, setSection: (event: object, section: string) => void, setProcessView: (event: object, mode: string) => void}} FixtureController */
+/** @typedef {{model?: TestResponse, series: string, processView: string, query: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, session: string, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, setProcessView: (event: object, mode: string) => void}} FixtureController */
 /** @typedef {{controller: FixtureController, requests: PendingRequest[], poll: (() => void) | null}} RequestFrame */
 /** @typedef {Omit<RequestFrame, 'controller'> & {controller: FixtureController | null}} PreparingFrame */
 
@@ -309,31 +309,17 @@ test('series changes preserve the verified selection and query through the next 
   frame.controller.setSeries({}, 'network');
   await OverviewRequestTest.flush();
   assert.equal(frame.controller.series, 'network');
-  assert.equal(frame.controller.section, 'running');
   assert.equal(frame.controller.processView, 'table');
   assert.equal(OverviewRequestTest.acceptedModel(frame).selectedSessionProcess?.started, 'actual-birth');
   await OverviewRequestTest.assertRetainedSelection(frame);
   frame.controller.dispose();
 });
 
-test('section changes preserve the active series and verified process through the next poll', /** @returns {Promise<void>} */ async () => {
-  const frame = await OverviewRequestTest.selectedFrame();
-  frame.controller.setSection({}, 'history');
-  await OverviewRequestTest.flush();
-  assert.equal(frame.controller.section, 'history');
-  assert.equal(frame.controller.series, 'cpu');
-  assert.equal(frame.controller.processView, 'table');
-  assert.equal(OverviewRequestTest.acceptedModel(frame).selectedSession, 'Codex:actual-id');
-  await OverviewRequestTest.assertRetainedSelection(frame);
-  frame.controller.dispose();
-});
-
-test('Tree changes preserve the section and exact process identity through the next poll', /** @returns {Promise<void>} */ async () => {
+test('Tree changes preserve the series and exact process identity through the next poll', /** @returns {Promise<void>} */ async () => {
   const frame = await OverviewRequestTest.selectedFrame();
   frame.controller.setProcessView({}, 'tree');
   await OverviewRequestTest.flush();
   assert.equal(frame.controller.processView, 'tree');
-  assert.equal(frame.controller.section, 'running');
   assert.equal(frame.controller.series, 'cpu');
   assert.equal(OverviewRequestTest.acceptedModel(frame).selectedSessionProcess?.pid, 42);
   await OverviewRequestTest.assertRetainedSelection(frame);

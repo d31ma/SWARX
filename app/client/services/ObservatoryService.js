@@ -39,8 +39,6 @@ export default class ObservatoryService {
     processView = 'table';
     /** @type {string} */
     #graphGroup = ObservatoryService._EMPTY_TEXT;
-    /** @type {string} */
-    section = 'running';
     /** @type {number} */
     #selectedProcessNumber = 0;
     /** @type {string} */
@@ -101,12 +99,6 @@ export default class ObservatoryService {
     /** @param {Event} _event @param {string} mode @returns {void} */
     setSeries(_event, mode) {
         this.series = mode;
-        void this.#renderIfReady();
-    }
-
-    /** @param {Event} _event @param {string} section @returns {void} */
-    setSection(_event, section) {
-        this.section = section;
         void this.#renderIfReady();
     }
 

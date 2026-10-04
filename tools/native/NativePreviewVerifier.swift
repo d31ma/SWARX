@@ -27,6 +27,9 @@ final class NativePreviewVerifier {
     private static let normalSize: NSSize = NSSize(width: 1240, height: 850)
     private static let fullSize: NSSize = NSSize(width: 1680, height: 850)
     private static let smallSize: NSSize = NSSize(width: 1000, height: 700)
+    private static let sectionRoutes: [String: String] = ["What's running": "/", "Processes": "/processes", "Runtimes": "/runtimes",
+                                                          "Resource history": "/history", "Activity": "/activity"]
+    private static let loadPollNanoseconds: UInt64 = 100_000_000
     private static let resourceSteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
         ("native-command-link-ready", "running", "What's running", "", normalSize, "command-linked"),
         ("native-command-resource-live-samples", "polls", "What's running", "", normalSize, "updates"),
@@ -203,6 +206,7 @@ final class NativePreviewVerifier {
         currentStage = Self.actionKey
         resizeForCheck(step.size)
         try await waitForExpiry(step.action)
+        try await openSection(step.section)
         let result: Any = try await evaluate(step)
         var report: [String: Any] = try reportDictionary(result)
         report[Self.nativeWindowKey] = dimensions()
@@ -214,6 +218,14 @@ final class NativePreviewVerifier {
                               Self.widthKey: image.size.width, Self.heightKey: image.size.height]
         currentStage = "report"
         try writeRecord(report, directory.appendingPathComponent(step.label + "-report.json"))
+    }
+
+    // Each monitor section is its own page; a nav click would replace the document mid-evaluation.
+    private func openSection(_ section: String) async throws -> Void {
+        guard let route: String = Self.sectionRoutes[section], let current: URL = view.url, current.path != route,
+              let target: URL = URL(string: route, relativeTo: current) else { return }
+        view.load(URLRequest(url: target))
+        while view.isLoading { try await Task.sleep(nanoseconds: Self.loadPollNanoseconds) }
     }
 
     private func waitForExpiry(_ action: String) async throws -> Void {
