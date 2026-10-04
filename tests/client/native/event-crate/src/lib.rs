@@ -59,6 +59,13 @@ pub mod utils {
         ));
     }
     pub use context::*;
+    mod harness_file {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../../app/client/utils/HarnessFileUtils.rs"
+        ));
+    }
+    pub use harness_file::*;
 }
 pub mod services {
     pub mod logical_execution_history_service {
