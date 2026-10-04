@@ -46,6 +46,10 @@ impl LogicalStateService {
     ) -> Result<NativeCommandBindingEvent, String> {
         let mut normalized: NativeCommandBindingEvent = event.clone();
         normalized.owner.agent_id = self.command_identity(&event.owner)?;
+        NativeCommandContextUtils::require_session_root(
+            self.agents.get(&normalized.owner.agent_id),
+            &normalized,
+        )?;
         Ok(normalized)
     }
 

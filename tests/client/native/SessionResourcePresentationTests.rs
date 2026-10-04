@@ -1,7 +1,8 @@
 use crate::command_resource_tests::CommandResourceViewTests;
 use crate::models::{
-    NativeCommandBinding, NativeCommandObservation, NativeLogicalAgentView, NativeOverviewView,
-    NativeProcessMetrics, NativeRuntimeView, NativeSnapshot, NativeViewSelection,
+    NativeCommandBinding, NativeCommandIdentity, NativeCommandObservation, NativeCommandOwner,
+    NativeLogicalAgent, NativeLogicalAgentView, NativeOverviewView, NativeProcessMetrics,
+    NativeResourceTotals, NativeRuntimeView, NativeSnapshot, NativeViewSelection,
 };
 use crate::TachyonRustServices::{
     CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionViewUtils,
@@ -287,4 +288,227 @@ fn session_conflicting_claims_keep_measured_context_separate() -> () {
     assert_eq!(wire["resourceSessions"][0]["commandCount"], 0);
     assert_eq!(wire["sharedResources"][0]["pid"], 42);
     assert_eq!(wire["sharedResources"][0]["cpu"], "88.0%");
+}
+
+/// A verified Claude session harness link (scope session-harness-process, owned by the session main
+/// agent with no task or action) reaches command resources, the session tree and chart data.
+struct SessionHarnessPresentation;
+
+impl SessionHarnessPresentation {
+    const NOW: f64 = 100.0;
+    const SESSION: &'static str = "7f8c2a40-1d3b-4c55-9e6a-0b1c2d3e4f50";
+    const SUBAGENT: &'static str = "7f8c2a40-1d3b-4c55-9e6a-0b1c2d3e4f50:a17f0c2e9b4d5e61";
+    const SCOPE: &'static str = "session-harness-process";
+    const ROOT: i32 = 72905;
+    const BIRTH: &'static str = "1791069029:370843";
+
+    fn owner() -> NativeCommandOwner {
+        NativeCommandOwner {
+            agent_id: Self::SESSION.to_owned(),
+            session_id: Self::SESSION.to_owned(),
+            task_id: String::new(),
+            execution_id: String::new(),
+        }
+    }
+
+    fn binding() -> NativeCommandBinding {
+        NativeCommandBinding {
+            id: "fixture-run:7".to_owned(),
+            generation: 7,
+            owner: Self::owner(),
+            identity: NativeCommandIdentity {
+                pid: Self::ROOT,
+                started: Self::BIRTH.to_owned(),
+                user: 501,
+                executable: "/Users/fixture/Library/Application Support/Claude/claude-code/2.1.286/f2326db61802/claude.app/Contents/MacOS/claude".to_owned(),
+            },
+            received_at: 90.0,
+            scope: Self::SCOPE.to_owned(),
+            ..Default::default()
+        }
+    }
+
+    fn observation() -> NativeCommandObservation {
+        NativeCommandObservation {
+            binding_id: "fixture-run:7".to_owned(),
+            generation: 7,
+            owner: Self::owner(),
+            pid: Self::ROOT,
+            started: Self::BIRTH.to_owned(),
+            sampled_at: Self::NOW,
+            scope: Self::SCOPE.to_owned(),
+            provenance: "caller-reported".to_owned(),
+            validation: "os-identity-matched".to_owned(),
+            coverage: "Local root process only".to_owned(),
+            metrics: Some(NativeProcessMetrics {
+                pid: Self::ROOT,
+                parent: 72904,
+                started: Self::BIRTH.to_owned(),
+                name: "claude".to_owned(),
+                cpu_percent: Some(4.0),
+                resident_bytes: Some(512 * 1024 * 1024),
+                ..NativeProcessMetrics::default()
+            }),
+            descendants: vec![NativeProcessMetrics {
+                pid: 80001,
+                parent: Self::ROOT,
+                started: "1791069100:1".to_owned(),
+                name: "zsh".to_owned(),
+                cpu_percent: Some(1.0),
+                resident_bytes: Some(4096),
+                ..NativeProcessMetrics::default()
+            }],
+            totals: NativeResourceTotals::default(),
+            history: vec![
+                vec![Some(98.0), Some(3.0), Some(1024.0), None, None, None, None],
+                vec![Some(100.0), Some(4.0), Some(2048.0), None, None, None, None],
+            ],
+        }
+    }
+
+    fn raw(id: &str, status: &str) -> NativeLogicalAgent {
+        let mut raw: NativeLogicalAgent = CommandResourceViewTests::raw_agent();
+        raw.id = id.to_owned();
+        raw.family = "Claude".to_owned();
+        raw.status = status.to_owned();
+        raw.source = "Coordinator lifecycle hooks".to_owned();
+        raw.task = None;
+        raw.executions.clear();
+        raw.session.as_mut().unwrap().id = Self::SESSION.to_owned();
+        raw
+    }
+
+    fn agents(status: &str) -> Vec<NativeLogicalAgentView> {
+        let mut agents: Vec<NativeLogicalAgentView> = vec![
+            LogicalViewUtils::agent(&Self::raw(Self::SESSION, status), Self::NOW),
+            LogicalViewUtils::agent(&Self::raw(Self::SUBAGENT, "active"), Self::NOW),
+        ];
+        CommandResourceViewUtils::present(
+            &mut agents,
+            &[Self::observation()],
+            &[Self::binding()],
+            Self::NOW,
+        );
+        agents
+    }
+}
+
+#[test]
+fn session_harness_link_is_a_main_agent_resource_and_never_a_sub_agent_resource() -> () {
+    let agents: Vec<NativeLogicalAgentView> = SessionHarnessPresentation::agents("active");
+    assert_eq!(agents[0].command_resources.len(), 1);
+    assert_eq!(
+        agents[0].command_resources[0].trust_label,
+        "Session harness process; OS identity matched"
+    );
+    assert_eq!(agents[0].command_resources[0].name, "claude");
+    assert_eq!(agents[0].command_resources[0].descendant_rows.len(), 1);
+    assert!(agents[1].command_resources.is_empty());
+}
+
+#[test]
+fn session_harness_link_stays_while_idle_and_ends_with_the_session() -> () {
+    assert_eq!(
+        SessionHarnessPresentation::agents("idle")[0]
+            .command_resources
+            .len(),
+        1
+    );
+    for ended in ["completed", "stale", "failed"] {
+        assert!(SessionHarnessPresentation::agents(ended)[0]
+            .command_resources
+            .is_empty());
+    }
+    let mut agents: Vec<NativeLogicalAgentView> = vec![LogicalViewUtils::agent(
+        &SessionHarnessPresentation::raw(SessionHarnessPresentation::SESSION, "active"),
+        SessionHarnessPresentation::NOW,
+    )];
+    CommandResourceViewUtils::present(
+        &mut agents,
+        &[SessionHarnessPresentation::observation()],
+        &[],
+        SessionHarnessPresentation::NOW,
+    );
+    assert!(agents[0].command_resources.is_empty());
+}
+
+#[test]
+fn bound_session_produces_a_session_tree_graph_and_chart_data() -> () {
+    let wire = SessionResourcePresentationTests::wire(
+        SessionHarnessPresentation::agents("idle"),
+        Vec::new(),
+        SessionHarnessPresentation::NOW,
+    );
+    let session = &wire["resourceSessions"][0];
+    assert_eq!(session["id"], SessionHarnessPresentation::SESSION);
+    assert_eq!(session["commandCount"], 1);
+    assert_eq!(session["processCount"], 2);
+    assert_eq!(
+        session["resourceNotice"],
+        "Verified session harness and command roots with current descendants only; root totals exclude children. Shared runtimes stay separate."
+    );
+    assert_eq!(session["tree"][0]["pid"], SessionHarnessPresentation::ROOT);
+    assert_eq!(session["tree"][1]["pid"], 80001);
+    assert_eq!(
+        session["graph"]["nodes"][1]["parentIdentity"],
+        "72905:1791069029:370843"
+    );
+    let command = &session["commands"][0];
+    assert_eq!(command["scope"], SessionHarnessPresentation::SCOPE);
+    assert_eq!(command["scopeLabel"], "Session harness process");
+    assert_eq!(command["name"], "Session harness process · claude");
+    assert_eq!(
+        command["tree"][0]["owner"]["scope_label"],
+        "session harness process"
+    );
+    assert_eq!(
+        command["tree"][0]["owner"]["agent_id"],
+        SessionHarnessPresentation::SESSION
+    );
+    assert_eq!(command["tree"][0]["owner"]["task_id"], "");
+    assert!(!wire.to_string().contains("Application Support"));
+    let chart = &wire["chartResources"][0];
+    assert_eq!(chart["pid"], SessionHarnessPresentation::ROOT);
+    assert_eq!(chart["charts"][0]["series"][0]["points"][1]["y"], 4.0);
+}
+
+#[test]
+fn session_harness_root_heads_the_tree_above_a_command_root_it_contains() -> () {
+    let session: &str = SessionHarnessPresentation::SESSION;
+    let mut raw: NativeLogicalAgent = CommandResourceViewTests::raw_agent();
+    raw.id = session.to_owned();
+    raw.family = "Claude".to_owned();
+    raw.session.as_mut().unwrap().id = session.to_owned();
+    raw.executions[0].session_id = Some(session.to_owned());
+    raw.executions[0].source = Some(raw.source.clone());
+    let mut command: NativeCommandObservation = CommandResourceViewTests::observation();
+    command.owner.agent_id = session.to_owned();
+    command.owner.session_id = session.to_owned();
+    command.metrics.as_mut().unwrap().parent = 80001;
+    let mut command_binding: NativeCommandBinding = CommandResourceViewTests::binding();
+    command_binding.owner = command.owner.clone();
+    let mut agents: Vec<NativeLogicalAgentView> = vec![LogicalViewUtils::agent(&raw, 100.0)];
+    CommandResourceViewUtils::present(
+        &mut agents,
+        &[command, SessionHarnessPresentation::observation()],
+        &[command_binding, SessionHarnessPresentation::binding()],
+        100.0,
+    );
+    assert_eq!(agents[0].command_resources.len(), 2);
+    let wire = SessionResourcePresentationTests::wire(agents, Vec::new(), 100.0);
+    let resources = &wire["resourceSessions"][0];
+    assert_eq!(resources["commandCount"], 2);
+    assert_eq!(
+        resources["commands"][0]["scope"],
+        SessionHarnessPresentation::SCOPE
+    );
+    assert_eq!(
+        resources["commands"][1]["scope"],
+        "reported-command-process"
+    );
+    assert_eq!(
+        resources["tree"][0]["pid"],
+        SessionHarnessPresentation::ROOT
+    );
+    assert_eq!(resources["processCount"], 3);
 }

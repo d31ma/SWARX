@@ -1,4 +1,7 @@
-use crate::models::{NativeClaudeHookPayload, NativeLogicalEvent};
+use crate::models::{
+    NativeClaudeHookPayload, NativeCommandBindingEvent, NativeCommandIdentity, NativeCommandOwner,
+    NativeLogicalEvent,
+};
 
 pub struct ClaudeHookEventFactory {}
 
@@ -11,6 +14,8 @@ impl ClaudeHookEventFactory {
     const TASK: &'static str = "logical.task";
     const EXECUTION_START: &'static str = "logical.execution.start";
     const EXECUTION_FINISH: &'static str = "logical.execution.finish";
+    const SESSION_PROCESS: &'static str = "logical.command.session";
+    const BINDING_VERSION: i64 = 1;
     const COMMAND_TOOLS: &'static [&'static str] =
         &["Bash", "shell", "local_shell", "exec_command"];
     const FILE_TOOLS: &'static [&'static str] =
@@ -57,6 +62,28 @@ impl ClaudeHookEventFactory {
         event.execution = Some(payload.tool_use_id.clone()?);
         event.status = Some(status);
         Some(event)
+    }
+
+    /// Links the session main agent (agent ID == session ID) to its verified harness process.
+    /// Sub-agents run inside the same process, so the link never names a sub-agent, task or action.
+    pub fn session_process(
+        payload: &NativeClaudeHookPayload,
+        identity: NativeCommandIdentity,
+    ) -> Option<NativeCommandBindingEvent> {
+        Self::require_direct_harness(payload)?;
+        let session: String = payload.session_id.clone()?;
+        Some(NativeCommandBindingEvent {
+            version: Self::BINDING_VERSION,
+            kind: Self::SESSION_PROCESS.to_owned(),
+            owner: NativeCommandOwner {
+                agent_id: session.clone(),
+                session_id: session,
+                task_id: String::new(),
+                execution_id: String::new(),
+            },
+            identity: Some(identity),
+            binding_id: None,
+        })
     }
 
     fn event(kind: &str, payload: &NativeClaudeHookPayload) -> Option<NativeLogicalEvent> {

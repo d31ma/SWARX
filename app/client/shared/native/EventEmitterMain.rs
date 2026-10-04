@@ -68,7 +68,21 @@ impl EventEmitterMain {
     fn read_hook(selection: (String, NativeHookDialect)) -> () {
         let (endpoint, dialect): (String, NativeHookDialect) = selection;
         let mut input: std::io::StdinLock<'static> = std::io::stdin().lock();
-        ClaudeHookAdapter::new(endpoint, dialect).deliver(&mut input)
+        Self::hook_adapter(ClaudeHookAdapter::new(endpoint, dialect)).deliver(&mut input)
+    }
+
+    #[cfg(target_os = "macos")]
+    fn hook_adapter(adapter: ClaudeHookAdapter) -> ClaudeHookAdapter {
+        let user: i64 = i64::from(unsafe { libc::getuid() });
+        let origin: i32 = std::os::unix::process::parent_id() as i32;
+        let reader: crate::services::NativeProcessReaderService =
+            crate::services::NativeProcessReaderService::new();
+        adapter.with_process_root(Box::new(reader), user, origin)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn hook_adapter(adapter: ClaudeHookAdapter) -> ClaudeHookAdapter {
+        adapter
     }
 
     fn event_result(arguments: Vec<String>) -> i32 {

@@ -18,12 +18,15 @@ pub struct NativeCommandBindingRegistryService {
 impl NativeCommandBindingRegistryService {
     const EARLIEST_CLOCK_TIME: f64 = 0.0;
     const LEASE_SECONDS: f64 = 30.0;
+    const SESSION_LEASE_SECONDS: f64 = 120.0;
     const MAXIMUM_BINDINGS: usize = 128;
     const MAXIMUM_RUN_ID: usize = 128;
     const BIND: &'static str = "logical.command.bind";
     const RENEW: &'static str = "logical.command.renew";
     const UNBIND: &'static str = "logical.command.unbind";
+    const SESSION: &'static str = "logical.command.session";
     const SCOPE: &'static str = "reported-command-process";
+    const SESSION_SCOPE: &'static str = "session-harness-process";
     const PROVENANCE: &'static str = "caller-reported";
     const VALIDATION: &'static str = "os-identity-matched";
     const INVALID_RUN: &'static str = "Invalid server run identity.";
@@ -96,10 +99,7 @@ impl NativeCommandBindingRegistryService {
         let identity: Result<(), String> = Self::require_identity(&binding, event);
         self.invalidate_identity_failure(event, identity.as_ref().err());
         identity?;
-        binding.verified_at = time.0;
-        binding.lease_until = time.1 + Self::LEASE_SECONDS;
-        self.bindings.insert(binding.id.clone(), binding.clone());
-        Ok(Some(binding))
+        Ok(Some(self.extend(&mut binding, time)))
     }
 
     pub fn unbind(
@@ -242,7 +242,68 @@ impl NativeCommandBindingRegistryService {
             Self::BIND => self.bind(event, time),
             Self::RENEW => self.renew(event, time),
             Self::UNBIND => self.unbind(event, time),
+            Self::SESSION => self.session(event, time),
             _ => Err(Self::INVALID_EVENT.to_owned()),
+        }
+    }
+
+    fn session(
+        &mut self,
+        event: &NativeCommandBindingEvent,
+        time: (f64, f64),
+    ) -> Result<Option<NativeCommandBinding>, String> {
+        match self.session_binding(&event.owner) {
+            Some(mut binding) => self.refresh(&mut binding, event, time),
+            None => self.bind(event, time),
+        }
+    }
+
+    fn session_binding(&self, owner: &NativeCommandOwner) -> Option<NativeCommandBinding> {
+        self.bindings
+            .values()
+            .find(|binding: &&NativeCommandBinding| -> bool {
+                [
+                    binding.owner == *owner,
+                    binding.scope == Self::SESSION_SCOPE,
+                ]
+                .into_iter()
+                .all(std::convert::identity)
+            })
+            .cloned()
+    }
+
+    fn refresh(
+        &mut self,
+        binding: &mut NativeCommandBinding,
+        event: &NativeCommandBindingEvent,
+        time: (f64, f64),
+    ) -> Result<Option<NativeCommandBinding>, String> {
+        Self::require_identity(binding, event)?;
+        Ok(Some(self.extend(binding, time)))
+    }
+
+    fn extend(
+        &mut self,
+        binding: &mut NativeCommandBinding,
+        time: (f64, f64),
+    ) -> NativeCommandBinding {
+        binding.verified_at = time.0;
+        binding.lease_until = time.1 + Self::lease(&binding.scope);
+        self.bindings.insert(binding.id.clone(), binding.clone());
+        binding.clone()
+    }
+
+    fn lease(scope: &str) -> f64 {
+        match scope {
+            Self::SESSION_SCOPE => Self::SESSION_LEASE_SECONDS,
+            _ => Self::LEASE_SECONDS,
+        }
+    }
+
+    fn scope(kind: &str) -> &'static str {
+        match kind {
+            Self::SESSION => Self::SESSION_SCOPE,
+            _ => Self::SCOPE,
         }
     }
 
@@ -278,6 +339,7 @@ impl NativeCommandBindingRegistryService {
         generation: i64,
         time: (f64, f64),
     ) -> NativeCommandBinding {
+        let scope: &str = Self::scope(&event.kind);
         NativeCommandBinding {
             id: format!("{}:{generation}", self.run_id),
             run_id: self.run_id.clone(),
@@ -286,8 +348,8 @@ impl NativeCommandBindingRegistryService {
             identity: identity.clone(),
             received_at: time.0,
             verified_at: time.0,
-            lease_until: time.1 + Self::LEASE_SECONDS,
-            scope: Self::SCOPE.to_owned(),
+            lease_until: time.1 + Self::lease(scope),
+            scope: scope.to_owned(),
             provenance: Self::PROVENANCE.to_owned(),
             validation: Self::VALIDATION.to_owned(),
         }

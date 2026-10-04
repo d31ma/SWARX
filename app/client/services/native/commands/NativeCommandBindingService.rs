@@ -26,6 +26,7 @@ impl NativeCommandBindingService {
     const BIND: &'static str = "logical.command.bind";
     const RENEW: &'static str = "logical.command.renew";
     const UNBIND: &'static str = "logical.command.unbind";
+    const SESSION: &'static str = "logical.command.session";
     const EVENTS: &'static str = "events";
     const COORDINATOR: &'static str = "coordinator-report";
     const INVALID_SCHEMA: &'static str = "Invalid command binding schema.";
@@ -88,7 +89,7 @@ impl NativeCommandBindingService {
 
     fn validate_event(event: &NativeCommandBindingEvent) -> Result<(), String> {
         Self::require(event.version == Self::VERSION, Self::INVALID_SCHEMA)?;
-        Self::validate_owner(&event.owner)?;
+        Self::validate_owner(event)?;
         event
             .identity
             .as_ref()
@@ -104,11 +105,36 @@ impl NativeCommandBindingService {
         Self::require(Self::shape(event), Self::INVALID_SCHEMA)
     }
 
-    fn validate_owner(owner: &NativeCommandOwner) -> Result<(), String> {
+    fn validate_owner(event: &NativeCommandBindingEvent) -> Result<(), String> {
+        let owner: &NativeCommandOwner = &event.owner;
         Self::text(&owner.agent_id, Self::MAXIMUM_IDENTIFIER)?;
         Self::text(&owner.session_id, Self::MAXIMUM_IDENTIFIER)?;
+        Self::owner_scope(event)(owner)
+    }
+
+    fn owner_scope(
+        event: &NativeCommandBindingEvent,
+    ) -> fn(&NativeCommandOwner) -> Result<(), String> {
+        if event.kind == Self::SESSION {
+            return Self::session_owner;
+        }
+        Self::execution_owner
+    }
+
+    fn execution_owner(owner: &NativeCommandOwner) -> Result<(), String> {
         Self::text(&owner.task_id, Self::MAXIMUM_IDENTIFIER)?;
         Self::text(&owner.execution_id, Self::MAXIMUM_IDENTIFIER)
+    }
+
+    fn session_owner(owner: &NativeCommandOwner) -> Result<(), String> {
+        let valid: bool = [
+            owner.agent_id == owner.session_id,
+            owner.task_id.is_empty(),
+            owner.execution_id.is_empty(),
+        ]
+        .into_iter()
+        .all(std::convert::identity);
+        Self::require(valid, Self::INVALID_SCHEMA)
     }
 
     fn text(value: &str, maximum: usize) -> Result<(), String> {
@@ -125,7 +151,10 @@ impl NativeCommandBindingService {
     }
 
     fn validate_identity(identity: &NativeCommandIdentity) -> Result<(), String> {
-        Self::require(identity.pid > Self::INVALID_PROCESS_ID, Self::INVALID_SCHEMA)?;
+        Self::require(
+            identity.pid > Self::INVALID_PROCESS_ID,
+            Self::INVALID_SCHEMA,
+        )?;
         Self::require(identity.user >= Self::FIRST_USER, Self::INVALID_SCHEMA)?;
         Self::birth(&identity.started)?;
         Self::text(&identity.executable, Self::MAXIMUM_PATH)?;
@@ -157,7 +186,7 @@ impl NativeCommandBindingService {
 
     fn shape(event: &NativeCommandBindingEvent) -> bool {
         match event.kind.as_str() {
-            Self::BIND => [event.identity.is_some(), event.binding_id.is_none()]
+            Self::BIND | Self::SESSION => [event.identity.is_some(), event.binding_id.is_none()]
                 .into_iter()
                 .all(std::convert::identity),
             Self::RENEW => [event.identity.is_some(), event.binding_id.is_some()]

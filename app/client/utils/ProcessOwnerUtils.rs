@@ -6,7 +6,11 @@ use crate::models::{
 pub struct ProcessOwnerUtils;
 
 impl ProcessOwnerUtils {
-    const COMMAND_SCOPE: &'static str = "reported-command-process";
+    const SESSION_SCOPE: &'static str = "session-harness-process";
+    const COMMAND_LABEL: &'static str = "command root only";
+    const SESSION_LABEL: &'static str = "session harness process";
+    const COMMAND_NAME: &'static str = "Linked command";
+    const SESSION_NAME: &'static str = "Session harness process";
     const PROCESS_PRESENT: &'static str = "process-present";
     const NETWORK_UNAVAILABLE: &'static str = "unavailable";
     const UNIQUE_OWNER: usize = 1;
@@ -163,9 +167,16 @@ impl ProcessOwnerUtils {
             root_pid: observation.pid,
             root_started: observation.started.clone(),
             scope: Self::ROOT_ONLY.to_owned(),
-            scope_label: "command root only".to_owned(),
+            scope_label: Self::root_label(&observation.scope).0.to_owned(),
             validation: command.trust_label.clone(),
         }
+    }
+
+    fn root_label(scope: &str) -> (&'static str, &'static str) {
+        if scope == Self::SESSION_SCOPE {
+            return (Self::SESSION_LABEL, Self::SESSION_NAME);
+        }
+        (Self::COMMAND_LABEL, Self::COMMAND_NAME)
     }
 
     fn annotate_groups(groups: &mut [NativeGroup], owner: &NativeProcessOwner) -> () {
@@ -259,9 +270,13 @@ impl ProcessOwnerUtils {
             id: format!("linked-command:{}:{}", owner.binding_id, owner.generation),
             pid: owner.pid,
             started: owner.started.clone(),
-            name: format!("Linked command · {}", command.name),
+            name: format!(
+                "{} · {}",
+                Self::root_label(&command.observation.scope).1,
+                command.name
+            ),
             family: agent.family.clone(),
-            scope: Self::COMMAND_SCOPE.to_owned(),
+            scope: command.observation.scope.clone(),
             status: Self::PROCESS_PRESENT.to_owned(),
             instrumented: true,
             identity_evidence: owner.validation.clone(),

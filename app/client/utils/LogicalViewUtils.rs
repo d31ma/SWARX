@@ -250,8 +250,38 @@ impl LogicalViewUtils {
         let owner: &crate::models::NativeCommandOwner = &resource.observation.owner;
         [
             owner.agent_id == agent.id,
-            agent.task.as_ref().map(Self::task_identifier) == Some(owner.task_id.as_str()),
             agent.session.as_ref().map(Self::session_identifier) == Some(owner.session_id.as_str()),
+            Self::current_owner(agent, owner),
+        ]
+        .into_iter()
+        .all(std::convert::identity)
+    }
+
+    // A session harness link names no task or action: it belongs to the session main agent.
+    fn current_owner(
+        agent: &NativeLogicalAgentView,
+        owner: &crate::models::NativeCommandOwner,
+    ) -> bool {
+        [
+            Self::session_owner(owner),
+            Self::current_execution_owner(agent, owner),
+        ]
+        .into_iter()
+        .any(std::convert::identity)
+    }
+
+    fn session_owner(owner: &crate::models::NativeCommandOwner) -> bool {
+        [owner.task_id.is_empty(), owner.execution_id.is_empty()]
+            .into_iter()
+            .all(std::convert::identity)
+    }
+
+    fn current_execution_owner(
+        agent: &NativeLogicalAgentView,
+        owner: &crate::models::NativeCommandOwner,
+    ) -> bool {
+        [
+            agent.task.as_ref().map(Self::task_identifier) == Some(owner.task_id.as_str()),
             Self::has_execution(&agent.executions, &owner.execution_id),
         ]
         .into_iter()

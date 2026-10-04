@@ -14,11 +14,17 @@ pub struct SessionResourceUtils;
 impl SessionResourceUtils {
     const MAXIMUM_SAMPLE_AGE: f64 = 8.0;
     const COMMAND_SCOPE: &'static str = "reported-command-process";
+    const SESSION_SCOPE: &'static str = "session-harness-process";
+    const LINKED_SCOPES: [&'static str; 2] = [Self::COMMAND_SCOPE, Self::SESSION_SCOPE];
+    const ACTIVE: &'static str = "active";
+    const RUNNING: &'static str = "running";
+    const COMMAND_STATUSES: &'static [&'static str] = &[Self::ACTIVE, Self::RUNNING];
+    const SESSION_STATUSES: &'static [&'static str] = &[Self::ACTIVE, Self::RUNNING, "idle"];
     const PROVENANCE: &'static str = "caller-reported";
     const VALIDATION: &'static str = "os-identity-matched";
     const UNAVAILABLE: &'static str =
         "No current verified process link; session resources unavailable.";
-    const LINKED: &'static str = "Verified command roots and current descendants only; root totals exclude children. Shared runtimes stay separate.";
+    const LINKED: &'static str = "Verified session harness and command roots with current descendants only; root totals exclude children. Shared runtimes stay separate.";
     const EMPTY: &'static str = "";
     const MISSING_PID: i32 = 0;
 
@@ -274,6 +280,9 @@ impl SessionResourceUtils {
             let agent: NativeLogicalAgentView = LogicalViewUtils::running_view(source, now);
             Self::agent_commands(session, &agent, now, &mut groups);
         }
+        groups.sort_by_key(|group: &NativeRuntimeView| -> bool {
+            group.group.scope != Self::SESSION_SCOPE
+        });
         groups
     }
 
@@ -310,9 +319,9 @@ impl SessionResourceUtils {
             source.0.known,
             source.0.id.as_deref() == Some(observation.owner.session_id.as_str()),
             source.0.family == source.1.family,
-            ["active", "running"].contains(&source.1.status.as_str()),
+            Self::live_statuses(observation).contains(&source.1.status.as_str()),
             !source.1.stale,
-            observation.scope == Self::COMMAND_SCOPE,
+            Self::LINKED_SCOPES.contains(&observation.scope.as_str()),
             observation.provenance == Self::PROVENANCE,
             observation.validation == Self::VALIDATION,
             Self::fresh(observation.sampled_at, now),
@@ -320,6 +329,13 @@ impl SessionResourceUtils {
         ]
         .into_iter()
         .all(std::convert::identity)
+    }
+
+    fn live_statuses(observation: &NativeCommandObservation) -> &'static [&'static str] {
+        if observation.scope == Self::SESSION_SCOPE {
+            return Self::SESSION_STATUSES;
+        }
+        Self::COMMAND_STATUSES
     }
 
     fn fresh(sampled_at: f64, now: f64) -> bool {
@@ -408,7 +424,7 @@ impl SessionResourceUtils {
     }
 
     fn context(group: &NativeRuntimeView, sessions: &[NativeSessionResourceView]) -> bool {
-        if group.group.scope != Self::COMMAND_SCOPE {
+        if !Self::LINKED_SCOPES.contains(&group.group.scope.as_str()) {
             return true;
         }
         !Self::linked_context(group, sessions)

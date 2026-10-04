@@ -10,6 +10,7 @@ impl RuntimeViewUtils {
     const SHARED_SCOPE: &'static str = "shared-runtime";
     const TREE_SCOPE: &'static str = "local-process-tree";
     const COMMAND_SCOPE: &'static str = "reported-command-process";
+    const SESSION_SCOPE: &'static str = "session-harness-process";
     const PROGRESS_UNAVAILABLE: &'static str = "Progress unavailable";
     const PARTIAL: &'static str = "partial";
     const PARTIAL_NOTE: &'static str = "Partial counters";
@@ -77,6 +78,7 @@ impl RuntimeViewUtils {
     fn scope(scope: &str) -> String {
         match scope {
             Self::COMMAND_SCOPE => "Command root process".to_owned(),
+            Self::SESSION_SCOPE => "Session harness process".to_owned(),
             Self::SHARED_SCOPE => "Shared runtime".to_owned(),
             Self::TREE_SCOPE => "Process tree".to_owned(),
             _ => Self::NO_SCOPE.to_owned(),

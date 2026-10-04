@@ -20,6 +20,14 @@ impl ClaudeHookMapper {
     const NONE: &'static str = ClaudeHookEventFactory::NONE;
     const START: &'static str = ClaudeHookEventFactory::START;
 
+    /// Every mapped hook except SessionEnd refreshes the session harness process link.
+    pub fn refreshes_session(payload: &NativeClaudeHookPayload) -> bool {
+        let name: Option<&str> = payload.hook_event_name.as_deref();
+        [Self::plan(name).is_some(), name != Some(Self::SESSION_END)]
+            .into_iter()
+            .all(std::convert::identity)
+    }
+
     pub fn events(payload: &NativeClaudeHookPayload) -> Vec<NativeLogicalEvent> {
         let plan: Option<(&str, &str, &str)> = Self::plan(payload.hook_event_name.as_deref());
         Self::planned(payload, plan)

@@ -1,13 +1,18 @@
 use crate::models::{
-    NativeClaudeHookPayload, NativeHookDialect, NativeLogicalEvent, NativeLogicalReceipt,
+    NativeClaudeHookPayload, NativeCommandBindingEvent, NativeCommandIdentity, NativeHookDialect,
+    NativeLogicalEvent, NativeLogicalReceipt,
 };
 use crate::utils::{ActionPreviewUtils, HarnessFileUtils};
-use crate::{ClaudeHookMapper, ClaudeHookToolInputReader};
+use crate::{
+    ClaudeHookEventFactory, ClaudeHookMapper, ClaudeHookToolInputReader, HarnessProcessRootReader,
+    ProcessIdentityReader,
+};
 use std::io::Read;
 
 pub struct ClaudeHookAdapter {
     client: crate::services::LogicalEventClientService,
     dialect: NativeHookDialect,
+    root: Option<HarnessProcessRootReader>,
 }
 
 impl ClaudeHookAdapter {
@@ -29,6 +34,7 @@ impl ClaudeHookAdapter {
     pub const GEMINI_BEFORE_AGENT: &'static str = "BeforeAgent";
     pub const GEMINI_AFTER_AGENT: &'static str = "AfterAgent";
     const EXPECTED: &'static str = "one hook JSON object";
+    const UNENCODED_LINK: &'static str = "Cannot encode the session process link.";
     const EVENT_KEY: &'static str = "hook_event_name";
     const GOOSE_EVENT_KEY: &'static str = "event";
     const SESSION_KEY: &'static str = "session_id";
@@ -128,20 +134,68 @@ impl ClaudeHookAdapter {
         Self {
             client: crate::services::LogicalEventClientService::new(endpoint),
             dialect,
+            root: None,
         }
     }
 
-    pub fn deliver(&self, input: &mut dyn Read) -> () {
-        let events: Vec<NativeLogicalEvent> = self.events(input);
-        let _delivery: Result<(), String> = self.send_all(&events);
+    /// Lets hooks link the session to its harness process: the reader walks a bounded number of
+    /// ancestors upward from `origin` (the sender's parent).
+    pub fn with_process_root(
+        mut self,
+        reader: Box<dyn ProcessIdentityReader>,
+        user: i64,
+        origin: i32,
+    ) -> Self {
+        self.root = Some(HarnessProcessRootReader::new(reader, user, origin));
+        self
+    }
+
+    pub fn deliver(&mut self, input: &mut dyn Read) -> () {
+        let payload: Option<NativeClaudeHookPayload> = self.payload(input);
+        let events: Vec<NativeLogicalEvent> = Self::mapped(payload.as_ref());
+        let _delivery: Result<(), String> =
+            self.send_all(&events)
+                .and_then(|_: ()| -> Result<(), String> {
+                    self.send_session_process(payload.as_ref())
+                });
     }
 
     pub fn events(&self, input: &mut dyn Read) -> Vec<NativeLogicalEvent> {
         let payload: Option<NativeClaudeHookPayload> = self.payload(input);
-        payload
-            .as_ref()
-            .map(ClaudeHookMapper::events)
-            .unwrap_or_default()
+        Self::mapped(payload.as_ref())
+    }
+
+    fn mapped(payload: Option<&NativeClaudeHookPayload>) -> Vec<NativeLogicalEvent> {
+        payload.map(ClaudeHookMapper::events).unwrap_or_default()
+    }
+
+    fn send_session_process(
+        &mut self,
+        payload: Option<&NativeClaudeHookPayload>,
+    ) -> Result<(), String> {
+        self.session_process(payload)
+            .map(|event: NativeCommandBindingEvent| -> Result<(), String> {
+                self.send_binding(&event)
+            })
+            .unwrap_or(Ok(()))
+    }
+
+    fn session_process(
+        &mut self,
+        payload: Option<&NativeClaudeHookPayload>,
+    ) -> Option<NativeCommandBindingEvent> {
+        let payload: &NativeClaudeHookPayload =
+            payload.filter(|payload: &&NativeClaudeHookPayload| -> bool {
+                ClaudeHookMapper::refreshes_session(payload)
+            })?;
+        let identity: NativeCommandIdentity = self.root.as_mut()?.root(&payload.family)?;
+        ClaudeHookEventFactory::session_process(payload, identity)
+    }
+
+    fn send_binding(&self, event: &NativeCommandBindingEvent) -> Result<(), String> {
+        let data: Vec<u8> = serde_json::to_vec(event)
+            .map_err(|_: serde_json::Error| -> String { Self::UNENCODED_LINK.to_owned() })?;
+        self.client.send_bytes(&data).map(Self::ignore_receipt)
     }
 
     const fn fixed(

@@ -15,6 +15,7 @@ use capture_peer::ClaudeHookCapturePeer;
 use event_slice::models::{
     NativeExecutionRecord, NativeLogicalAgent, NativeSessionLink, NativeTaskRecord,
 };
+use event_slice::utils::NativeCommandContextUtils;
 use event_slice::EventSource;
 use fixture::ClaudeHookFixture;
 use logical_event_fixture::LogicalEventFixture;
@@ -28,6 +29,8 @@ struct ClaudeHookTests;
 impl ClaudeHookTests {
     const FAMILY: &'static str = "Claude";
     const SILENT_LIMIT: Duration = Duration::from_secs(2);
+    const SESSION_LINK: &'static str = "logical.command.session";
+    const REFRESHING_CLAUDE_HOOKS: usize = 11;
 
     fn send(fixture: &LogicalEventFixture, payload: &Value) -> () {
         let output: Output =
@@ -56,6 +59,26 @@ impl ClaudeHookTests {
             .into_iter()
             .find(|row: &NativeLogicalAgent| -> bool { row.id == identifier })
             .expect("Reported Claude agent row must exist")
+    }
+
+    fn session_link(frame: &[u8]) -> bool {
+        let value: Value = serde_json::from_slice(frame).unwrap();
+        value["kind"] == Self::SESSION_LINK
+    }
+
+    fn require_session_link(frame: &[u8]) -> () {
+        let value: Value = serde_json::from_slice(frame).unwrap();
+        let keys: Vec<&String> = value["identity"].as_object().unwrap().keys().collect();
+        assert_eq!(keys, ["executable", "pid", "started", "user"]);
+        assert_eq!(value["owner"]["agent_id"], ClaudeHookFixture::SESSION);
+        assert_eq!(value["owner"]["session_id"], ClaudeHookFixture::SESSION);
+        assert_eq!(value["owner"]["task_id"], "");
+        assert_eq!(value["owner"]["execution_id"], "");
+        let executable: &str = value["identity"]["executable"].as_str().unwrap();
+        assert!(NativeCommandContextUtils::session_root(
+            Self::FAMILY,
+            executable
+        ));
     }
 
     fn require_rows_private(fixture: &LogicalEventFixture) -> () {
@@ -249,9 +272,17 @@ fn wire_frames_exclude_prompts_commands_file_contents_and_secrets() -> () {
         ClaudeHookFixture::require_silent_success(&output);
     }
     let frames: Vec<Vec<u8>> = peer.finish();
-    assert_eq!(frames.len(), expected);
-    for frame in frames {
-        ClaudeHookFixture::require_private_text_absent(&frame);
+    for frame in &frames {
+        ClaudeHookFixture::require_private_text_absent(frame);
+    }
+    let (links, logical): (Vec<Vec<u8>>, Vec<Vec<u8>>) = frames
+        .into_iter()
+        .partition(|frame: &Vec<u8>| -> bool { ClaudeHookTests::session_link(frame) });
+    assert_eq!(logical.len(), expected);
+    // A session process link is sent only when this test itself runs below a Claude Code session.
+    assert!([0, ClaudeHookTests::REFRESHING_CLAUDE_HOOKS].contains(&links.len()));
+    for link in links {
+        ClaudeHookTests::require_session_link(&link);
     }
 }
 
