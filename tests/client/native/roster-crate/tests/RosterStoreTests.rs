@@ -281,3 +281,37 @@ fn only_a_call_left_running_keeps_a_reported_running_status_after_restart() -> (
         fixture.store.save(&rows).unwrap();
     }
 }
+
+#[test]
+fn a_roster_at_the_policy_limits_with_long_fields_still_saves_and_loads() -> () {
+    // 100 rows of 20 finished calls each, with realistic long sanitized fields (about 1.3 MB):
+    // the byte cap must hold what the row and call limits allow.
+    let fixture = Fixture::new();
+    let rows: Vec<_> = (0..100)
+        .map(|index: usize| {
+            let mut row = Fixture::row();
+            row.id = format!("agent-{index:03}-00000000-0000-4000-8000-000000000000");
+            row.executions = (0..20)
+                .map(|call: usize| {
+                    let mut execution = row.executions[0].clone();
+                    execution.id = format!("toolu_{index:03}_{call:02}_0000000000000000000000");
+                    execution.status = "completed".to_string();
+                    execution.exit_code = Some(0);
+                    execution.duration_seconds = Some(1.5);
+                    execution.finished_at = Some(991.5);
+                    execution.task_id = Some("00000000-0000-4000-8000-000000000002".to_string());
+                    execution.task_name = Some("Prompt turn with a fairly long reported task title for sizing".to_string());
+                    execution.session_id = Some("00000000-0000-4000-8000-000000000001".to_string());
+                    execution.session_name = Some("SWARX/Implement long session name".to_string());
+                    execution.source = Some("Coordinator lifecycle hooks".to_string());
+                    execution.detail = Some("cd /Volumes/ANNEX/build/worktrees/SWARX-EXAMPLE && cargo test --locked --no-fail-fast".to_string());
+                    execution
+                })
+                .collect();
+            row
+        })
+        .collect();
+    assert!(serde_json::to_vec(&rows).unwrap().len() > 1_048_576);
+    fixture.store.save(&rows).unwrap();
+    assert_eq!(fixture.store.load(1010.0).unwrap().len(), 100);
+}

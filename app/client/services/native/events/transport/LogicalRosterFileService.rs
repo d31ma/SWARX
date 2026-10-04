@@ -19,7 +19,9 @@ impl LogicalRosterFileService {
     const FIRST_DESCRIPTOR: i32 = 0;
     const SUCCESS_CODE: i32 = 0;
     const FILE_NAME: &'static str = "roster-native.json";
-    const MAX_BYTES: usize = 1_048_576;
+    // Holds what the policy allows (100 rows x 20 calls, about 600 bytes each with long sanitized
+    // fields, so roughly 1.3 MB) with headroom; still bounded for the startup read.
+    const MAX_BYTES: usize = 4_194_304;
     const PERMISSION_MASK: u32 = 0o7777;
     const DIRECTORY_PERMISSIONS: u32 = 0o700;
     const FILE_PERMISSIONS: u32 = 0o600;
