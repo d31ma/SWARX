@@ -1,4 +1,5 @@
 use crate::models::{NativeLogicalEvent, NativeLogicalReceipt};
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 
 #[Service]
@@ -25,7 +26,7 @@ impl LogicalEventClientService {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 impl LogicalEventClientService {
     pub fn send_bytes(&self, data: &[u8]) -> Result<NativeLogicalReceipt, String> {
         let mut stream: UnixStream =
@@ -39,7 +40,7 @@ impl LogicalEventClientService {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(unix))]
 impl LogicalEventClientService {
     pub fn send_bytes(&self, _data: &[u8]) -> Result<NativeLogicalReceipt, String> {
         Err("Local event emission is not implemented on this platform.".to_string())

@@ -158,7 +158,7 @@ impl MonitorService {
         NativeSnapshot {
             started_at: started,
             interval_seconds: Self::INTERVAL_SECONDS as f64,
-            platform: String::from("macOS"),
+            platform: Self::platform_name(),
             logical_cores: cores,
             errors,
             capabilities: NativeCapabilities {
@@ -168,6 +168,17 @@ impl MonitorService {
             limitations,
             ..Default::default()
         }
+    }
+
+    // Display name of the platform this collector was built for.
+    fn platform_name() -> String {
+        let name: &str = match std::env::consts::OS {
+            "macos" => "macOS",
+            "linux" => "Linux",
+            "windows" => "Windows",
+            other => other,
+        };
+        name.to_owned()
     }
 
     fn core_count() -> i64 {

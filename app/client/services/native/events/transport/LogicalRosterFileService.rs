@@ -1,7 +1,9 @@
 use std::ffi::CString;
 use std::fs::{File, Metadata};
 use std::io::{Read, Write};
+#[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd};
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
@@ -12,6 +14,9 @@ pub struct LogicalRosterFileService {
     file_name: String,
 }
 
+// Unix only: private-directory descriptors, ownership and mode checks. Another
+// platform adds its own implementation instead of widening this one.
+#[cfg(unix)]
 impl LogicalRosterFileService {
     const FIRST_DESCRIPTOR: i32 = 0;
     const SUCCESS_CODE: i32 = 0;
@@ -24,7 +29,7 @@ impl LogicalRosterFileService {
     const DIRECTORY_CHECK_COUNT: usize = 3;
     const FILE_CHECK_COUNT: usize = 4;
     const ENDPOINT_CHECK_COUNT: usize = 3;
-    const RANDOM_WORD_BITS: u32 = 32;
+    const RANDOM_BYTES: usize = 8;
     const UNSAFE: &'static str = "Roster storage is not private or safe.";
     const IO_FAILURE: &'static str = "Roster storage is unavailable.";
 
@@ -222,10 +227,16 @@ impl LogicalRosterFileService {
     }
 
     fn temporary_name() -> Result<CString, String> {
-        let random: u64 = unsafe {
-            (libc::arc4random() as u64) << Self::RANDOM_WORD_BITS | libc::arc4random() as u64
-        };
+        let random: u64 = Self::random()?;
         Self::native_string(format!(".roster-{}-{random:016x}.tmp", std::process::id()).as_bytes())
+    }
+
+    // getentropy reads the kernel CSPRNG on macOS and on glibc 2.25 or later.
+    fn random() -> Result<u64, String> {
+        let mut bytes: [u8; Self::RANDOM_BYTES] = [0; Self::RANDOM_BYTES];
+        let result: i32 = unsafe { libc::getentropy(bytes.as_mut_ptr().cast(), bytes.len()) };
+        Self::require_success(result)?;
+        Ok(u64::from_ne_bytes(bytes))
     }
 
     fn native_string(value: &[u8]) -> Result<CString, String> {

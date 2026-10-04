@@ -2,7 +2,7 @@ use std::ffi::CString;
 use std::ffi::{c_char, c_int, c_void};
 use std::path::Path;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[link(name = "sqlite3")]
 unsafe extern "C" {
     #[link_name = "sqlite3_open_v2"]
@@ -28,7 +28,7 @@ impl SqliteReadOnlyConnection {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 impl SqliteReadOnlyConnection {
     const OPEN_READ_ONLY: c_int = 0x0000_0001;
     const OPEN_URI: c_int = 0x0000_0040;
@@ -87,14 +87,14 @@ impl SqliteReadOnlyConnection {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 impl Drop for SqliteReadOnlyConnection {
     fn drop(&mut self) -> () {
         unsafe { connection_close(self.handle) };
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 impl SqliteReadOnlyConnection {
     pub fn open(_path: &Path) -> Option<Self> {
         None

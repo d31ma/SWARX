@@ -1,6 +1,15 @@
 use crate::models::NativeSocketIdentity;
 use std::fs::File;
+#[cfg(target_os = "linux")]
+use std::fs::Metadata;
+#[cfg(target_os = "linux")]
+use std::os::unix::fs::MetadataExt;
+#[cfg(unix)]
 use std::os::unix::net::UnixListener;
+#[cfg(target_os = "linux")]
+use std::path::Path;
+#[cfg(unix)]
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
@@ -54,11 +63,24 @@ impl LogicalSocketService {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 impl LogicalSocketService {
+    const FOLDER_NAME: &'static str = "agent-observatory";
+    const SOCKET_NAME: &'static str = "hooks-native.sock";
+
+    // macOS: /tmp/agent-observatory-<uid>/. Linux prefers a private
+    // $XDG_RUNTIME_DIR/agent-observatory/ and otherwise uses the same /tmp layout.
     pub fn current_endpoint() -> String {
+        let folder: PathBuf = Self::runtime_folder().unwrap_or_else(Self::user_folder);
+        folder
+            .join(Self::SOCKET_NAME)
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn user_folder() -> PathBuf {
         let user: libc::uid_t = unsafe { libc::getuid() };
-        format!("/tmp/agent-observatory-{user}/hooks-native.sock")
+        PathBuf::from(format!("/tmp/{}-{user}", Self::FOLDER_NAME))
     }
 
     pub fn start(&mut self, receiver: Arc<LogicalEventReceiverService>) -> Result<(), String> {
@@ -109,7 +131,41 @@ impl LogicalSocketService {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "linux")]
+impl LogicalSocketService {
+    const RUNTIME_VARIABLE: &'static str = "XDG_RUNTIME_DIR";
+    const PERMISSION_MASK: u32 = 0o7777;
+    const PRIVATE_MODE: u32 = 0o700;
+
+    fn runtime_folder() -> Option<PathBuf> {
+        let root: PathBuf = PathBuf::from(std::env::var_os(Self::RUNTIME_VARIABLE)?);
+        let private: bool = Self::private_root(&root);
+        private.then(|| -> PathBuf { root.join(Self::FOLDER_NAME) })
+    }
+
+    fn private_root(root: &Path) -> bool {
+        let metadata: Option<Metadata> = std::fs::symlink_metadata(root).ok();
+        metadata.is_some_and(|value: Metadata| -> bool {
+            [
+                root.is_absolute(),
+                value.is_dir(),
+                value.uid() == unsafe { libc::getuid() },
+                value.mode() & Self::PERMISSION_MASK == Self::PRIVATE_MODE,
+            ]
+            .into_iter()
+            .all(std::convert::identity)
+        })
+    }
+}
+
+#[cfg(all(unix, not(target_os = "linux")))]
+impl LogicalSocketService {
+    fn runtime_folder() -> Option<PathBuf> {
+        None
+    }
+}
+
+#[cfg(not(unix))]
 impl LogicalSocketService {
     pub fn current_endpoint() -> String {
         String::new()

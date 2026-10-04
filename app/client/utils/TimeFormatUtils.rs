@@ -36,9 +36,9 @@ impl TimeFormatUtils {
 
     fn native_time(seconds: i64) -> Option<libc::tm> {
         let mut time: libc::tm = unsafe { std::mem::zeroed() };
-        #[cfg(target_os = "macos")]
+        #[cfg(unix)]
         let result: *mut libc::tm = unsafe { libc::localtime_r(&seconds, &mut time) };
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(not(unix))]
         let result: *mut libc::tm = std::ptr::null_mut();
         if result.is_null() {
             return None;

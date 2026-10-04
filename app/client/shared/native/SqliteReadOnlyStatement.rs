@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use std::ffi::{c_char, c_int, c_void};
 use std::marker::PhantomData;
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 #[link(name = "sqlite3")]
 unsafe extern "C" {
     #[link_name = "sqlite3_prepare_v2"]
@@ -31,7 +31,7 @@ pub struct SqliteReadOnlyStatement<'connection> {
     connection: PhantomData<&'connection SqliteReadOnlyConnection>,
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 impl<'connection> SqliteReadOnlyStatement<'connection> {
     const SUCCESS: c_int = 0;
     const ROW: c_int = 100;
@@ -127,14 +127,14 @@ impl<'connection> SqliteReadOnlyStatement<'connection> {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 impl Drop for SqliteReadOnlyStatement<'_> {
     fn drop(&mut self) -> () {
         unsafe { statement_finalize(self.handle) };
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
 impl<'connection> SqliteReadOnlyStatement<'connection> {
     pub fn prepare(
         _query: &'static str,

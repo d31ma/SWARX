@@ -1,6 +1,8 @@
 use crate::models::{NativeCommandBindingReceipt, NativeLogicalEvent, NativeLogicalReceipt};
 use std::io::{Read, Write};
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::os::fd::AsRawFd;
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 use std::time::{Duration, Instant};
 
@@ -14,6 +16,7 @@ impl LogicalEventWireService {
     pub const LIMIT: usize = 32 * 1024;
     const BLOCK_SIZE: usize = 1024;
     const TIMEOUT_SECONDS: u64 = 3;
+    const PEER_UNVERIFIED: &'static str = "Cannot verify the local event peer.";
 
     pub fn decode(&self, data: &[u8]) -> Result<NativeLogicalEvent, String> {
         self.require_size(data.len())?;
@@ -114,9 +117,41 @@ impl LogicalEventWireService {
         self.require_peer_owner(user)
     }
 
+    // Linux has no getpeereid; SO_PEERCRED reports the connecting process uid.
+    #[cfg(target_os = "linux")]
+    fn require_peer(&self, stream: &UnixStream) -> Result<(), String> {
+        let mut credentials: libc::ucred = libc::ucred {
+            pid: 0,
+            uid: libc::uid_t::MAX,
+            gid: libc::gid_t::MAX,
+        };
+        let expected: usize = std::mem::size_of::<libc::ucred>();
+        let mut length: libc::socklen_t = expected as libc::socklen_t;
+        let result: i32 = unsafe {
+            libc::getsockopt(
+                stream.as_raw_fd(),
+                libc::SOL_SOCKET,
+                libc::SO_PEERCRED,
+                (&mut credentials as *mut libc::ucred).cast(),
+                &mut length,
+            )
+        };
+        self.require_peer_result(result)?;
+        self.require_peer_length(length as usize, expected)?;
+        self.require_peer_owner(credentials.uid)
+    }
+
+    #[cfg(target_os = "linux")]
+    fn require_peer_length(&self, length: usize, expected: usize) -> Result<(), String> {
+        if length != expected {
+            return Err(Self::PEER_UNVERIFIED.to_string());
+        }
+        Ok(())
+    }
+
     fn require_peer_result(&self, result: i32) -> Result<(), String> {
         if result != Self::SUCCESS_CODE {
-            return Err("Cannot verify the local event peer.".to_string());
+            return Err(Self::PEER_UNVERIFIED.to_string());
         }
         Ok(())
     }
@@ -179,7 +214,7 @@ impl LogicalEventWireService {
         Ok(())
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     fn require_peer(&self, _stream: &UnixStream) -> Result<(), String> {
         Err("Local peer verification is not implemented on this platform.".to_string())
     }

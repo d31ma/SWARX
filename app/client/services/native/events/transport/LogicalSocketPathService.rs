@@ -1,9 +1,15 @@
 use crate::models::NativeSocketIdentity;
+#[cfg(unix)]
 use std::fs::{self, File, Metadata, OpenOptions, Permissions};
+#[cfg(unix)]
 use std::io::ErrorKind;
+#[cfg(unix)]
 use std::os::fd::AsRawFd;
+#[cfg(unix)]
 use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt, PermissionsExt};
+#[cfg(unix)]
 use std::os::unix::net::UnixStream;
+#[cfg(unix)]
 use std::path::Path;
 
 #[derive(Default)]
