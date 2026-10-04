@@ -91,6 +91,7 @@ impl LogicalStateService {
 
     fn register(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<(), String> {
         self.require_new_agent(&event.agent)?;
+        self.make_room(now);
         self.require_agent_capacity()?;
         let session: Option<NativeSessionLink> = self.session_binding(event)?;
         let agent: NativeLogicalAgent = NativeLogicalAgent {
@@ -121,6 +122,7 @@ impl LogicalStateService {
     ) -> Result<(), String> {
         let row: NativeLogicalAgent = self.coordination.row(event, now)?;
         self.require_new_agent(&row.id)?;
+        self.make_room(now);
         self.require_agent_capacity()?;
         self.agents.insert(row.id.clone(), row);
         Ok(())
@@ -129,6 +131,7 @@ impl LogicalStateService {
     fn coordination_upsert(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<(), String> {
         let mut row: NativeLogicalAgent = self.coordination.row(event, now)?;
         let exists: bool = self.agents.contains_key(&row.id);
+        self.room_for(exists, now);
         let full: bool = Self::new_row_full(self.agents.len(), exists);
         Self::require_new_row_space(full)?;
         row.executions = self.coordination_executions(self.agents.get(&row.id), &row)?;
@@ -447,6 +450,53 @@ impl LogicalStateService {
             );
         }
         Ok(())
+    }
+
+    // The live table is bounded and rows are never removed otherwise, so a long run of sub-agents
+    // would refuse every later agent (a first Codex session, a new Claude session). When full, the
+    // row quiet longest gives way, but only past the stale window and with no running call.
+    fn make_room(&mut self, now: f64) -> () {
+        let victim: Option<String> = self.room_victim(now);
+        self.remove_row(victim);
+    }
+
+    fn room_for(&mut self, exists: bool, now: f64) -> () {
+        if exists {
+            return;
+        }
+        self.make_room(now);
+    }
+
+    fn room_victim(&self, now: f64) -> Option<String> {
+        let full: bool = self.agents.len() >= LogicalEventPolicyService::AGENT_LIMIT;
+        full.then(|| -> Option<String> { self.quietest(now) }).flatten()
+    }
+
+    fn quietest(&self, now: f64) -> Option<String> {
+        self.agents
+            .values()
+            .filter(|agent: &&NativeLogicalAgent| -> bool { Self::evictable_row(agent, now) })
+            .min_by(|left: &&NativeLogicalAgent, right: &&NativeLogicalAgent| -> std::cmp::Ordering {
+                left.captured_at.total_cmp(&right.captured_at)
+            })
+            .map(|agent: &NativeLogicalAgent| -> String { agent.id.clone() })
+    }
+
+    fn evictable_row(agent: &NativeLogicalAgent, now: f64) -> bool {
+        [
+            now - agent.captured_at > LogicalEventPolicyService::STALE_SECONDS,
+            !agent.executions.iter().any(|execution: &NativeExecutionRecord| -> bool {
+                execution.status == LogicalEventPolicyService::RUNNING
+            }),
+        ]
+        .into_iter()
+        .all(std::convert::identity)
+    }
+
+    fn remove_row(&mut self, victim: Option<String>) -> () {
+        if let Some(identifier) = victim {
+            self.agents.remove(&identifier);
+        }
     }
 
     fn require_agent_capacity(&self) -> Result<(), String> {
