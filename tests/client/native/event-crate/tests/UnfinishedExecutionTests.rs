@@ -1,14 +1,14 @@
 #[allow(dead_code)]
 #[path = "support/ClaudeHookFixture.rs"]
 mod fixture;
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 #[allow(dead_code)]
 #[path = "../../LogicalEventFixture.rs"]
 mod logical_event_fixture;
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 #[path = "../../TestClock.rs"]
 mod test_clock;
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 use test_clock::TestClock;
 
 use event_slice::models::{NativeExecutionRecord, NativeLogicalAgent, NativeLogicalEvent};
@@ -287,7 +287,7 @@ fn a_late_finish_still_matches_a_retired_call_by_its_exact_id() -> () {
     );
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 #[test]
 fn a_restart_keeps_finished_calls_finished_and_retires_calls_left_running() -> () {
     use event_slice::services::{LogicalEventService, NativeCommandEventService};

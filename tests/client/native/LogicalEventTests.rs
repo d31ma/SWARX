@@ -189,6 +189,11 @@ fn socket_and_directory_are_private_and_no_tcp_listener_is_created() -> () {
             & 0o777,
         0o700
     );
+    assert_no_tcp_listener();
+}
+
+#[cfg(target_os = "macos")]
+fn assert_no_tcp_listener() -> () {
     let inspection = Command::new("/usr/sbin/lsof")
         .args([
             "-n",
@@ -203,6 +208,30 @@ fn socket_and_directory_are_private_and_no_tcp_listener_is_created() -> () {
         .unwrap();
     assert_eq!(inspection.status.code(), Some(1));
     assert!(inspection.stdout.is_empty());
+}
+
+// Linux: no socket descriptor of this process is a LISTEN row (state 0A) in the TCP tables.
+#[cfg(target_os = "linux")]
+fn assert_no_tcp_listener() -> () {
+    let sockets: Vec<String> = fs::read_dir("/proc/self/fd")
+        .unwrap()
+        .filter_map(|entry| fs::read_link(entry.ok()?.path()).ok())
+        .filter_map(|target| {
+            let text: &str = target.to_str()?;
+            Some(text.strip_prefix("socket:[")?.strip_suffix(']')?.to_owned())
+        })
+        .collect();
+    for table in ["/proc/net/tcp", "/proc/net/tcp6"] {
+        let text: String = fs::read_to_string(table).unwrap_or_default();
+        for line in text.lines().skip(1) {
+            let fields: Vec<&str> = line.split_whitespace().collect();
+            let listening: bool = fields.get(3) == Some(&"0A");
+            let owned: bool = fields
+                .get(9)
+                .is_some_and(|inode: &&str| sockets.iter().any(|socket| socket == inode));
+            assert!(!(listening && owned), "unexpected TCP listener: {line}");
+        }
+    }
 }
 
 #[test]

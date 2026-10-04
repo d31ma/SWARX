@@ -1,4 +1,4 @@
-#![cfg(target_os = "macos")]
+#![cfg(unix)]
 
 #[allow(dead_code)]
 #[path = "support/ClaudeHookFixture.rs"]

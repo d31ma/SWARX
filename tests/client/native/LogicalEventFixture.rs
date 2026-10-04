@@ -3,7 +3,7 @@ use event_slice::models::NativeLogicalReceipt;
 use event_slice::services::{LogicalEventClientService, LogicalEventService};
 use event_slice::EventSource;
 use std::fs;
-use std::io::{Read, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -57,9 +57,13 @@ impl LogicalEventFixture {
             .set_read_timeout(Some(Duration::from_secs(5)))
             .unwrap();
         let _written_or_closed: Result<(), std::io::Error> = stream.write_all(data);
-        let mut received: String = String::new();
-        stream.read_to_string(&mut received).unwrap();
-        serde_json::from_str(&received).unwrap()
+        // One receipt line; Linux may report a reset after it when the peer
+        // closed with unread request bytes, so do not read to end of stream.
+        let mut received: Vec<u8> = Vec::new();
+        BufReader::new(stream)
+            .read_until(b'\n', &mut received)
+            .unwrap();
+        serde_json::from_slice(&received).unwrap()
     }
 }
 

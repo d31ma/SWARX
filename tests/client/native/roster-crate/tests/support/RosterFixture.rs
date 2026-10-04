@@ -13,7 +13,12 @@ pub struct RosterFixture {
 
 impl RosterFixture {
     pub fn new() -> Self {
-        let nonce: u32 = unsafe { libc::arc4random() };
+        let mut bytes: [u8; 4] = [0; 4];
+        assert_eq!(
+            unsafe { libc::getentropy(bytes.as_mut_ptr().cast(), bytes.len()) },
+            0
+        );
+        let nonce: u32 = u32::from_ne_bytes(bytes);
         let directory: PathBuf = std::env::temp_dir().join(format!(
             "observatory-roster-test-{}-{nonce}",
             std::process::id()

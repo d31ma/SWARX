@@ -1,4 +1,4 @@
-#![cfg(target_os = "macos")]
+#![cfg(unix)]
 
 use event_slice::models::{NativeLogicalEvent, NativeLogicalReceipt};
 use event_slice::services::LogicalEventWireService;

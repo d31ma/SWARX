@@ -1,4 +1,4 @@
-#![cfg(target_os = "macos")]
+#![cfg(unix)]
 
 #[path = "support/LogicalEventClientFixture.rs"]
 mod fixture;

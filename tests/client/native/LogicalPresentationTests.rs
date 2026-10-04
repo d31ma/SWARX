@@ -96,7 +96,7 @@ impl LogicalPresentationTests {
         Self::view(&agent)
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(unix)]
     fn expected_local_time(seconds: i64) -> String {
         let mut time: libc::tm = unsafe { std::mem::zeroed() };
         let result: *mut libc::tm = unsafe { libc::localtime_r(&seconds, &mut time) };
@@ -642,7 +642,7 @@ fn empty_sessions_have_zero_linked_and_harness_counts() -> () {
     assert_eq!(SessionViewUtils::harness_count(&sessions), 0);
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(unix)]
 #[test]
 fn local_capture_clock_matches_mac_fields_and_ignores_subsecond_fraction() -> () {
     let expected = LogicalPresentationTests::expected_local_time(1_700_000_000);
