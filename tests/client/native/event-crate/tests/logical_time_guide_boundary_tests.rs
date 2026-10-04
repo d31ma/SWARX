@@ -21,6 +21,8 @@ impl LogicalTimeGuideBoundaryTests {
             depends_on: None,
             model: None,
             detail: None,
+            background: None,
+            title: None,
         }
     }
 

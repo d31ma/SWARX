@@ -513,3 +513,38 @@ fn session_harness_root_heads_the_tree_above_a_command_root_it_contains() -> () 
     );
     assert_eq!(resources["processCount"], 3);
 }
+
+#[test]
+fn a_stale_idle_session_keeps_its_still_bound_harness_resources() -> () {
+    let present = |reported: &str, bindings: &[NativeCommandBinding]| -> usize {
+        let mut raw: NativeLogicalAgent =
+            SessionHarnessPresentation::raw(SessionHarnessPresentation::SESSION, "stale");
+        raw.stale = true;
+        raw.reported_status = Some(reported.to_owned());
+        let mut agents: Vec<NativeLogicalAgentView> = vec![LogicalViewUtils::agent(
+            &raw,
+            SessionHarnessPresentation::NOW,
+        )];
+        agents[0].stale = true;
+        agents[0].status = "stale".to_owned();
+        agents[0].reported_status = Some(reported.to_owned());
+        CommandResourceViewUtils::present(
+            &mut agents,
+            &[SessionHarnessPresentation::observation()],
+            bindings,
+            SessionHarnessPresentation::NOW,
+        );
+        let wire = SessionResourcePresentationTests::wire(
+            agents,
+            Vec::new(),
+            SessionHarnessPresentation::NOW,
+        );
+        wire["resourceSessions"][0]["commandCount"]
+            .as_i64()
+            .unwrap_or_default() as usize
+    };
+    let binding: NativeCommandBinding = SessionHarnessPresentation::binding();
+    assert_eq!(present("idle", std::slice::from_ref(&binding)), 1);
+    assert_eq!(present("idle", &[]), 0);
+    assert_eq!(present("completed", std::slice::from_ref(&binding)), 0);
+}

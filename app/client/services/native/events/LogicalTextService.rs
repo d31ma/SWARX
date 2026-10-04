@@ -57,6 +57,10 @@ impl LogicalTextService {
         Self::unchanged(value, ActionPreviewUtils::task_title)
     }
 
+    pub fn description(&self, value: Option<&str>) -> Option<String> {
+        Self::unchanged(value, ActionPreviewUtils::description)
+    }
+
     pub fn tool(&self, value: Option<&str>) -> String {
         self.safe_tool(value).unwrap_or_else(Self::tool_fallback)
     }

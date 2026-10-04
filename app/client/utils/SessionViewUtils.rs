@@ -63,6 +63,13 @@ impl SessionViewUtils {
             .collect()
     }
 
+    pub fn linked_key(family: &str, identifier: &str) -> String {
+        Self::session_key(
+            &Self::key_component(family),
+            &Self::key_component(identifier),
+        )
+    }
+
     pub fn linked_count(sessions: &[NativeSessionView]) -> i64 {
         Self::linked(sessions)
     }
@@ -422,10 +429,7 @@ impl SessionViewUtils {
 
     fn harness_session(candidate: &NativeHarnessSession) -> NativeSessionView {
         NativeSessionView {
-            key: Self::session_key(
-                &Self::key_component(&candidate.family),
-                &Self::key_component(&candidate.id),
-            ),
+            key: Self::linked_key(&candidate.family, &candidate.id),
             id: Some(candidate.id.clone()),
             name: Self::harness_name(candidate)
                 .unwrap_or_else(|| -> String { Self::UNTITLED.to_owned() }),

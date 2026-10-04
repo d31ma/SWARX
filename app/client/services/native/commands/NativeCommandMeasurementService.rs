@@ -23,6 +23,9 @@ impl NativeCommandMeasurementService {
     const GAP: &'static str = "Process sampling unavailable; missing resources are not zero.";
     const STATE_ERROR: &'static str = "Command binding state unavailable.";
     const UNIQUE_PROCESS: usize = 1;
+    const SESSION_SCOPE: &'static str = "session-harness-process";
+    const SHELL_NAMES: [&'static str; 3] = ["zsh", "bash", "sh"];
+    const PATH_SEPARATOR: char = '/';
 
     pub fn new(registry: Result<Arc<Mutex<NativeCommandBindingRegistryService>>, String>) -> Self {
         Self {
@@ -42,6 +45,7 @@ impl NativeCommandMeasurementService {
         let current: Vec<NativeCommandBinding> = self.active(time).unwrap_or_default();
         let captured: Vec<NativeCommandBinding> = self.captured.clone();
         self.latest = self.measure_bindings(&captured, &current, processes, time);
+        self.sustain_background(processes, time);
         self.retain_current(time);
     }
 
@@ -166,6 +170,72 @@ impl NativeCommandMeasurementService {
             .map(|root: &NativeProcess| -> Vec<NativeProcessMetrics> {
                 ProcessLineageUtils::descendants(root, processes, measured)
             })
+            .unwrap_or_default()
+    }
+
+    fn sustain_background(&self, processes: &[NativeProcess], time: (f64, f64)) -> () {
+        for observation in &self.latest {
+            self.sustain_session(observation, processes, time);
+        }
+    }
+
+    fn sustain_session(
+        &self,
+        observation: &NativeCommandObservation,
+        processes: &[NativeProcess],
+        time: (f64, f64),
+    ) -> () {
+        let sustained: bool = [
+            observation.scope == Self::SESSION_SCOPE,
+            observation.metrics.is_some(),
+            Self::has_shell_child(observation, processes),
+        ]
+        .into_iter()
+        .all(std::convert::identity);
+        self.registry
+            .as_ref()
+            .filter(|_: &&Arc<Mutex<NativeCommandBindingRegistryService>>| -> bool { sustained })
+            .map(
+                |registry: &Arc<Mutex<NativeCommandBindingRegistryService>>| -> () {
+                    Self::renew(registry, observation, time)
+                },
+            );
+    }
+
+    fn renew(
+        registry: &Arc<Mutex<NativeCommandBindingRegistryService>>,
+        observation: &NativeCommandObservation,
+        time: (f64, f64),
+    ) -> () {
+        registry
+            .lock()
+            .map(
+                |mut locked: std::sync::MutexGuard<'_, NativeCommandBindingRegistryService>| -> () {
+                    locked.sustain(&observation.binding_id, observation.generation, time)
+                },
+            )
+            .unwrap_or_default()
+    }
+
+    fn has_shell_child(
+        observation: &NativeCommandObservation,
+        processes: &[NativeProcess],
+    ) -> bool {
+        processes.iter().any(|process: &NativeProcess| -> bool {
+            [
+                process.parent == observation.pid,
+                Self::SHELL_NAMES.contains(&Self::executable_name(process)),
+            ]
+            .into_iter()
+            .all(std::convert::identity)
+        })
+    }
+
+    fn executable_name(process: &NativeProcess) -> &str {
+        process
+            .executable
+            .rsplit(Self::PATH_SEPARATOR)
+            .next()
             .unwrap_or_default()
     }
 

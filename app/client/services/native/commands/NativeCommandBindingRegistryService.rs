@@ -1,7 +1,7 @@
-use crate::ObservationClock;
 use crate::models::{
     NativeCommandBinding, NativeCommandBindingEvent, NativeCommandIdentity, NativeCommandOwner,
 };
+use crate::ObservationClock;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -139,6 +139,15 @@ impl NativeCommandBindingRegistryService {
     pub fn revoke(&mut self, identifier: &str, generation: i64) -> () {
         let binding: Option<NativeCommandBinding> = self.generation_binding(identifier, generation);
         self.remove(binding);
+    }
+
+    pub fn sustain(&mut self, identifier: &str, generation: i64, time: (f64, f64)) -> () {
+        let time: (f64, f64) = self.current_time(time);
+        let binding: Option<NativeCommandBinding> =
+            self.generation_binding(identifier, generation).filter(
+                |binding: &NativeCommandBinding| -> bool { binding.scope == Self::SESSION_SCOPE },
+            );
+        self.extend_present(binding, time);
     }
 
     pub fn errors(&self) -> Vec<String> {
@@ -291,6 +300,12 @@ impl NativeCommandBindingRegistryService {
         binding.lease_until = time.1 + Self::lease(&binding.scope);
         self.bindings.insert(binding.id.clone(), binding.clone());
         binding.clone()
+    }
+
+    fn extend_present(&mut self, binding: Option<NativeCommandBinding>, time: (f64, f64)) -> () {
+        if let Some(mut binding) = binding {
+            self.extend(&mut binding, time);
+        }
     }
 
     fn lease(scope: &str) -> f64 {

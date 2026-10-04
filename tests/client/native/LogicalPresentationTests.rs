@@ -26,6 +26,8 @@ impl LogicalPresentationTests {
             finished_at: None,
             duration_source: None,
             detail: None,
+            background: None,
+            title: None,
         }
     }
 

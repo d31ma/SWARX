@@ -11,6 +11,7 @@ impl NativeCommandContextUtils {
     const RUNNING: &'static str = "running";
     const ACTIVE: &'static str = "active";
     const IDLE: &'static str = "idle";
+    const SESSION_STATUSES: &'static [&'static str] = &[Self::ACTIVE, Self::RUNNING, Self::IDLE];
     const FINAL: [&'static str; 3] = ["completed", "failed", "cancelled"];
     const UNAVAILABLE: &'static str = "Active command execution context required.";
     const SESSION_KIND: &'static str = "logical.command.session";
@@ -106,15 +107,46 @@ impl NativeCommandContextUtils {
 
     fn require_session(row: &NativeLogicalAgent, owner: &NativeCommandOwner) -> Result<(), String> {
         let valid: bool = [
-            !row.stale,
+            Self::current_session(row),
             row.feed_mode == Self::EVENTS,
-            [Self::ACTIVE, Self::RUNNING, Self::IDLE].contains(&row.status.as_str()),
             owner.agent_id == owner.session_id,
             Self::session_identifier(row) == Some(owner.session_id.as_str()),
         ]
         .into_iter()
         .all(std::convert::identity);
         Self::require_valid(valid)
+    }
+
+    fn current_session(row: &NativeLogicalAgent) -> bool {
+        [Self::fresh_session(row), Self::background_session(row)]
+            .into_iter()
+            .any(std::convert::identity)
+    }
+
+    fn fresh_session(row: &NativeLogicalAgent) -> bool {
+        [
+            !row.stale,
+            Self::SESSION_STATUSES.contains(&row.status.as_str()),
+        ]
+        .into_iter()
+        .all(std::convert::identity)
+    }
+
+    fn background_session(row: &NativeLogicalAgent) -> bool {
+        let reported: &str = row.reported_status.as_deref().unwrap_or_default();
+        [
+            row.stale,
+            Self::SESSION_STATUSES.contains(&reported),
+            Self::launched_background(&row.executions),
+        ]
+        .into_iter()
+        .all(std::convert::identity)
+    }
+
+    fn launched_background(executions: &[NativeExecutionRecord]) -> bool {
+        executions
+            .iter()
+            .any(|execution: &NativeExecutionRecord| -> bool { execution.background == Some(true) })
     }
 
     fn session_identifier(row: &NativeLogicalAgent) -> Option<&str> {

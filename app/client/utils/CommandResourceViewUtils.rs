@@ -33,6 +33,18 @@ impl CommandResourceViewUtils {
         Self::agents(agents, observations, bindings, now);
     }
 
+    pub fn current_agent(
+        agent: &NativeLogicalAgentView,
+        observation: &NativeCommandObservation,
+    ) -> bool {
+        [
+            Self::fresh_agent(agent, observation),
+            Self::lingering_session(agent, observation),
+        ]
+        .into_iter()
+        .any(std::convert::identity)
+    }
+
     fn agents(
         agents: &mut [NativeLogicalAgentView],
         observations: &[NativeCommandObservation],
@@ -77,9 +89,31 @@ impl CommandResourceViewUtils {
 
     fn live_agent(agent: &NativeLogicalAgentView, observation: &NativeCommandObservation) -> bool {
         [
-            !agent.stale,
+            Self::current_agent(agent, observation),
             [Self::EVENT_FEED, Self::COORDINATOR_FEED].contains(&agent.feed_mode.as_str()),
+        ]
+        .into_iter()
+        .all(std::convert::identity)
+    }
+
+    fn fresh_agent(agent: &NativeLogicalAgentView, observation: &NativeCommandObservation) -> bool {
+        [
+            !agent.stale,
             Self::live_statuses(observation).contains(&agent.status.as_str()),
+        ]
+        .into_iter()
+        .all(std::convert::identity)
+    }
+
+    fn lingering_session(
+        agent: &NativeLogicalAgentView,
+        observation: &NativeCommandObservation,
+    ) -> bool {
+        let reported: &str = agent.reported_status.as_deref().unwrap_or_default();
+        [
+            agent.stale,
+            Self::session_scope(observation),
+            Self::live_statuses(observation).contains(&reported),
         ]
         .into_iter()
         .all(std::convert::identity)

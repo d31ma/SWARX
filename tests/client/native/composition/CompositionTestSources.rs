@@ -30,6 +30,7 @@ impl CompositionTestSources {
         "SessionDetailUtils",
         "ActiveSummaryUtils",
         "ActiveSessionUtils",
+        "BackgroundTaskUtils",
     ];
 
     pub fn run() -> Result<(), Box<dyn Error>> {

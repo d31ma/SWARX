@@ -5,6 +5,7 @@ impl ActionPreviewUtils {
     pub const COMMAND_LIMIT: usize = 96;
     pub const FILE_LIMIT: usize = 64;
     pub const TITLE_LIMIT: usize = 80;
+    pub const DESCRIPTION_LIMIT: usize = 160;
     const SCAN_LIMIT: usize = 4096;
     const LONG_RUN: usize = 32;
     const PREFIX_TAIL: usize = 8;
@@ -66,7 +67,17 @@ impl ActionPreviewUtils {
     }
 
     pub fn task_title(raw: &str) -> Option<String> {
-        Self::preview(Self::single_line(raw.trim()), Self::TITLE_LIMIT)
+        Self::preview(
+            Self::single_line(raw.trim(), Self::TITLE_LIMIT),
+            Self::TITLE_LIMIT,
+        )
+    }
+
+    pub fn description(raw: &str) -> Option<String> {
+        Self::preview(
+            Self::single_line(raw.trim(), Self::DESCRIPTION_LIMIT),
+            Self::DESCRIPTION_LIMIT,
+        )
     }
 
     fn preview(text: Option<&str>, limit: usize) -> Option<String> {
@@ -85,9 +96,9 @@ impl ActionPreviewUtils {
         raw.trim().rsplit(Self::PATH_SEPARATORS).next()
     }
 
-    fn single_line(text: &str) -> Option<&str> {
+    fn single_line(text: &str, limit: usize) -> Option<&str> {
         let accepted: bool = [
-            text.chars().count() <= Self::TITLE_LIMIT,
+            text.chars().count() <= limit,
             !text.chars().any(char::is_control),
         ]
         .into_iter()

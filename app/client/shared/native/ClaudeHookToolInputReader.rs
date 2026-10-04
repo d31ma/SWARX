@@ -9,6 +9,8 @@ impl ClaudeHookToolInputReader {
     const COMMAND_KEY: &'static str = "command";
     const FILE_KEY: &'static str = "file_path";
     const NOTEBOOK_KEY: &'static str = "notebook_path";
+    const BACKGROUND_KEY: &'static str = "run_in_background";
+    const DESCRIPTION_KEY: &'static str = "description";
     const WORD_SEPARATOR: &'static str = " ";
 
     pub fn text(value: serde_json::Value) -> Option<String> {
@@ -33,6 +35,10 @@ impl ClaudeHookToolInputReader {
         match key {
             Self::COMMAND_KEY => input.command = Self::command(fields.next_value()?),
             Self::FILE_KEY | Self::NOTEBOOK_KEY => input.file = Self::file(fields.next_value()?),
+            Self::BACKGROUND_KEY => {
+                input.background = fields.next_value::<serde_json::Value>()?.as_bool()
+            }
+            Self::DESCRIPTION_KEY => input.description = Self::description(fields.next_value()?),
             _ => fields.next_value::<IgnoredAny>().map(drop)?,
         }
         Ok(())
@@ -48,6 +54,12 @@ impl ClaudeHookToolInputReader {
         Self::text(value)
             .as_deref()
             .and_then(ActionPreviewUtils::file)
+    }
+
+    fn description(value: serde_json::Value) -> Option<String> {
+        Self::text(value)
+            .as_deref()
+            .and_then(ActionPreviewUtils::description)
     }
 
     fn command_text(value: serde_json::Value) -> Option<String> {

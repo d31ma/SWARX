@@ -77,6 +77,8 @@ impl LogicalEventClientFixture {
             depends_on: None,
             model: None,
             detail: None,
+            background: None,
+            title: None,
         }
     }
 

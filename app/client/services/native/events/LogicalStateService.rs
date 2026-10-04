@@ -284,13 +284,7 @@ impl LogicalStateService {
         self.require_matching_task(requested, &task.id)?;
         let identifier: String = self.text.identifier(event.execution.as_deref())?;
         self.require_new_execution(&agent.executions, &identifier)?;
-        let finished: Option<usize> =
-            agent
-                .executions
-                .iter()
-                .position(|item: &NativeExecutionRecord| -> bool {
-                    self.policy.is_final(&item.status)
-                });
+        let finished: Option<usize> = self.evictable(&agent.executions);
         self.require_execution_capacity(agent.executions.len(), finished)?;
         self.evict_finished(&mut agent.executions, finished);
         agent.executions.push(NativeExecutionRecord {
@@ -315,8 +309,30 @@ impl LogicalStateService {
             finished_at: None,
             duration_source: None,
             detail: self.text.detail(event.detail.as_deref()),
+            background: event.background,
+            title: self.text.description(event.title.as_deref()),
         });
         self.save_agent(agent, now)
+    }
+
+    fn evictable(&self, values: &[NativeExecutionRecord]) -> Option<usize> {
+        let foreground: Option<usize> = values
+            .iter()
+            .position(|item: &NativeExecutionRecord| -> bool { self.finished_foreground(item) });
+        foreground.or(values
+            .iter()
+            .position(|item: &NativeExecutionRecord| -> bool {
+                self.policy.is_final(&item.status)
+            }))
+    }
+
+    fn finished_foreground(&self, item: &NativeExecutionRecord) -> bool {
+        [
+            self.policy.is_final(&item.status),
+            item.background != Some(true),
+        ]
+        .into_iter()
+        .all(std::convert::identity)
     }
 
     fn finish_execution(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<(), String> {

@@ -256,3 +256,45 @@ fn the_root_reports_its_own_network_rates_from_the_same_tick() -> () {
         Some(2000.0)
     );
 }
+
+#[test]
+fn a_live_background_shell_keeps_the_session_link_past_its_lease() -> () {
+    let mut fixture: SessionProcessMeasurementTests = SessionProcessMeasurementTests::new();
+    for _ in 0..6 {
+        fixture.clock.advance(30.0);
+        assert_eq!(
+            fixture
+                .sample(SessionProcessMeasurementTests::table(10.0))
+                .len(),
+            1
+        );
+    }
+    assert_eq!(fixture.active(), 1);
+}
+
+#[test]
+fn without_a_shell_child_the_session_link_ends_with_its_lease() -> () {
+    let mut fixture: SessionProcessMeasurementTests = SessionProcessMeasurementTests::new();
+    let quiet: Vec<NativeProcess> = vec![
+        SessionProcessMeasurementTests::process(
+            SessionProcessMeasurementTests::ROOT,
+            1,
+            SessionProcessMeasurementTests::CLAUDE,
+        ),
+        SessionProcessMeasurementTests::process(
+            SessionProcessMeasurementTests::TOOL,
+            SessionProcessMeasurementTests::ROOT,
+            "/usr/local/bin/node",
+        ),
+        SessionProcessMeasurementTests::process(
+            SessionProcessMeasurementTests::UNRELATED,
+            1,
+            "/bin/zsh",
+        ),
+    ];
+    for _ in 0..6 {
+        fixture.clock.advance(30.0);
+        fixture.sample(quiet.clone());
+    }
+    assert_eq!(fixture.active(), 0);
+}

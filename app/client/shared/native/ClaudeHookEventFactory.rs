@@ -20,6 +20,10 @@ impl ClaudeHookEventFactory {
         &["Bash", "shell", "local_shell", "exec_command"];
     const FILE_TOOLS: &'static [&'static str] =
         &["Read", "Write", "Edit", "MultiEdit", "NotebookEdit"];
+    const AGENT_TOOLS: &'static [&'static str] = &["Agent", "Task"];
+    const TITLED_TOOLS: &'static [&'static [&'static str]] =
+        &[Self::COMMAND_TOOLS, Self::AGENT_TOOLS];
+    const BACKGROUND_TOOLS: &'static [&'static [&'static str]] = &[Self::COMMAND_TOOLS];
 
     pub fn register(payload: &NativeClaudeHookPayload) -> Option<NativeLogicalEvent> {
         let mut event: NativeLogicalEvent = Self::event(Self::REGISTER, payload)?;
@@ -52,6 +56,16 @@ impl ClaudeHookEventFactory {
         event.execution = Some(payload.tool_use_id.clone()?);
         event.name = payload.tool_name.clone();
         event.detail = Self::detail(payload);
+        event.background = Self::reported_for(
+            payload,
+            Self::BACKGROUND_TOOLS,
+            payload.tool_input.background,
+        );
+        event.title = Self::reported_for(
+            payload,
+            Self::TITLED_TOOLS,
+            payload.tool_input.description.clone(),
+        );
         Some(event)
     }
 
@@ -105,6 +119,8 @@ impl ClaudeHookEventFactory {
             depends_on: None,
             model: None,
             detail: None,
+            background: None,
+            title: None,
         })
     }
 
@@ -119,6 +135,18 @@ impl ClaudeHookEventFactory {
             .then(|| -> Option<String> { payload.tool_input.file.clone() })
             .flatten();
         command.or(file)
+    }
+
+    fn reported_for<Value>(
+        payload: &NativeClaudeHookPayload,
+        tools: &[&[&str]],
+        value: Option<Value>,
+    ) -> Option<Value> {
+        let tool: &str = payload.tool_name.as_deref().unwrap_or(Self::NONE);
+        let listed: bool = tools
+            .iter()
+            .any(|group: &&[&str]| -> bool { group.contains(&tool) });
+        value.filter(|_: &Value| -> bool { listed })
     }
 
     fn agent(session: &str, subagent: Option<&str>) -> String {

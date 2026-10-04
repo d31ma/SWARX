@@ -4,8 +4,8 @@ use crate::models::{
     NativeSessionView, NativeViewSelection,
 };
 use crate::utils::{
-    ChartDataUtils, LogicalViewUtils, ProcessGraphUtils, ProcessOwnerUtils, ProcessTreeUtils,
-    RuntimeViewUtils, SessionProcessClaimUtils,
+    ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, ProcessGraphUtils,
+    ProcessOwnerUtils, ProcessTreeUtils, RuntimeViewUtils, SessionProcessClaimUtils,
 };
 use std::collections::BTreeSet;
 
@@ -16,10 +16,6 @@ impl SessionResourceUtils {
     const COMMAND_SCOPE: &'static str = "reported-command-process";
     const SESSION_SCOPE: &'static str = "session-harness-process";
     const LINKED_SCOPES: [&'static str; 2] = [Self::COMMAND_SCOPE, Self::SESSION_SCOPE];
-    const ACTIVE: &'static str = "active";
-    const RUNNING: &'static str = "running";
-    const COMMAND_STATUSES: &'static [&'static str] = &[Self::ACTIVE, Self::RUNNING];
-    const SESSION_STATUSES: &'static [&'static str] = &[Self::ACTIVE, Self::RUNNING, "idle"];
     const PROVENANCE: &'static str = "caller-reported";
     const VALIDATION: &'static str = "os-identity-matched";
     const UNAVAILABLE: &'static str =
@@ -318,8 +314,7 @@ impl SessionResourceUtils {
             source.0.known,
             source.0.id.as_deref() == Some(observation.owner.session_id.as_str()),
             source.0.family == source.1.family,
-            Self::live_statuses(observation).contains(&source.1.status.as_str()),
-            !source.1.stale,
+            CommandResourceViewUtils::current_agent(source.1, observation),
             Self::LINKED_SCOPES.contains(&observation.scope.as_str()),
             observation.provenance == Self::PROVENANCE,
             observation.validation == Self::VALIDATION,
@@ -328,13 +323,6 @@ impl SessionResourceUtils {
         ]
         .into_iter()
         .all(std::convert::identity)
-    }
-
-    fn live_statuses(observation: &NativeCommandObservation) -> &'static [&'static str] {
-        if observation.scope == Self::SESSION_SCOPE {
-            return Self::SESSION_STATUSES;
-        }
-        Self::COMMAND_STATUSES
     }
 
     fn fresh(sampled_at: f64, now: f64) -> bool {

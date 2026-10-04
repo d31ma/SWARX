@@ -177,6 +177,8 @@ impl LogicalRosterPolicyService {
             finished_at: self.finished_time(item.finished_at)?,
             duration_source: Self::duration_source(item.duration_source.as_deref())?,
             detail: self.text.detail(item.detail.as_deref()),
+            background: item.background,
+            title: self.text.description(item.title.as_deref()),
         })
     }
 
