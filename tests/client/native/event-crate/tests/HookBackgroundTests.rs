@@ -342,7 +342,9 @@ fn the_receiver_and_roster_recovery_drop_unsanitized_titles() -> () {
 }
 
 #[test]
-fn a_stale_idle_session_keeps_its_harness_link_owner_only_with_launch_evidence() -> () {
+// Launches made while Swarx was not running have no report, so a stale idle session keeps its
+// owner without one; the binding lease then decides, renewed only while a shell child lives.
+fn a_stale_idle_session_keeps_its_harness_link_owner_until_the_session_ends() -> () {
     let owner: NativeCommandOwner = HookBackgroundTests::session_owner();
     let launched: LogicalStateService = HookBackgroundTests::launched();
     let rows: Vec<NativeLogicalAgent> = launched.rows(HookBackgroundTests::LATER);
@@ -368,7 +370,11 @@ fn a_stale_idle_session_keeps_its_harness_link_owner_only_with_launch_evidence()
         1
     );
     let stale: Vec<NativeLogicalAgent> = quiet.rows(HookBackgroundTests::LATER);
-    assert!(NativeCommandContextUtils::owners(&stale, HookBackgroundTests::USER).is_empty());
+    assert!(stale[0].stale);
+    assert_eq!(
+        NativeCommandContextUtils::owners(&stale, HookBackgroundTests::USER).len(),
+        1
+    );
     let mut ended: LogicalStateService = HookBackgroundTests::launched();
     HookBackgroundTests::deliver(&mut ended, &ClaudeHookFixture::payload("SessionEnd"), 102.0);
     let closed: Vec<NativeLogicalAgent> = ended.rows(HookBackgroundTests::LATER);

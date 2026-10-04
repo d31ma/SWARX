@@ -15,18 +15,6 @@
   outline-offset: -2px;
 }
 
-.resource-scope {
-  margin: 0;
-  color: #b4bfd8;
-  font-size: 13px;
-  line-height: 1.6;
-  overflow-wrap: anywhere;
-}
-
-.resource-scope.scope-none {
-  color: #e1bd87;
-}
-
 .history-card-header {
   display: flex;
   flex-wrap: wrap;
@@ -85,19 +73,11 @@
   color: #9caecc;
 }
 
-.session-notes {
-  margin: 0 0 4px;
-  padding-left: 18px;
-  color: #b4bfd8;
-  font-size: 12px;
-  line-height: 1.6;
-}
-
 .chart-tabs {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin: 12px 0 14px;
+  margin: 0 0 14px;
 }
 
 .chart-tabs .w-btn {

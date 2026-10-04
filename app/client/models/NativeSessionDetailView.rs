@@ -24,7 +24,6 @@ pub struct NativeSessionDetailView {
     #[serde(rename = "resourceLabel")]
     pub resource_label: String,
     pub metrics: Vec<NativeSessionMetricView>,
-    pub notes: Vec<String>,
     #[serde(rename = "processCount")]
     pub process_count: i64,
     #[serde(rename = "rootCount")]

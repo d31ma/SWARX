@@ -18,7 +18,6 @@ export interface SessionDetailView {
   resourceScope: string;
   resourceLabel: string;
   metrics: SessionMetricView[];
-  notes: string[];
   processCount: number;
   rootCount: number;
   chartId: string;

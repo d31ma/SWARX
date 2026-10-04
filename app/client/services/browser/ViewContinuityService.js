@@ -15,6 +15,8 @@ export default class ViewContinuityService {
   /** @type {string} */
   static _GRAPH_SELECTOR = '.group-graph-scroll';
   /** @type {string} */
+  static _NODE_SELECTOR = '.graph-node[data-identity]';
+  /** @type {string} */
   static _EXECUTION_SELECTOR = '.execution-history';
   /** @type {string} */
   static _ACTION_SELECTOR = '.action-history-list';
@@ -92,6 +94,8 @@ export default class ViewContinuityService {
   #expanded = new Map();
   /** @type {Map<string, WeakRef<HTMLDetailsElement>>} */
   #toggleElements = new Map();
+  /** @type {Map<string, Map<string, number>>} */
+  #layouts = new Map();
   /** @type {ReturnType<typeof setTimeout> | null} */
   #timer = null;
   /** @type {string} */
@@ -204,6 +208,7 @@ export default class ViewContinuityService {
     this.#offsets.clear();
     this.#expanded.clear();
     this.#toggleElements.clear();
+    this.#layouts.clear();
     this.#focusedTab = ViewContinuityService._EMPTY_IDENTIFIER;
     this.#focusedControl = null;
     this.#view = null;
@@ -267,10 +272,76 @@ export default class ViewContinuityService {
     const selection = this.#currentSelection();
     this.#runtimeSelection(selection);
     this.#graphProvider().draw(this.#boundView(), selection);
+    this.#anchorGraphs();
     this.#restoreTabFocus();
     this.#restoreControlFocus();
     this.#chartProvider().draw(this.#boundView(), selection);
     this.#restoreOffsets();
+  }
+
+  // Live renders add and remove process nodes (each tool call starts a shell), which moves every
+  // later row. WebKit has no CSS scroll anchoring, so keep the node that was at the top of each
+  // tree viewport at the same place after the redraw.
+  /** @returns {void} */
+  #anchorGraphs() {
+    for (const viewport of this.#elements(ViewContinuityService._GRAPH_SELECTOR)) {
+      this.#anchorGraph(viewport);
+    }
+  }
+
+  /** @param {HTMLElement} viewport @returns {void} */
+  #anchorGraph(viewport) {
+    const key = ViewContinuityService._GROUP_PREFIX + viewport.dataset.group;
+    const current = this.#nodeTops(viewport);
+    this.#storeAnchored(key, this.#anchoredOffset(this.#offsets.get(key), this.#layouts.get(key) ?? new Map(), current));
+    this.#layouts.set(key, current);
+  }
+
+  /** @returns {void} */
+  #rememberGraphs() {
+    for (const viewport of this.#elements(ViewContinuityService._GRAPH_SELECTOR)) {
+      this.#layouts.set(ViewContinuityService._GROUP_PREFIX + viewport.dataset.group, this.#nodeTops(viewport));
+    }
+  }
+
+  /** @param {HTMLElement} viewport @returns {Map<string, number>} */
+  #nodeTops(viewport) {
+    const origin = viewport.getBoundingClientRect().top - viewport.scrollTop;
+    return new Map(Array.from(viewport.querySelectorAll(ViewContinuityService._NODE_SELECTOR),
+      /** @param {Element} node @returns {[string, number]} */
+      node => [this.#identifier(/** @type {HTMLElement} */ (node).dataset.identity), node.getBoundingClientRect().top - origin]));
+  }
+
+  /** @param {{top: number, left: number} | undefined} saved @param {Map<string, number>} previous @param {Map<string, number>} current @returns {{top: number, left: number} | undefined} */
+  #anchoredOffset(saved, previous, current) {
+    if (saved === undefined) {
+      return undefined;
+    }
+    return this.#shiftedOffset(saved, this.#anchor(saved.top, previous, current), current);
+  }
+
+  /** @param {number} top @param {Map<string, number>} previous @param {Map<string, number>} current @returns {[string, number] | undefined} */
+  #anchor(top, previous, current) {
+    const kept = Array.from(previous).filter(
+      /** @param {[string, number]} entry @returns {boolean} */ entry => current.has(entry[0])
+    ).sort(/** @param {[string, number]} first @param {[string, number]} second @returns {number} */ (first, second) => first[1] - second[1]);
+    return kept.findLast(/** @param {[string, number]} entry @returns {boolean} */ entry => entry[1] <= top) ?? kept[0];
+  }
+
+  /** @param {{top: number, left: number}} saved @param {[string, number] | undefined} anchor @param {Map<string, number>} current @returns {{top: number, left: number}} */
+  #shiftedOffset(saved, anchor, current) {
+    if (anchor === undefined) {
+      return saved;
+    }
+    return {top: Math.max(0, saved.top + Number(current.get(anchor[0])) - anchor[1]), left: saved.left};
+  }
+
+  /** @param {string} key @param {{top: number, left: number} | undefined} offset @returns {void} */
+  #storeAnchored(key, offset) {
+    if (offset === undefined) {
+      return;
+    }
+    this.#offsets.set(key, offset);
   }
 
   /** @param {Event} event @returns {void} */
@@ -648,6 +719,7 @@ export default class ViewContinuityService {
     this.#graphProvider().zoom(this.#boundView(), identifier, action);
     this.#resetFitOffset(identifier, action);
     this.#graphProvider().draw(this.#boundView(), this.#currentSelection(), true);
+    this.#rememberGraphs();
     this.#restoreOffsets();
   }
 

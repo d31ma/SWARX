@@ -25,11 +25,6 @@ impl SessionDetailUtils {
         "Measured local usage of the processes attributable to this session: its verified session harness process and verified command roots with their current descendants. Each process counts once, by PID and start time.",
         "No verified process link for this session; resource metrics unavailable.",
     ];
-    const NOTES: [&'static str; 3] = [
-        "Shared runtimes are not attributed to this session.",
-        "Remote model compute is not measured.",
-        "Values are measured usage, not an estimated allocation of shared or remote work.",
-    ];
     const TREE_LABELS: [&'static str; Self::OUTCOMES] = [
         "Current OS parent relationships beneath this session's verified roots; each process appears once.",
         "No process tree: no verified process link.",
@@ -141,7 +136,6 @@ impl SessionDetailUtils {
         let unlinked: usize = usize::from(rows.is_empty());
         let samples: usize = SessionUsageUtils::history(commands).len();
         detail.metrics = SessionUsageUtils::metrics(rows, samples);
-        detail.notes = Self::NOTES.map(str::to_owned).to_vec();
         detail.process_count = rows.len() as i64;
         detail.root_count = Self::root_count(commands);
         detail.resource_scope = Self::SCOPES[unlinked].to_owned();

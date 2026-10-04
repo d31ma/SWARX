@@ -1,9 +1,5 @@
 <logic :if="(observatory.sessionView === 'detail' || observatory.sessionView === 'inactive') && observatory.sessionTab === 'resources'">
   <section id="session-panel-resources" role="tabpanel" aria-labelledby="session-tab-resources" class="history-scroll session-tab-panel" tabindex="0" :data-session="observatory.model.sessionDetail.key" :data-scope="observatory.model.sessionDetail.resourceScope">
-    <p :class="'resource-scope scope-' + observatory.model.sessionDetail.resourceScope">{observatory.model.sessionDetail.resourceLabel}</p>
-    <ul class="session-notes">
-      <loop :for="note of observatory.model.sessionDetail.notes"><li>{note}</li></loop>
-    </ul>
     <logic :if="observatory.model.sessionDetail.processCount">
       <div class="chart-tabs" role="group" aria-label="History metric">
         <w-btn :variant="observatory.series === 'cpu' ? 'tonal' : 'text'" on:click="observatory.setSeries('cpu')">CPU</w-btn>

@@ -64,6 +64,8 @@ class PresentationElement {
   /** @param {string} selector @returns {PresentationElement[]} */
   querySelectorAll(selector) { return this.lists.get(selector) ?? []; }
   /** @param {string} name @param {string} value @returns {void} */
+  /** @returns {{top: number}} */
+  getBoundingClientRect() { return {top: 0}; }
   setAttribute(name, value) { this.attributes[name] = value; }
 }
 

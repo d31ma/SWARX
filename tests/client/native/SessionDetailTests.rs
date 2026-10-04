@@ -262,12 +262,6 @@ fn shared_runtimes_outside_the_verified_trees_are_not_attributed() -> () {
     .unwrap();
     // Process 50 belongs to no verified root of this session, so it stays out of the totals.
     assert_eq!(SessionDetailTests::metric(&detail, "cpu").value, "15.0%");
-    assert!(detail
-        .notes
-        .contains(&"Shared runtimes are not attributed to this session.".to_owned()));
-    assert!(detail
-        .notes
-        .contains(&"Remote model compute is not measured.".to_owned()));
 }
 
 #[test]

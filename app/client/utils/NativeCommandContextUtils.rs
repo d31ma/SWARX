@@ -137,16 +137,9 @@ impl NativeCommandContextUtils {
         [
             row.stale,
             Self::SESSION_STATUSES.contains(&reported),
-            Self::launched_background(&row.executions),
         ]
         .into_iter()
         .all(std::convert::identity)
-    }
-
-    fn launched_background(executions: &[NativeExecutionRecord]) -> bool {
-        executions
-            .iter()
-            .any(|execution: &NativeExecutionRecord| -> bool { execution.background == Some(true) })
     }
 
     fn session_identifier(row: &NativeLogicalAgent) -> Option<&str> {

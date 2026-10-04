@@ -199,6 +199,8 @@ class TestView {
     this.controls = [];
     /** @type {Map<string, EventListener>} */
     this.listeners = new Map();
+    /** @type {GraphViewport[]} */
+    this.viewports = [];
     /** @type {number} */
     this.added = 0;
   }
@@ -211,6 +213,7 @@ class TestView {
   /** @param {string} selector @returns {ScrollElement[]} */
   querySelectorAll(selector) {
     if (selector === '[data-session-tab]') { return this.tabs; }
+    if (selector === '.group-graph-scroll') { return this.viewports; }
     if (['.session-process-pick', '[data-zoom]', '[data-session-focus]', '.session-card-open', '.session-panel'].includes(selector)) {
       return this.controls.filter(/** @param {FocusControl} element @returns {boolean} */ element => element.matches(selector));
     }
@@ -863,5 +866,66 @@ test('focus continuity restores a replaced session card by its focus key', /** @
   await restorePoll();
   assert.equal(replacement.focused, true);
   assert.equal(neighbour.focused, false);
+  watcher.dispose();
+});
+
+class GraphNode {
+  /** @param {string} identity @param {number} top */
+  constructor(identity, top) {
+    /** @type {{identity: string}} */
+    this.dataset = {identity};
+    /** @type {number} */
+    this.top = top;
+    /** @type {GraphViewport | null} */
+    this.viewport = null;
+  }
+  /** @returns {{top: number}} */
+  getBoundingClientRect() { return {top: this.top - Number(this.viewport?.scrollTop)}; }
+}
+
+class GraphViewport extends ScrollElement {
+  /** @param {GraphNode[]} nodes */
+  constructor(nodes) {
+    super();
+    this.dataset.group = 'Claude:exact-session';
+    this.scrollHeight = 2000;
+    /** @type {GraphNode[]} */
+    this.nodes = [];
+    this.place(nodes);
+  }
+  /** @param {GraphNode[]} nodes @returns {void} */
+  place(nodes) {
+    this.nodes = nodes;
+    for (const node of nodes) { node.viewport = this; }
+  }
+  /** @param {string} selector @returns {boolean} */
+  matches(selector) { return selector === '.group-graph-scroll'; }
+  /** @returns {{top: number}} */
+  getBoundingClientRect() { return {top: 0}; }
+  /** @param {string} selector @returns {GraphNode[]} */
+  querySelectorAll(selector) { return selector === '.graph-node[data-identity]' ? this.nodes : []; }
+}
+
+test('a node inserted above keeps the viewed tree node in place across a live render', /** @returns {Promise<void>} */ async () => {
+  const {view, watcher} = fixture();
+  const viewport = new GraphViewport([new GraphNode('claude', 20), new GraphNode('zsh-1', 200), new GraphNode('bash-1', 380)]);
+  view.viewports = [viewport];
+  assert.ok(TestMutationObserver.callback);
+  TestMutationObserver.callback();
+  await ViewContinuityServiceTest.delay();
+  viewport.scrollTop = 390;
+  const scroll = view.listeners.get('scroll');
+  assert.ok(scroll);
+  scroll(/** @type {Event} */ (/** @type {unknown} */ ({target: viewport})));
+  // A new shell under claude takes a row above bash-1, pushing it 180 px down.
+  viewport.place([new GraphNode('claude', 20), new GraphNode('zsh-1', 200), new GraphNode('zsh-2', 380), new GraphNode('bash-1', 560)]);
+  TestMutationObserver.callback();
+  await ViewContinuityServiceTest.delay();
+  assert.equal(viewport.scrollTop, 570);
+  // A removed row above moves it back up without losing the place.
+  viewport.place([new GraphNode('claude', 20), new GraphNode('zsh-2', 200), new GraphNode('bash-1', 380)]);
+  TestMutationObserver.callback();
+  await ViewContinuityServiceTest.delay();
+  assert.equal(viewport.scrollTop, 390);
   watcher.dispose();
 });
