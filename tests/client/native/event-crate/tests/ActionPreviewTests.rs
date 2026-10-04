@@ -243,3 +243,17 @@ fn prompt_like_task_text_is_rejected_not_truncated() -> () {
     assert!(ActionPreviewUtils::task_title("   ").is_none());
     assert!(ActionPreviewUtils::task_title("").is_none());
 }
+
+#[test]
+fn secret_query_parameters_in_urls_are_redacted() -> () {
+    let preview: String = ActionPreviewUtils::command(
+        "curl https://example.com/x?token=QUERYSECRET1&page=2&api_key=QUERYSECRET2;session=QUERYSECRET3",
+    )
+    .unwrap();
+    assert!(!preview.contains("QUERYSECRET"), "{preview}");
+    assert!(preview.contains("page=2"), "{preview}");
+    assert!(
+        preview.contains("token=\u{2026}redacted\u{2026}"),
+        "{preview}"
+    );
+}

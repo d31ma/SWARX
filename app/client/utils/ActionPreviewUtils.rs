@@ -25,6 +25,7 @@ impl ActionPreviewUtils {
     const PATH_SEPARATORS: &'static [char] = &[Self::SLASH, '\\'];
     const PIECE_MARKS: &'static [char] = &['_', Self::FLAG];
     const ADDRESS_MARK: &'static str = "://";
+    const PARAMETER_MARKS: &'static [char] = &['?', '&', ';'];
     const WEB_TOKEN_START: &'static str = "eyJ";
     const SENSITIVE_NAMES: &'static [&'static str] = &[
         "token",
@@ -257,7 +258,8 @@ impl ActionPreviewUtils {
     fn scrubbed(word: &str) -> String {
         let assigned: String = Self::without_assignment(word);
         let addressed: String = Self::without_user(&assigned);
-        Self::runs(&addressed, Self::segment_character, Self::segment)
+        let parameters: String = Self::parameters(&addressed);
+        Self::runs(&parameters, Self::segment_character, Self::segment)
     }
 
     fn without_assignment(word: &str) -> String {
@@ -266,6 +268,18 @@ impl ActionPreviewUtils {
                 [&word[..word.len() - value.len()], &Self::masked(value)].concat()
             })
             .unwrap_or_else(|| -> String { word.to_owned() })
+    }
+
+    // URL query or matrix parameters (?token=…, &api_key=…) are checked one by one.
+    fn parameters(word: &str) -> String {
+        word.split_inclusive(Self::PARAMETER_MARKS)
+            .map(Self::parameter)
+            .collect()
+    }
+
+    fn parameter(part: &str) -> String {
+        let body: &str = part.trim_end_matches(Self::PARAMETER_MARKS);
+        [Self::without_assignment(body).as_str(), &part[body.len()..]].concat()
     }
 
     fn without_user(word: &str) -> String {
