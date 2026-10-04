@@ -1,7 +1,7 @@
+use crate::ObservationClock;
 use crate::models::{
     NativeCommandBinding, NativeCommandBindingEvent, NativeCommandIdentity, NativeCommandOwner,
 };
-use crate::ObservationClock;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 

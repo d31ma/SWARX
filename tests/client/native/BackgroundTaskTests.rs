@@ -226,9 +226,11 @@ fn an_unmatched_group_gets_the_honest_fallback_only_after_it_has_lasted() -> () 
     assert_eq!(tasks[0].title, BackgroundTaskTests::UNTITLED);
     assert_eq!(tasks[0].action, None);
     assert!(tasks[0].attribution.contains("no background launch report"));
-    assert!(tasks[0]
-        .key
-        .ends_with(&format!("7700:{}", BackgroundTaskTests::birth(900.0))));
+    assert!(
+        tasks[0]
+            .key
+            .ends_with(&format!("7700:{}", BackgroundTaskTests::birth(900.0)))
+    );
 }
 
 #[test]
