@@ -37,7 +37,10 @@ fn independent_service_restart_restores_stale_source_session_task_and_action() -
     assert_eq!(restored.task.as_ref().unwrap().status, "stale");
     // A call left running before the restart can never receive its finish afterwards.
     assert_eq!(restored.executions[0].status, "no-finish");
-    assert_eq!(restored.executions[0].reported_status, None);
+    assert_eq!(
+        restored.executions[0].reported_status.as_deref(),
+        Some("running")
+    );
     assert_eq!(restored.executions[0].finished_at, None);
     assert_eq!(restored.age_seconds, 50.0);
     assert_eq!(restored.metrics, None);

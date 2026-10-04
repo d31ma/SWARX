@@ -257,12 +257,14 @@ impl LogicalRosterPolicyService {
     }
 
     /// A finished or retired record keeps its outcome across a restart. A call still waiting for
-    /// its finish can never receive it after the restart, so it is retired without a finish.
+    /// its finish can never receive it after the restart, so it is retired without a finish and
+    /// keeps what its hooks last reported: a live shell may still show that it runs.
     fn recover_execution(&self, mut item: NativeExecutionRecord) -> NativeExecutionRecord {
-        if !self.event.is_settled(&item.status) {
+        let open: bool = !self.event.is_settled(&item.status);
+        item.reported_status = Some(item.status.clone()).filter(|_: &String| -> bool { open });
+        if open {
             item.status = LogicalEventPolicyService::NO_FINISH.to_string();
         }
-        item.reported_status = None;
         item
     }
 

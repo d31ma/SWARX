@@ -18,6 +18,7 @@ impl HarnessShellUtils {
     const SHELL_TOOL: &'static str = "Bash";
     const RUNNING: &'static str = "running";
     const STALE: &'static str = "stale";
+    const NO_FINISH: &'static str = "no-finish";
     const BIRTH_SEPARATOR: char = ':';
     const MICROSECONDS: f64 = 1_000_000.0;
     const NO_AGE: f64 = 0.0;
@@ -169,7 +170,8 @@ impl HarnessShellUtils {
         .all(std::convert::identity)
     }
 
-    // A shell command still open: running, or marked stale only because no hook arrived lately.
+    // A shell command still open: running, or last reported running and then marked stale only
+    // because no hook arrived lately, or retired by an app restart that no finish can reach.
     fn open_commands<'a>(records: &[&'a NativeExecutionRecord]) -> Vec<&'a NativeExecutionRecord> {
         let mut open: Vec<&NativeExecutionRecord> = records
             .iter()
@@ -193,7 +195,7 @@ impl HarnessShellUtils {
 
     fn reported_running(record: &NativeExecutionRecord) -> bool {
         let reported: bool = [
-            record.status == Self::STALE,
+            [Self::STALE, Self::NO_FINISH].contains(&record.status.as_str()),
             record.reported_status.as_deref() == Some(Self::RUNNING),
         ]
         .into_iter()

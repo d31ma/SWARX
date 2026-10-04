@@ -67,7 +67,11 @@ fn restart_keeps_source_time_session_and_forces_stale() -> () {
     assert_eq!(row.task.as_ref().unwrap().status, "stale");
     // A call left running before the restart can never receive its finish afterwards.
     assert_eq!(row.executions[0].status, "no-finish");
-    assert_eq!(row.executions[0].reported_status, None);
+    // It keeps what its hooks last reported; a live shell may still show that it runs.
+    assert_eq!(
+        row.executions[0].reported_status.as_deref(),
+        Some("running")
+    );
     assert_eq!(row.metrics, None);
 }
 
@@ -237,5 +241,42 @@ fn restored_rows_can_be_saved_again_without_losing_original_status() -> () {
     assert_eq!(again[0].age_seconds, 20.0);
     assert_eq!(again[0].reported_status.as_deref(), Some("active"));
     assert_eq!(again[0].executions[0].status, "no-finish");
-    assert_eq!(again[0].executions[0].reported_status, None);
+    assert_eq!(
+        again[0].executions[0].reported_status.as_deref(),
+        Some("running")
+    );
+}
+
+#[test]
+fn only_a_call_left_running_keeps_a_reported_running_status_after_restart() -> () {
+    let fixture = Fixture::new();
+    let mut row = Fixture::row();
+    let running = row.executions[0].clone();
+    // Retired while the app ran (the harness moved on): no finish, and nothing still running.
+    let mut retired = running.clone();
+    retired.id = "retired-execution".to_string();
+    retired.status = "no-finish".to_string();
+    let mut completed = running.clone();
+    completed.id = "completed-execution".to_string();
+    completed.status = "completed".to_string();
+    completed.finished_at = Some(995.0);
+    row.executions = vec![running, retired, completed];
+    fixture.store.save(&[row]).unwrap();
+    for loaded in [1010.0, 1020.0] {
+        let rows = fixture.store.load(loaded).unwrap();
+        let reported: Vec<(&str, Option<&str>)> = rows[0]
+            .executions
+            .iter()
+            .map(|item| (item.status.as_str(), item.reported_status.as_deref()))
+            .collect();
+        assert_eq!(
+            reported,
+            vec![
+                ("no-finish", Some("running")),
+                ("no-finish", None),
+                ("completed", None)
+            ]
+        );
+        fixture.store.save(&rows).unwrap();
+    }
 }

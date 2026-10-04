@@ -262,6 +262,60 @@ fn a_recovered_row_after_restart_returns_only_with_process_evidence() -> () {
     ShellEvidenceTests::assert_hidden(&gone);
 }
 
+// The roster recovery shape of a foreground call left running across an app restart: no finish
+// can arrive any more, so it is retired as "no-finish" while keeping what its hooks last reported.
+fn restart_retired_row(reported: Option<&str>, feed: &str) -> NativeLogicalAgent {
+    let mut row: NativeLogicalAgent = ShellEvidenceTests::stale_row("Bash", "active", feed);
+    row.executions[0].status = "no-finish".to_owned();
+    row.executions[0].reported_status = reported.map(str::to_owned);
+    row
+}
+
+#[test]
+fn a_call_retired_by_a_restart_is_current_work_while_its_shell_still_runs() -> () {
+    let recovered: NativeLogicalAgent = restart_retired_row(Some("running"), "recovered");
+    let live: NativeSnapshot = ShellEvidenceTests::snapshot(
+        ShellEvidenceTests::shell(ShellEvidenceTests::LAUNCH + 0.3),
+        vec![recovered.clone()],
+    );
+    assert_eq!(live.shell_evidence, ShellEvidenceTests::expected_evidence());
+    assert!(live.background_tasks.is_empty(), "{:?}", live.background_tasks);
+    let view: NativeOverviewView = ShellEvidenceTests::overview(&live);
+    assert_eq!(view.active_sessions.len(), 1);
+    assert_eq!(view.active_summary.tools, 1);
+    assert_eq!(view.logical[0].status, "active");
+    assert_eq!(view.logical[0].executions[0].execution.status, "running");
+    // The recorded call keeps its status and invents no finish time.
+    assert_eq!(live.logical_agents[0].executions[0].status, "no-finish");
+    assert_eq!(live.logical_agents[0].executions[0].finished_at, None);
+    // When the shell exits the evidence ends.
+    let gone: NativeSnapshot = ShellEvidenceTests::snapshot(Vec::new(), vec![recovered.clone()]);
+    assert!(gone.shell_evidence.is_empty());
+    ShellEvidenceTests::assert_hidden(&gone);
+    // A shell outside the call's launch window is not its evidence.
+    let late: NativeSnapshot = ShellEvidenceTests::snapshot(
+        ShellEvidenceTests::shell(ShellEvidenceTests::LAUNCH + 30.0),
+        vec![recovered],
+    );
+    assert!(late.shell_evidence.is_empty());
+}
+
+#[test]
+fn a_call_retired_while_the_app_ran_is_never_shell_evidence() -> () {
+    // The harness moved on (new turn, denial, cancel) without a finish: the call is over.
+    for retired in [
+        restart_retired_row(None, "events"),
+        restart_retired_row(None, "recovered"),
+    ] {
+        let snapshot: NativeSnapshot = ShellEvidenceTests::snapshot(
+            ShellEvidenceTests::shell(ShellEvidenceTests::LAUNCH + 0.3),
+            vec![retired],
+        );
+        assert!(snapshot.shell_evidence.is_empty());
+        ShellEvidenceTests::assert_no_agent(&snapshot);
+    }
+}
+
 // MonitorService::current computes the evidence from the latest sample and rows on every read.
 #[derive(Clone)]
 struct ShellEvidenceSources;

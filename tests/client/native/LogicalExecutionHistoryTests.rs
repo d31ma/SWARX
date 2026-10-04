@@ -235,7 +235,8 @@ fn restart_and_fresh_upsert_preserve_completed_and_retire_unfinished_history() -
         )
         .unwrap();
     assert_eq!(unfinished.status, "no-finish");
-    assert_eq!(unfinished.reported_status, None);
+    // Retired by the restart, it keeps what its hooks last reported (shell evidence may use it).
+    assert_eq!(unfinished.reported_status.as_deref(), Some("running"));
     assert!(unfinished.finished_at.is_none());
     assert!(
         fixture
