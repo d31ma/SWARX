@@ -8,7 +8,7 @@ mod test_clock;
 
 use event_slice::models::NativeLogicalReceipt;
 use event_slice::services::{
-    LogicalEventReceiverService, LogicalRosterStoreService, NativeCommandEventService,
+    LogicalEventReceiverService, LogicalRosterStoreService,
 };
 use logical_event_fixture::LogicalEventFixture;
 use serde_json::json;
@@ -132,10 +132,9 @@ fn a_burst_of_hook_events_on_a_full_roster_reports_its_receiver_latency() -> () 
     fs::create_dir(&directory).unwrap();
     fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
     let endpoint: String = directory.join("hooks.sock").to_string_lossy().into_owned();
-    let receiver: LogicalEventReceiverService = LogicalEventReceiverService::with_commands(
+    let receiver: LogicalEventReceiverService = LogicalEventReceiverService::new(
         Arc::new(TestClock::new()),
         LogicalRosterStoreService::new(&endpoint),
-        NativeCommandEventService::disabled(),
     );
     receiver.restore();
     let send = |data: &str| -> NativeLogicalReceipt { receiver.receive(data.as_bytes()) };

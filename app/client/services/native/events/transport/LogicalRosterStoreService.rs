@@ -23,7 +23,7 @@ impl LogicalRosterStoreService {
         })
     }
 
-    pub fn save(&self, rows: &[NativeLogicalAgent]) -> Result<(), String> {
+    fn save_rows(&self, rows: &[NativeLogicalAgent]) -> Result<(), String> {
         let safe: Vec<NativeLogicalAgent> = self.policy.sanitized(rows)?;
         let agents: Vec<NativeLogicalAgent> = self.policy.recovered(safe, 0.0);
         let snapshot: NativeRosterSnapshot = NativeRosterSnapshot {
@@ -34,7 +34,7 @@ impl LogicalRosterStoreService {
         self.file.save(&bytes)
     }
 
-    pub fn load(&self, now: f64) -> Result<Vec<NativeLogicalAgent>, String> {
+    fn load_rows(&self, now: f64) -> Result<Vec<NativeLogicalAgent>, String> {
         self.policy.require_time(now)?;
         let bytes: Option<Vec<u8>> = self.file.load()?;
         let snapshot: NativeRosterSnapshot = Self::snapshot(bytes)?;
@@ -45,7 +45,7 @@ impl LogicalRosterStoreService {
 
     // Session harness links of the previous run: owner, family and exact process identity only.
     // They are claims to re-validate against the live OS process, never trusted as they are.
-    pub fn load_bindings(&self) -> Result<Vec<NativeSessionBindingRecord>, String> {
+    fn read_bindings(&self) -> Result<Vec<NativeSessionBindingRecord>, String> {
         let bytes: Option<Vec<u8>> = self.bindings.load()?;
         let file: Option<NativeSessionBindingFile> = bytes.map(Self::decode).transpose()?;
         file.map(Self::checked_bindings).unwrap_or_else(
@@ -53,7 +53,7 @@ impl LogicalRosterStoreService {
         )
     }
 
-    pub fn save_bindings(&self, records: &[NativeSessionBindingRecord]) -> Result<(), String> {
+    fn write_bindings(&self, records: &[NativeSessionBindingRecord]) -> Result<(), String> {
         Self::require_binding_count(records.len())?;
         let file: NativeSessionBindingFile = NativeSessionBindingFile {
             contract_version: Self::VERSION,
@@ -107,18 +107,18 @@ impl LogicalRosterStoreService {
 
 impl RosterStorage for LogicalRosterStoreService {
     fn load(&self, now: f64) -> Result<Vec<NativeLogicalAgent>, String> {
-        LogicalRosterStoreService::load(self, now)
+        self.load_rows(now)
     }
 
     fn load_bindings(&self) -> Result<Vec<NativeSessionBindingRecord>, String> {
-        LogicalRosterStoreService::load_bindings(self)
+        self.read_bindings()
     }
 
     fn save(&self, rows: &[NativeLogicalAgent]) -> Result<(), String> {
-        LogicalRosterStoreService::save(self, rows)
+        self.save_rows(rows)
     }
 
     fn save_bindings(&self, records: &[NativeSessionBindingRecord]) -> Result<(), String> {
-        LogicalRosterStoreService::save_bindings(self, records)
+        self.write_bindings(records)
     }
 }

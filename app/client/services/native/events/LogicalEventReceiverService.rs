@@ -21,18 +21,14 @@ impl LogicalEventReceiverService {
         clock: Arc<dyn ObservationClock>,
         store: Result<LogicalRosterStoreService, String>,
     ) -> Self {
-        Self::with_commands(clock, store, NativeCommandEventService::disabled())
+        Self::with_commands(
+            clock,
+            store.map(Self::shared_store),
+            NativeCommandEventService::disabled(),
+        )
     }
 
     pub fn with_commands(
-        clock: Arc<dyn ObservationClock>,
-        store: Result<LogicalRosterStoreService, String>,
-        commands: NativeCommandEventService,
-    ) -> Self {
-        Self::with_storage(clock, store.map(Self::shared_store), commands)
-    }
-
-    pub fn with_storage(
         clock: Arc<dyn ObservationClock>,
         storage: Result<Arc<dyn RosterStorage>, String>,
         commands: NativeCommandEventService,

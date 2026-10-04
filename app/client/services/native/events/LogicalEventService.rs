@@ -1,5 +1,5 @@
 use crate::models::{NativeCommandBinding, NativeLogicalAgent};
-use crate::{EventSource, ObservationClock};
+use crate::{EventSource, ObservationClock, RosterStorage};
 use std::sync::Arc;
 
 #[Service]
@@ -26,7 +26,9 @@ impl LogicalEventService {
             LogicalRosterStoreService::new(&endpoint);
         Self {
             receiver: Arc::new(LogicalEventReceiverService::with_commands(
-                clock, store, commands,
+                clock,
+                store.map(|value: LogicalRosterStoreService| -> Arc<dyn RosterStorage> { Arc::new(value) }),
+                commands,
             )),
             socket: LogicalSocketService::new(endpoint),
         }
@@ -39,10 +41,6 @@ impl LogicalEventService {
     // The socket stops first, so no event arrives after the final roster write.
     fn stop(&mut self) -> () {
         self.socket.stop();
-        self.flush();
-    }
-
-    pub fn flush(&self) -> () {
         self.receiver.flush();
     }
 

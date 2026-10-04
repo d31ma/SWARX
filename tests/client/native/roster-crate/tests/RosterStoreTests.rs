@@ -2,6 +2,7 @@
 mod roster_fixture;
 
 use observatory_roster_tests::services::LogicalRosterStoreService;
+use observatory_roster_tests::RosterStorage;
 use roster_fixture::RosterFixture as Fixture;
 use std::fs;
 use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};

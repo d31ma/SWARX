@@ -88,7 +88,11 @@ impl SessionBindingRestoreTests {
             .into_owned();
         let receiver: LogicalEventReceiverService = LogicalEventReceiverService::with_commands(
             clock.clone(),
-            LogicalRosterStoreService::new(&endpoint),
+            LogicalRosterStoreService::new(&endpoint).map(
+                |store: LogicalRosterStoreService| -> std::sync::Arc<dyn event_slice::RosterStorage> {
+                    std::sync::Arc::new(store)
+                },
+            ),
             commands,
         );
         AppRun {

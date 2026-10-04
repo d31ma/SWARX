@@ -57,7 +57,7 @@ impl RosterWriterTests {
         let storage: Arc<SlowRosterStorage> =
             Arc::new(SlowRosterStorage::new(&endpoint, Self::SLOW_WRITE));
         let shared: Arc<dyn RosterStorage> = storage.clone();
-        let receiver: LogicalEventReceiverService = LogicalEventReceiverService::with_storage(
+        let receiver: LogicalEventReceiverService = LogicalEventReceiverService::with_commands(
             Arc::new(TestClock::new()),
             Ok(shared),
             NativeCommandEventService::disabled(),
