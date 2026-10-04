@@ -104,3 +104,5 @@ mod goose_session_reader_service {
     include!(concat!(env!("OUT_DIR"), "/GooseSessionReaderService.rs"));
 }
 pub use goose_session_reader_service::*;
+mod observation_clock { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../../../app/client/shared/native/ObservationClock.rs")); }
+pub use observation_clock::*;
