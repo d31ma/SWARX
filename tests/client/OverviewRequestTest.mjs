@@ -7,7 +7,7 @@ import { BrowserServiceTestUtils } from './BrowserServiceTestUtils.mjs';
 /** @typedef {import('../../app/client/models/NativeViewSelection.ts').NativeViewSelection} NativeSelection */
 /** @typedef {Pick<import('../../app/client/models/ObservatoryModel.ts').ObservatoryModel, 'selected' | 'liveStatus' | 'detail' | 'selectedSession' | 'selectedSessionProcess' | 'resourceSessions' | 'sharedResources' | 'agentView'>} TestResponse */
 /** @typedef {{selection: NativeSelection, resolve: (value: TestResponse | PromiseLike<TestResponse>) => void, reject: (reason?: unknown) => void}} PendingRequest */
-/** @typedef {{model?: TestResponse, series: string, selectedAgent: string, agentTab: string, agentView: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, session: string, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, openAgent: (event: object, id: string) => void, closeAgent: (event: object) => void, setAgentTab: (event: object, tab: string) => void, toggleSession: (event: object, key: string) => void}} FixtureController *
+/** @typedef {{model?: TestResponse, series: string, selectedAgent: string, agentTab: string, agentView: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, session: string, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, openAgent: (event: object, id: string) => void, closeAgent: (event: object) => void, toggleSession: (event: object, key: string) => void}} FixtureController *
 /** @typedef {{controller: FixtureController, requests: PendingRequest[], poll: (() => void) | null}} RequestFrame */
 /** @typedef {Omit<RequestFrame, 'controller'> & {controller: FixtureController | null}} PreparingFrame */
 
@@ -157,6 +157,12 @@ class RequestView {
     const target = new RequestProcessTarget(group, pid);
     listener(/** @type {Event} */ (/** @type {unknown} */ ({target, defaultPrevented: false})));
   }
+  /** @param {string} name @returns {void} */
+  tab(name) {
+    const listener = this.listeners.get('click');
+    assert.ok(listener);
+    listener(/** @type {Event} */ (/** @type {unknown} */ ({target: new RequestTabTarget(name), defaultPrevented: false})));
+  }
   /** @returns {Element[]} */
   querySelectorAll() {return [];}
   /** @returns {null} */
@@ -167,6 +173,18 @@ class RequestView {
     assert.ok(listener);
     listener(/** @type {Event} */ (/** @type {unknown} */ ({key, target: new RequestProcessTarget('', 0), preventDefault() {}})));
   }
+}
+
+class RequestTabTarget extends RequestView {
+  /** @param {string} name */
+  constructor(name) {super(); this.dataset = {agentTab: name};}
+  /** @param {string} selector @returns {Element | null} */
+  closest(selector) {
+    if (selector === '[data-agent-tab]') return /** @type {Element} */ (/** @type {unknown} */ (this));
+    return null;
+  }
+  /** @returns {void} */
+  scrollIntoView() {}
 }
 
 class RequestProcessTarget extends RequestView {
@@ -322,7 +340,7 @@ test('series changes preserve the verified selection through the next poll', /**
 
 test('Tab changes preserve the series and exact process identity through the next poll', /** @returns {Promise<void>} */ async () => {
   const frame = await OverviewRequestTest.selectedFrame();
-  frame.controller.setAgentTab({}, 'tree');
+  frame.controller.view.tab('tree');
   await OverviewRequestTest.flush();
   assert.equal(frame.controller.agentTab, 'tree');
   assert.equal(frame.controller.series, 'cpu');
@@ -380,7 +398,7 @@ test('the selected agent and tab survive polls, including an honest missing stat
   const frame = OverviewRequestTest.frame();
   await started(frame);
   frame.controller.openAgent({}, 'agent-a');
-  frame.controller.setAgentTab({}, 'activity');
+  frame.controller.view.tab('activity');
   await OverviewRequestTest.flush();
   frame.requests[1].resolve(agentResponse('detail'));
   await OverviewRequestTest.flush();
@@ -400,7 +418,7 @@ test('switching agents keeps the current tab and requests the new agent', /** @r
   const frame = OverviewRequestTest.frame();
   await started(frame);
   frame.controller.openAgent({}, 'agent-a');
-  frame.controller.setAgentTab({}, 'tree');
+  frame.controller.view.tab('tree');
   frame.controller.openAgent({}, 'agent-b');
   await OverviewRequestTest.flush();
   assert.equal(frame.requests[1].selection.selectedAgent, 'agent-a');

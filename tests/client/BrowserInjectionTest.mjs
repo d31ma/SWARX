@@ -58,7 +58,6 @@ class BrowserInjectionTest {
       assert.ok(observatory.lifecycle);
       presentation.watch(observatory.view, observatory.lifecycle, this.viewSelection);
       assert.equal(this.observerCalls.observed, 2);
-      observatory.search();
       await this.settled();
       assert.equal(observatory.problem, '', observatory.view.dataset.nativeFailure);
       assert.ok(observatory.model);

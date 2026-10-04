@@ -95,7 +95,7 @@ export default class ObservatoryService {
     /** @param {Event} _event @param {string} identifier @returns {void} */
     #select(_event, identifier) {
         this.#selected = identifier;
-        this.search();
+        this.#search();
     }
 
     /** @param {Event} _event @param {string} session @param {number} identifier @param {string} started @returns {void} */
@@ -103,7 +103,7 @@ export default class ObservatoryService {
         this.#selectedSession = session;
         this.#sessionProcessNumber = identifier;
         this.#sessionProcessStarted = started;
-        this.search();
+        this.#search();
     }
 
     /** @param {Event} _event @param {string} mode @returns {void} */
@@ -116,7 +116,7 @@ export default class ObservatoryService {
     openAgent(_event, identifier) {
         this.selectedAgent = identifier;
         this.agentView = ObservatoryService._LOADING_VIEW;
-        this.search();
+        this.#search();
         this.#focusAfterRender(identifier, ObservatoryService._DRAWER_SELECTOR);
     }
 
@@ -125,24 +125,24 @@ export default class ObservatoryService {
         const identifier = this.selectedAgent;
         this.selectedAgent = ObservatoryService._EMPTY_TEXT;
         this.agentView = ObservatoryService._LIST_VIEW;
-        this.search();
+        this.#search();
         this.#focusAfterRender(identifier, ObservatoryService._ROW_SELECTOR);
     }
 
     /** @param {Event} _event @param {string} key @returns {void} */
     toggleSession(_event, key) {
         this.#expandedSessions = this.#toggled(key, this.#without(key));
-        this.search();
+        this.#search();
     }
 
     /** @param {Event} _event @param {string} tab @returns {void} */
-    setAgentTab(_event, tab) {
+    #setAgentTab(_event, tab) {
         this.agentTab = tab;
         void this.#renderIfReady();
     }
 
     /** @returns {void} */
-    search() {
+    #search() {
         this.#revision += 1;
         this.#schedule();
     }
@@ -191,7 +191,7 @@ export default class ObservatoryService {
             sessionPid: this.#sessionProcessNumber,
             sessionStarted: this.#sessionProcessStarted,
             showTab: /** @param {Event} event @param {string} tab @returns {void} */
-                (event, tab) => this.setAgentTab(event, tab),
+                (event, tab) => this.#setAgentTab(event, tab),
             close: /** @param {Event} event @returns {void} */ event => this.#closeOpenAgent(event),
             pick: /** @param {Event} event @param {string} group @param {number} identifier @returns {void} */
                 (event, group, identifier) => this.#selectProcess(event, group, identifier)
