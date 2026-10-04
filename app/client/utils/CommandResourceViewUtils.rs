@@ -98,11 +98,12 @@ impl CommandResourceViewUtils {
 
     fn owner_check(
         observation: &NativeCommandObservation,
-    ) -> fn(&NativeLogicalAgentView, &NativeCommandObservation) -> bool {
+    ) -> Box<dyn Fn(&NativeLogicalAgentView, &NativeCommandObservation) -> bool> {
+        // Boxed rather than a bare fn pointer: compiler32 corrupts function-pointer return types when it widens util visibility.
         if Self::session_scope(observation) {
-            return Self::session_owner_matches;
+            return Box::new(Self::session_owner_matches);
         }
-        Self::owner_matches
+        Box::new(Self::owner_matches)
     }
 
     fn session_owner_matches<'a>(

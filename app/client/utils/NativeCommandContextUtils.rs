@@ -71,11 +71,12 @@ impl NativeCommandContextUtils {
 
     fn owner_check(
         owner: &NativeCommandOwner,
-    ) -> fn(&NativeLogicalAgent, &NativeCommandOwner) -> Result<(), String> {
+    ) -> Box<dyn Fn(&NativeLogicalAgent, &NativeCommandOwner) -> Result<(), String>> {
+        // Boxed rather than a bare fn pointer: compiler32 corrupts function-pointer return types when it widens util visibility.
         if Self::session_owner(owner) {
-            return Self::require_session;
+            return Box::new(Self::require_session);
         }
-        Self::require_execution
+        Box::new(Self::require_execution)
     }
 
     fn session_owner(owner: &NativeCommandOwner) -> bool {
