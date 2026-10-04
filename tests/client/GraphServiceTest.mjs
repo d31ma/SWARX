@@ -520,3 +520,21 @@ test('measured geometry writes SVG attributes and never an inline style', /** @r
   assert.ok(group.nodes.every(/** @param {GraphNode} node @returns {boolean} */ node => Object.keys(node.style).length === 0));
   assert.deepEqual(Object.keys(group.nodes[0].parentElement.attributes).sort(), ['height', 'width', 'x', 'y']);
 });
+
+test('redrawing at the same zoom leaves the zoom label node untouched', /** @returns {void} */ () => {
+  // Each label write replaces a DOM text node; the view continuity observer answers mutations with a
+  // redraw, so an unconditional write looped forever and reset the tree scroll on every pass.
+  const group = GraphServiceTest.group('Codex:real-id');
+  let text = '';
+  let writes = 0;
+  Object.defineProperty(group.label, 'textContent', {get: () => text, set: /** @param {string} value */ value => { text = value; writes += 1; }});
+  const view = GraphServiceTest.view([group]);
+  const service = GraphServiceTest.service();
+  for (let pass = 0; pass < 5; pass += 1) service.draw(view, GraphServiceTest.selection());
+  assert.equal(group.label.textContent, '100%');
+  assert.equal(writes, 1);
+  service.zoom(view, 'Codex:real-id', 'in');
+  service.draw(view, GraphServiceTest.selection());
+  assert.equal(group.label.textContent, '110%');
+  assert.equal(writes, 2);
+});

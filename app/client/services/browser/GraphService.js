@@ -233,8 +233,13 @@ export default class GraphService {
 
   /** @param {Element | null} element @param {number} zoom @returns {void} */
   #zoomLabel(element, zoom) {
-    if (!element) return;
-    element.textContent = Math.round(zoom * 100) + '%';
+    // Rewriting unchanged text replaces a DOM node, which the view continuity observer answers with
+    // another draw: an endless redraw loop that reset the tree scroll position on every pass.
+    const text = Math.round(zoom * 100) + '%';
+    if ([element === null, element?.textContent === text].some(Boolean)) {
+      return;
+    }
+    /** @type {HTMLElement} */ (element).textContent = text;
   }
 
   /** @param {HTMLElement} group @param {import('/models/GraphLayout.ts').GraphLayout} layout @param {import('/models/ViewSelection.ts').ViewSelection} selection @returns {void} */
