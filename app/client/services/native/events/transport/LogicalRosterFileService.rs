@@ -1,9 +1,7 @@
 use std::ffi::CString;
 use std::fs::{File, Metadata};
 use std::io::{Read, Write};
-#[cfg(unix)]
 use std::os::fd::{AsRawFd, FromRawFd};
-#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 

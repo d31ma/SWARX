@@ -1,8 +1,6 @@
 use crate::models::{NativeCommandBindingReceipt, NativeLogicalEvent, NativeLogicalReceipt};
 use std::io::{Read, Write};
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 use std::os::fd::AsRawFd;
-#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 use std::time::{Duration, Instant};
 

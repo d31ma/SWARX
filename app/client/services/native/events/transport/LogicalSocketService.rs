@@ -1,14 +1,6 @@
 use crate::models::NativeSocketIdentity;
 use std::fs::File;
-#[cfg(target_os = "linux")]
-use std::fs::Metadata;
-#[cfg(target_os = "linux")]
-use std::os::unix::fs::MetadataExt;
-#[cfg(unix)]
 use std::os::unix::net::UnixListener;
-#[cfg(target_os = "linux")]
-use std::path::Path;
-#[cfg(unix)]
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -143,14 +135,14 @@ impl LogicalSocketService {
         private.then(|| -> PathBuf { root.join(Self::FOLDER_NAME) })
     }
 
-    fn private_root(root: &Path) -> bool {
-        let metadata: Option<Metadata> = std::fs::symlink_metadata(root).ok();
-        metadata.is_some_and(|value: Metadata| -> bool {
+    fn private_root(root: &std::path::Path) -> bool {
+        let metadata: Option<std::fs::Metadata> = std::fs::symlink_metadata(root).ok();
+        metadata.is_some_and(|value: std::fs::Metadata| -> bool {
             [
                 root.is_absolute(),
                 value.is_dir(),
-                value.uid() == unsafe { libc::getuid() },
-                value.mode() & Self::PERMISSION_MASK == Self::PRIVATE_MODE,
+                std::os::unix::fs::MetadataExt::uid(&value) == unsafe { libc::getuid() },
+                std::os::unix::fs::MetadataExt::mode(&value) & Self::PERMISSION_MASK == Self::PRIVATE_MODE,
             ]
             .into_iter()
             .all(std::convert::identity)

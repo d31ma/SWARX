@@ -1,5 +1,4 @@
 use crate::models::{NativeLogicalEvent, NativeLogicalReceipt};
-#[cfg(unix)]
 use std::os::unix::net::UnixStream;
 
 #[Service]
