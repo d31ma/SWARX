@@ -4,6 +4,9 @@ import type { LogicalAgentView } from '/models/LogicalAgentView.ts';
 import type { SessionActivityView } from '/models/SessionActivityView.ts';
 import type { SessionResourceView } from '/models/SessionResourceView.ts';
 import type { ProcessRow } from '/models/ProcessRow.ts';
+import type { ActiveSummaryView } from '/models/ActiveSummaryView.ts';
+import type { ActiveSessionView } from '/models/ActiveSessionView.ts';
+import type { AgentDetailView } from '/models/AgentDetailView.ts';
 export interface ObservatoryModel {
   sessionGroups: SessionView[];
   resourceSessions: SessionResourceView[];
@@ -11,11 +14,10 @@ export interface ObservatoryModel {
   chartResources: RuntimeView[];
   selectedSession: string;
   selectedSessionProcess: ProcessRow | null;
-  linkedSessionCount: number;
-  harnessCount: number;
-  eventSourceCount: number;
-  snapshotSourceCount: number;
-  recoveredSourceCount: number;
+  activeSessions: ActiveSessionView[];
+  activeSummary: ActiveSummaryView;
+  agentDetail: AgentDetailView | null;
+  agentView: string;
   sessions: RuntimeView[];
   runtimes: RuntimeView[];
   shared: RuntimeView[];

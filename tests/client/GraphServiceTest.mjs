@@ -87,7 +87,7 @@ class GraphServiceTest {
   static view(groups) {
     return /** @type {HTMLElement} */ (/** @type {unknown} */ ({
       /** @param {string} selector @returns {GraphGroup[]} */
-      querySelectorAll(selector) { assert.ok(['.graph-group', '.session-process-table .session-process-pick'].includes(selector)); return selector === '.graph-group' ? groups : []; }}));
+      querySelectorAll(selector) { assert.equal(selector, '.graph-group'); return groups; }}));
   }
 
   /** @param {string} [session] @param {number} [pid] @param {string} [birth] @returns {ViewSelection} */
@@ -375,21 +375,6 @@ test('service disposal releases remembered zoom without touching another instanc
   assert.equal(GraphServiceTest.scale(group), 1);
   other.draw(view, GraphServiceTest.selection());
   assert.equal(GraphServiceTest.scale(group), 0.9);
-});
-
-test('Table highlights only the selected session PID and birth', /** @returns {void} */ () => {
-  const group = GraphServiceTest.group('Codex:real-id');
-  const node = group.nodes[1];
-  node.dataset.session = 'Codex:real-id';
-  const view = /** @type {HTMLElement} */ (/** @type {unknown} */ ({
-    /** @param {string} selector @returns {GraphNode[]} */
-    querySelectorAll(selector) {return selector === '.session-process-table .session-process-pick' ? [node] : [];}
-  }));
-  const service = GraphServiceTest.service();
-  service.draw(view, GraphServiceTest.selection());
-  assert.equal(node.selected, true);
-  service.draw(view, GraphServiceTest.selection('Codex:real-id', 11, 'reused-birth'));
-  assert.equal(node.selected, false);
 });
 
 test('twelve narrow sibling branches connect true endpoints without crossing unrelated cards', /** @returns {void} */ () => {

@@ -1,13 +1,16 @@
-<div class="panel-heading"><h2>Agents &amp; assigned work</h2><p>Harness and session labels come from explicit sources. Command resources require an explicit link with a matching OS identity.</p></div>
-<p class="feed-notice">{observatory.model.logicalNotice} History stays in Activity; source records are not a unique agent count.</p>
-<div :class="'logical-scroll agent-grid' + (observatory.model.logicalCount === 0 ? ' is-empty' : '')">
-  <loop :for="agent of observatory.model.logical">
-    <article :class="'logical-agent-row logical-state-' + agent.status" :data-agent="agent.id" :data-session="agent.session ? agent.session.id : ''" :data-task="agent.task ? agent.task.id : ''" :data-status="agent.status" :data-family="agent.family" :data-source="agent.source">
-      <div class="logical-title"><h3>{agent.session ? (agent.session.name === agent.session.id ? 'Session title not reported' : agent.session.name) : 'Session not linked'}</h3></div>
-      <p class="agent-harness">{agent.family === 'Claude' ? 'Claude Code' : agent.family} · {agent.subAgent ? 'Sub-agent' : 'Agent'}</p>
-      <div class="assignment"><small>ASSIGNED TASK</small><strong>{agent.taskLabel}</strong></div>
-      <div class="current-action"><small>CURRENT TOOL</small><strong>{agent.currentAction || 'No tool running'}</strong><logic :if="agent.currentAction"><p class="action-detail" :title="agent.actionDetail || ''">{agent.actionDetail || 'Action details not reported'}</p></logic></div>
-    </article>
+<div class="panel-heading"><h2>Active sessions &amp; agents</h2><p>Harness and session labels come from explicit sources. Command resources require an explicit link with a matching OS identity.</p></div>
+<p class="feed-notice">{observatory.model.logicalNotice} Select an agent row for its resources, process tree and past activity.</p>
+<div :class="'logical-scroll session-grid' + (observatory.model.activeSessions.length === 0 ? ' is-empty' : '')">
+  <loop :for="session of observatory.model.activeSessions">
+    <section :class="'session-card' + (session.linked ? '' : ' is-unlinked')" :data-session="session.key" :data-session-id="session.id || ''" :data-family="session.family" :aria-label="session.title">
+      <header class="session-card-heading"><h3 :title="session.title">{session.title}</h3><p>{session.harness} · {session.countLabel}</p></header>
+      <ul class="agent-rows">
+        <loop :for="row of session.agents">
+          <li><button type="button" :class="'agent-row' + (row.id === observatory.selectedAgent ? ' is-selected' : '')" aria-haspopup="dialog" aria-controls="agent-drawer" :aria-expanded="row.id === observatory.selectedAgent ? 'true' : 'false'" :data-agent="row.id" :data-agent-focus="'row:' + row.id" :data-session="row.sessionId" :data-task="row.taskId" :data-status="row.status" :data-family="row.family" :data-source="row.source" on:click="observatory.openAgent(row.id)"><span :class="'agent-role' + (row.subAgent ? ' is-sub-agent' : '')">{row.roleLabel}</span><span class="agent-task" :title="row.taskLabel">{row.taskLabel}</span><span :class="'agent-tool' + (row.actionDetail ? '' : ' is-idle')" :title="row.actionDetail ? row.toolLabel + ' · ' + row.actionDetail : row.toolLabel"><span class="agent-tool-name">{row.toolLabel}</span><logic :if="row.actionDetail"><span class="agent-action">{row.actionDetail}</span></logic></span></button></li>
+        </loop>
+      </ul>
+      <logic :if="session.collapsible"><button type="button" class="session-toggle" :aria-expanded="session.expanded ? 'true' : 'false'" :data-agent-focus="'toggle:' + session.key" on:click="observatory.toggleSession(session.key)">{session.toggleLabel}</button></logic>
+    </section>
   </loop>
-  <logic :if="observatory.model.logicalCount === 0"><div class="empty task-feed-empty">No fresh active-task reports.<p>This feed does not prove no agents are working. After reopening the app, a coordinator must send a new report. Previously reported work stays in Activity.</p></div></logic>
+  <logic :if="observatory.model.activeSessions.length === 0"><div class="empty task-feed-empty">No fresh active-task reports.<p>This feed does not prove no agents are working. After reopening the app, a coordinator must send a new report.</p></div></logic>
 </div>

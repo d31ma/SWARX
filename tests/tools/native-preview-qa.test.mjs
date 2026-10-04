@@ -8,7 +8,7 @@ import test from 'node:test';
 /** @typedef {{id: string, name: string, status: string, source: string, task: string, action?: string, sessionId?: string, taskId?: string, provider?: string, rawSource?: string}} QaLogicalRecord */
 /** @typedef {{id: string, agent: string, sessionId: string, taskId: string, name: string, status: string, source: string, running: boolean}} QaActionRecord */
 /** @typedef {{logicalText?: string, activityText?: string, overflowScroll?: boolean, actions?: QaActionRecord[], columns?: number, logicalRows?: QaLogicalRecord[], navigationDelay?: number, noGroups?: boolean, activityCards?: number, overflow?: boolean, width?: number, height?: number, nativeFailure?: boolean, advanceSamples?: boolean, advancePaused?: boolean, replaceOnLayout?: boolean}} QaOptions */
-/** @typedef {{section: string, mode: string, samples: number, live: string, clock: number, columns: number, activeGroup: number, groupClicks: number, groupPending: boolean, groupDropped: boolean}} QaState */
+/** @typedef {{section: string, tab: string, drawer: boolean, opened: string, samples: number, live: string, clock: number, columns: number, activeGroup: number, groupClicks: number, groupPending: boolean, groupDropped: boolean}} QaState */
 /** @typedef {{dataset: Record<string, string | undefined>}} QaBody */
 /** @typedef {{label: string, action: string, check: string, section: string, mode: string, width: number, height: number, actionName?: string, agentRecordId?: string, sessionId?: string, taskId?: string, actionRecordId?: string}} QaInput */
 /** @typedef {{verify: (input: QaInput, iconLoaded: boolean) => Promise<string>}} QaReporter */
@@ -67,6 +67,8 @@ class QaElement {
   querySelector(selector){return this.query(selector);}
   /** @param {string} selector @returns {QaElement[]} */
   querySelectorAll(selector){const element=this.query(selector);return element===null?[]:[element];}
+  /** @param {string} _selector @returns {QaElement | null} */
+  closest(_selector){return null;}
   /** @returns {boolean} */
   dispatchEvent(){return true;}
 }
@@ -74,7 +76,7 @@ class QaElement {
 /** @param {QaOptions} [options] @returns {QaEnvironment} */
 function environment(options={}) {
   /** @type {QaState} */
-  const state={section:"What's running",mode:'table',samples:10,live:'Live',clock:0,columns:options.columns??2,activeGroup:0,groupClicks:0,groupPending:false,groupDropped:false};
+  const state={section:"What's running",tab:'Resources',drawer:false,opened:'',samples:10,live:'Live',clock:0,columns:options.columns??2,activeGroup:0,groupClicks:0,groupPending:false,groupDropped:false};
   /** @type {QaBody} */
   const body={dataset:{platform:'macos',qaAgentId:'coord:00000000-0000-4000-8000-000000000001:/root'}};
   const table=new QaElement('table');
@@ -82,18 +84,28 @@ function environment(options={}) {
   const sidebar=new QaElement('sidebar');
   const cards=Array.from({length:4},/** @param {unknown} _ @param {number} index @returns {QaElement} */ (_,index)=>new QaElement('card'+index,{x:20+index*420,y:100,width:400,height:180}));
   const canvas=new QaElement('chart');
-  const logicalRows=(options.logicalRows??[]).map(/** @param {QaLogicalRecord} record @returns {QaElement} */ record=>{
+  const records=options.logicalRows??[{id:'fixture-default-agent',name:'Fixture session',status:'running',source:'Fixture',task:'Fixture task'}];
+  const logicalRows=records.map(/** @param {QaLogicalRecord} record @returns {QaElement} */ record=>{
     const row=new QaElement('agent');
+    row.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.drawer=true;state.opened=record.id;state.section=state.tab;});
+    row.closest=/** @param {string} selector @returns {QaElement | null} */ selector=>{
+      if(selector!=='.session-card')return null;
+      const card=new QaElement('session');
+      card.query=/** @param {string} inner @returns {QaElement | null} */ inner=>inner==='h3'?new QaElement(record.name):null;
+      return card;
+    };
     row.attributes['data-agent']=record.id;
     row.dataset.agent=record.id;
     row.dataset.session=record.sessionId??'00000000-0000-4000-8000-000000000001';
     row.dataset.task=record.taskId??'fixture-task';
     row.dataset.family=record.provider??'Codex';
     row.dataset.source=record.rawSource??record.source;
+    row.dataset.status=record.status;
     row.query=/** @param {string} selector @returns {QaElement | null} */ selector=>{
-      const fields=/** @type {Record<string, string>} */ ({h3:record.name,'.status-pill':record.status,'.feed-time':record.source,'.assignment strong':record.task});
-      if(selector==='.current-action'||selector==='.current-action strong')return record.action?new QaElement(record.action):null;
-      return Object.hasOwn(fields,selector)?new QaElement(fields[selector]):null;
+      if(selector==='.agent-task')return new QaElement(record.task);
+      if(selector==='.agent-tool-name')return new QaElement(record.action??'No tool running');
+      if(selector==='.agent-tool.is-idle')return record.action?null:new QaElement('idle');
+      return null;
     };
     return row;
   });
@@ -128,30 +140,25 @@ function environment(options={}) {
       return button;
     };
   });
-  const navigation=["What's running",'Processes','Resource history','Activity'].map(/** @param {string} name @returns {QaElement} */ name=>{
+  const tabs=['Resources','Process tree','Activity'].map(/** @param {string} name @returns {QaElement} */ name=>{
     const element=new QaElement(name);
-    element.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.section=name;});
+    element.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.tab=name;state.section=name;});
     return element;
   });
-  const tabButtons=['Table','Tree'].map(/** @param {string} name @returns {QaElement} */ name=>{
-    const element=new QaElement(name);
-    element.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.mode=name.toLowerCase();});
-    return element;
-  });
+  const close=new QaElement('×');
+  close.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.drawer=false;state.section="What's running";});
   const queryAll=/** @param {string} selector @returns {QaElement[]} */ selector=>{
-    if(selector==='.logical-agent-row')return logicalRows;
+    if(selector==='.agent-row')return logicalRows;
+    if(selector==='.agent-tab')return state.drawer?tabs:[];
     if(selector==='.action-history-row')return actionRows;
-    if(selector==='.nav-item')return state.clock >= (options.navigationDelay ?? 0) ? navigation : [];
-    if(selector==='.view-tabs w-btn')return tabButtons;
-    if(selector==='.status-controls w-btn')return [];
-    if(selector==='[role=tab][data-graph-group]')return [];
+    if(selector==='[role=tab][data-agent-tab]')return [];
     if(selector==='.session-process-card')return options.noGroups?[]:graphs;
     if(selector==='.session-process-pick')return cards;
     if(selector==='.graph-group')return options.noGroups||state.groupPending?[]:graphs;
     if(selector==='.group-graph-scroll')return scrolls;
     if(selector==='.session-process-grid .session-process-card')return cards;
     if(selector==='.context-resource-grid .session-process-card')return cards;
-    if(selector==='.session-history-grid .session-history-card')return cards;
+    if(selector==='.history-grid .history-card')return cards;
     if(selector==='.context-history-grid .history-card')return cards;
     if(selector==='.activity-grid .activity-card')return cards.slice(0, options.activityCards ?? 1);
     if(selector==='.history-card')return cards;
@@ -171,13 +178,16 @@ function environment(options={}) {
     }),
     querySelectorAll:queryAll,
     querySelector:/** @param {string} selector @returns {QaElement | null} */ selector=>{
-      if(selector==='.nav-item.selected')return new QaElement(state.section);
-      if(selector==='.logical-panel')return new QaElement(options.logicalText??'');
+      if(selector==='.agent-drawer.is-open .agent-tab[aria-selected="true"]')return state.drawer?new QaElement(state.section):null;
+      if(selector==='.agent-tab')return state.drawer?tabs[0]:null;
+      if(selector==='.agent-drawer-close')return state.drawer?close:null;
+      if(selector==='.process-tree-view')return state.drawer&&state.section==='Process tree'?new QaElement('tree view'):null;
+      if(selector==='.logical-panel')return state.clock >= (options.navigationDelay ?? 0) ? new QaElement(options.logicalText??'') : null;
       if(selector==='.activity-overview')return new QaElement(options.activityText??'');
       if(selector==='.session-process-list'){const list=new QaElement('');list.dataset.processView=state.mode;return list;}
       if(selector==='.session-process-card'){return table;}
       if(selector==='.session-process-grid'||selector==='.context-resource-grid')return table;
-      if(selector==='.session-history-grid'||selector==='.context-history-grid')return history;
+      if(selector==='.history-grid'||selector==='.context-history-grid')return history;
       if(selector==='.activity-grid')return history;
       if(selector==='.sidebar')return sidebar;
       if(selector==='.live-state')return new QaElement(state.live);
@@ -199,8 +209,8 @@ function environment(options={}) {
 }
 
 /** @param {string} [action] @param {string} [check] @param {number} [width] @param {number} [height] @returns {QaInput} */
-function input(action='table',check='table',width=1240,height=850) {
-  return {label:'fixture-'+action,action,check,section:'Processes',mode:action==='table'?'table':'tree',width,height};
+function input(action='tree',check='tree',width=1240,height=850) {
+  return {label:'fixture-'+action,action,check,section:'Process tree',mode:'tree',width,height};
 }
 
 /** @param {QaEnvironment} context @returns {Promise<string>} */
@@ -252,46 +262,53 @@ test('zoom verification waits through a poll replacing the current graph',/** @r
   assert.equal(interaction(report).baseline.after[1].scale,'scale(1)');
 });
 
-test('report waits for asynchronous section and mode before recording the requested 1240x850 table',/** @returns {Promise<void>} */ async()=>{
+test('report opens the agent details and waits for the Process tree tab before recording 1240x850',/** @returns {Promise<void>} */ async()=>{
   const context=environment();
   const report=parse(await context.report.verify(input(),true));
-  assert.equal(report.section,'Processes');
+  assert.equal(report.section,'Process tree');
+  assert.equal(context.state.drawer,true);
   assert.equal(report.width,1240);
   assert.equal(report.height,850);
   assert.equal(report.verification.success,true);
-  assert.equal(report.tableLayout.columns.length,2);
 });
 
-test('small table records the actual 1000x700 viewport and one column',/** @returns {Promise<void>} */ async()=>{
+test('small tree records the actual 1000x700 viewport',/** @returns {Promise<void>} */ async()=>{
   const context=environment({width:1000,height:700,columns:1});
-  const report=parse(await context.report.verify(input('table','table',1000,700),true));
+  const report=parse(await context.report.verify(input('tree','tree',1000,700),true));
   assert.equal(report.width,1000);
   assert.equal(report.height,700);
-  assert.equal(report.tableLayout.columns.length,1);
+  assert.equal(report.section,'Process tree');
 });
 
-test('wrong grid fails rather than returning a successful screenshot report',/** @returns {Promise<void>} */ async()=>{
-  const context=environment({columns:1});
-  await assert.rejects(context.report.verify(input(),true),/expected 2 equal columns; measured 1/);
-});
+for(const action of ['table','owned-table','runtimes']) {
+  test('removed '+action+' step fails with an explicit note',/** @returns {Promise<void>} */ async()=>{
+    const context=environment();
+    await assert.rejects(context.report.verify(input(action,''),true),/were removed; use the agent details Process tree or Resources tab/);
+  });
+}
 
-test('wide Activity verifies four-column capacity with one real history card',/** @returns {Promise<void>} */ async()=>{
-  const context=environment({width:1680,columns:4,activityCards:1});
-  const request={label:'activity-capacity',action:'activity',section:'Activity',mode:'',check:'activity-layout',width:1680,height:850};
+test('Activity tab opens from the owned agent row and reports its section',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({logicalRows:[{id:'other',name:'Other',status:'running',source:'Fixture',task:'Other task'},{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'Root',status:'running',source:'Fixture',task:'Root task'}]});
+  const request={label:'activity',action:'activity',section:'Activity',mode:'',check:'',width:1240,height:850,agentRecordId:'coord:00000000-0000-4000-8000-000000000001:/root'};
   const report=parse(await context.report.verify(request,true));
   assert.equal(report.verification.success,true);
   assert.equal(report.section,'Activity');
+  assert.equal(context.state.opened,'coord:00000000-0000-4000-8000-000000000001:/root');
 });
 
-test('Activity wrong column capacity still fails with one card',/** @returns {Promise<void>} */ async()=>{
-  const context=environment({width:1680,columns:2,activityCards:1});
-  const request={label:'activity-capacity',action:'activity',section:'Activity',mode:'',check:'activity-layout',width:1680,height:850};
-  await assert.rejects(context.report.verify(request,true),/expected 4 equal columns; measured 2/);
+test("returning to What's running closes the agent details",/** @returns {Promise<void>} */ async()=>{
+  const context=environment();
+  await tree(context);
+  assert.equal(context.state.drawer,true);
+  const request={...input(),action:'running',section:"What's running",mode:'',check:''};
+  const report=parse(await context.report.verify(request,true));
+  assert.equal(report.section,"What's running");
+  assert.equal(context.state.drawer,false);
 });
 
 test('wrong late viewport times out rather than accepting a mislabeled small report',/** @returns {Promise<void>} */ async()=>{
   const context=environment();
-  await assert.rejects(context.report.verify(input('table','table',1000,700),true),/timed out/);
+  await assert.rejects(context.report.verify(input('tree','tree',1000,700),true),/timed out/);
 });
 
 test('native runtime error fails the current action',/** @returns {Promise<void>} */ async()=>{
@@ -379,14 +396,20 @@ for(const action of ['pause','resume','hold']) {
   });
 }
 
-test('history report records real DOM chart values and equal columns',/** @returns {Promise<void>} */ async()=>{
-  const context=environment();
-  const request={...input(),label:'fixture-history',action:'history',section:'Resource history',mode:'',check:'history'};
+test('Resources report records real DOM chart values in one full-width column',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({columns:1});
+  const request={...input(),label:'fixture-history',action:'history',section:'Resources',mode:'',check:'history'};
   const report=parse(await context.report.verify(request,true));
-  assert.equal(report.section,'Resource history');
+  assert.equal(report.section,'Resources');
   assert.equal(report.chartPoints,12);
   assert.equal(report.chartUnit,'% of one core');
-  assert.equal(report.historyLayout.columns.length,2);
+  assert.equal(report.historyLayout.columns.length,1);
+});
+
+test('Resources grid with two columns fails inside the drawer',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({columns:2});
+  const request={...input(),label:'fixture-history',action:'history',section:'Resources',mode:'',check:'history'};
+  await assert.rejects(context.report.verify(request,true),/expected 1 equal columns; measured 2/);
 });
 
 
@@ -397,7 +420,6 @@ test('native startup waits for asynchronous navigation before pressing a control
   assert.ok(context.state.clock >= 400);
 });
 
-test('wide session table preserves two readable tracks',/** @returns {Promise<void>} */ async()=>{const context=environment({width:1680,columns:2});const report=parse(await context.report.verify(input('table','table',1680,850),true));assert.equal(report.tableLayout.columns.length,2);assert.equal(report.tableLayout.cards.length,4);});
 
 test('agent capture observes live updates without requiring process tree zoom state', /** @returns {Promise<void>} */ async () => {
   const context = environment({advanceSamples:true});

@@ -12,7 +12,7 @@ impl CompositionTestSources {
         "activity/ActivityHistoryService",
         "sessions/HarnessSessionService",
     ];
-    const UTILITIES: [&'static str; 13] = [
+    const UTILITIES: [&'static str; 16] = [
         "MetricFormatUtils",
         "ProcessTreeUtils",
         "RuntimeViewUtils",
@@ -26,6 +26,9 @@ impl CompositionTestSources {
         "ProcessGraphUtils",
         "ProcessOwnerUtils",
         "ChartDataUtils",
+        "AgentDetailUtils",
+        "ActiveSummaryUtils",
+        "ActiveSessionUtils",
     ];
 
     pub fn run() -> Result<(), Box<dyn Error>> {

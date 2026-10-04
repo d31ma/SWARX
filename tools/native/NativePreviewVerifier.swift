@@ -27,38 +27,30 @@ final class NativePreviewVerifier {
     private static let normalSize: NSSize = NSSize(width: 1240, height: 850)
     private static let fullSize: NSSize = NSSize(width: 1680, height: 850)
     private static let smallSize: NSSize = NSSize(width: 1000, height: 700)
-    private static let sectionRoutes: [String: String] = ["What's running": "/", "Processes": "/processes", "Runtimes": "/runtimes",
-                                                          "Resource history": "/history", "Activity": "/activity"]
+    private static let sectionRoutes: [String: String] = ["What's running": "/", "Resources": "/", "Process tree": "/", "Activity": "/"]
     private static let loadPollNanoseconds: UInt64 = 100_000_000
     private static let resourceSteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
-        ("native-command-link-ready", "running", "What's running", "", normalSize, "command-linked"),
-        ("native-command-resource-live-samples", "polls", "What's running", "", normalSize, "updates"),
-        ("native-command-resources-wide", "running", "What's running", "", normalSize, "command-linked"),
-        ("native-command-resources-small", "running", "What's running", "", smallSize, "command-linked"),
-        ("native-command-resources-final", "running", "What's running", "", normalSize, "command-linked")
+        ("native-command-link-ready", "history", "Resources", "", normalSize, "command-linked"),
+        ("native-command-resource-live-samples", "polls", "Resources", "", normalSize, "updates"),
+        ("native-command-resources-wide", "history", "Resources", "", normalSize, "command-linked"),
+        ("native-command-resources-small", "history", "Resources", "", smallSize, "command-linked"),
+        ("native-command-resources-final", "history", "Resources", "", normalSize, "command-linked")
     ]
     private static let descendantSteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
         ("native-descendant-running", "descendants", "What's running", "", normalSize, "descendant-linked"),
         ("native-descendant-refresh", "polls", "What's running", "", normalSize, "descendant-open-polls"),
-        ("native-descendant-table", "owned-table", "Processes", "table", normalSize, "descendant-owner"),
-        ("native-descendant-tree", "owned-tree", "Processes", "tree", normalSize, "descendant-owner"),
-        ("native-descendant-runtime", "runtimes", "Runtimes", "", normalSize, "descendant-owner"),
-        ("native-descendant-history", "history", "Resource history", "", normalSize, "descendant-owner"),
+        ("native-descendant-tree", "owned-tree", "Process tree", "tree", normalSize, "descendant-owner"),
+        ("native-descendant-history", "history", "Resources", "", normalSize, "descendant-owner"),
         ("native-descendant-small", "descendants", "What's running", "", smallSize, "descendant-linked"),
-        ("native-descendant-tree-small", "owned-tree", "Processes", "tree", smallSize, "descendant-owner"),
+        ("native-descendant-tree-small", "owned-tree", "Process tree", "tree", smallSize, "descendant-owner"),
         ("native-descendant-final", "descendants", "What's running", "", normalSize, "descendant-linked")
     ]
-    private static let activityLayoutSteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
-        ("native-activity-four-columns", "activity", "Activity", "", fullSize, "activity-layout"),
-        ("native-activity-two-columns", "activity", "Activity", "", normalSize, "activity-layout"),
-        ("native-activity-one-column", "activity", "Activity", "", smallSize, "activity-layout")
-    ]
     private static let connectorSteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
-        ("native-connector-61685", "connector-first", "Processes", "tree", normalSize, "tree"),
-        ("native-connector-61639", "connector-second", "Processes", "tree", normalSize, "tree"),
+        ("native-connector-61685", "connector-first", "Process tree", "tree", normalSize, "tree"),
+        ("native-connector-61639", "connector-second", "Process tree", "tree", normalSize, "tree"),
         ("native-retained-action-history", "activity", "Activity", "", normalSize, "action-history"),
         ("native-restart-live-samples", "polls", "Activity", "", normalSize, "updates")
-    ] + activityLayoutSteps
+    ]
     private static let expiryAction: String = "current-expiry"
     // Holds one page past the point where a long-lived page stopped refreshing (about 41 samples).
     private static let settleAction: String = "settle"
@@ -82,35 +74,30 @@ final class NativePreviewVerifier {
     private static let steps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
         ("native-action-running", "activity", "Activity", "", normalSize, "action-running"),
         ("native-action-elapsed-update", "polls", "Activity", "", normalSize, "action-progress"),
-        ("native-command-resources", "running", "What's running", "", normalSize, "command-linked"),
-        ("native-table-full", "table", "Processes", "table", fullSize, "table"),
+        ("native-command-resources", "history", "Resources", "", normalSize, "command-linked"),
         ("native-running-full", "running", "What's running", "", fullSize, ""),
-        ("native-tree-full", "tree", "Processes", "tree", fullSize, "tree"),
+        ("native-tree-full", "tree", "Process tree", "tree", fullSize, "tree"),
         ("native-running-wide", "running", "What's running", "", normalSize, ""),
-        ("native-table-wide", "table", "Processes", "table", normalSize, "table"),
-        ("native-tree", "tree", "Processes", "tree", normalSize, "tree"),
-        ("native-tree-zoom", "exercise", "Processes", "tree", normalSize, "zoom"),
-        ("native-launch-updates", "polls", "Processes", "tree", normalSize, "polls"),
-        ("native-tree-refresh", "polls", "Processes", "tree", normalSize, "polls"),
-        ("native-history-wide", "history", "Resource history", "", normalSize, "history"),
+        ("native-tree", "tree", "Process tree", "tree", normalSize, "tree"),
+        ("native-tree-zoom", "exercise", "Process tree", "tree", normalSize, "zoom"),
+        ("native-launch-updates", "polls", "Process tree", "tree", normalSize, "polls"),
+        ("native-tree-refresh", "polls", "Process tree", "tree", normalSize, "polls"),
+        ("native-history-wide", "history", "Resources", "", normalSize, "history"),
         ("native-small", "running", "What's running", "", smallSize, ""),
-        ("native-table-small", "table", "Processes", "table", smallSize, "table"),
-        ("native-tree-small", "tree", "Processes", "tree", smallSize, "tree"),
-        ("native-history-small", "history", "Resource history", "", smallSize, "history"),
-        ("native-runtimes-small", "runtimes", "Runtimes", "", smallSize, ""),
+        ("native-tree-small", "tree", "Process tree", "tree", smallSize, "tree"),
+        ("native-history-small", "history", "Resources", "", smallSize, "history"),
         ("native-activity-small", "activity", "Activity", "", smallSize, ""),
-        ("native-runtimes", "runtimes", "Runtimes", "", normalSize, ""),
         ("native-activity", "activity", "Activity", "", normalSize, ""),
         ("native-running-final", "running", "What's running", "", normalSize, ""),
         ("native-roster", "running", "What's running", "", normalSize, "logical"),
         ("native-action-history", "activity", "Activity", "", normalSize, "action-history")
-    ] + activityLayoutSteps
+    ]
     private static let stabilitySteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
-        ("native-stability-start", "table", "Processes", "table", normalSize, ""),
-        ("native-stability-settled", settleAction, "Processes", "table", normalSize, ""),
-        ("native-stability-new-page", "runtimes", "Runtimes", "", normalSize, ""),
-        ("native-stability-tree", "tree", "Processes", "tree", normalSize, "tree"),
-        ("native-stability-tree-small", "tree", "Processes", "tree", smallSize, "tree")
+        ("native-stability-start", "tree", "Process tree", "tree", normalSize, ""),
+        ("native-stability-settled", settleAction, "Process tree", "tree", normalSize, ""),
+        ("native-stability-resources", "history", "Resources", "", normalSize, ""),
+        ("native-stability-tree", "tree", "Process tree", "tree", normalSize, "tree"),
+        ("native-stability-tree-small", "tree", "Process tree", "tree", smallSize, "tree")
     ]
     private static let focusedSelections: [String: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)]] = [
         "connectors": connectorSteps,

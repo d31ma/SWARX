@@ -54,3 +54,9 @@ mod session_resource_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../S
 mod session_activity_identity_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../SessionActivityIdentityTests.rs")); }
 #[cfg(test)]
 mod session_resource_navigation_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../SessionResourceNavigationTests.rs")); }
+#[cfg(test)]
+mod agent_detail_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../AgentDetailTests.rs")); }
+#[cfg(test)]
+mod active_summary_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../ActiveSummaryTests.rs")); }
+#[cfg(test)]
+mod active_session_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../ActiveSessionTests.rs")); }

@@ -1,4 +1,5 @@
 use crate::models::{
+    NativeActiveSessionView, NativeActiveSummaryView, NativeAgentDetailView,
     NativeLogicalAgentView, NativeProcessRow, NativeRuntimeView, NativeSessionActivityView,
     NativeSessionResourceView, NativeSessionView,
 };
@@ -17,16 +18,14 @@ pub struct NativeOverviewView {
     pub selected_session: String,
     #[serde(default, rename = "selectedSessionProcess")]
     pub selected_session_process: Option<NativeProcessRow>,
-    #[serde(rename = "linkedSessionCount")]
-    pub linked_session_count: i64,
-    #[serde(rename = "harnessCount")]
-    pub harness_count: i64,
-    #[serde(rename = "eventSourceCount")]
-    pub event_source_count: i64,
-    #[serde(rename = "snapshotSourceCount")]
-    pub snapshot_source_count: i64,
-    #[serde(rename = "recoveredSourceCount")]
-    pub recovered_source_count: i64,
+    #[serde(default, rename = "activeSessions")]
+    pub active_sessions: Vec<NativeActiveSessionView>,
+    #[serde(default, rename = "activeSummary")]
+    pub active_summary: NativeActiveSummaryView,
+    #[serde(default, rename = "agentDetail")]
+    pub agent_detail: Option<NativeAgentDetailView>,
+    #[serde(default, rename = "agentView")]
+    pub agent_view: String,
     pub sessions: Vec<NativeRuntimeView>,
     pub runtimes: Vec<NativeRuntimeView>,
     pub shared: Vec<NativeRuntimeView>,

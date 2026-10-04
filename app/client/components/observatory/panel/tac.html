@@ -1,27 +1,18 @@
 <w-container fluid class="observatory">
-  <aside class="sidebar" aria-label="Application information">
-    <div class="brand"><img class="brand-symbol" src="/shared/assets/observatory.svg" alt="" role="presentation" /><div><strong>Swarx Agent Observatory</strong></div></div>
-    <nav class="section-navigation" aria-label="Monitor sections"><loop :for="item of data.sections"><a :href="item.path" :class="'nav-item ' + ((item.path === page.path || item.alias === page.path) ? 'selected' : '')" :aria-current="(item.path === page.path || item.alias === page.path) ? 'page' : null">{item.nav}</a></loop></nav>
-  </aside>
-  <loop :for="section of data.sections"><logic :if="(section.path === page.path || section.alias === page.path)">
-    <logic :if="!observatory.model"><main class="main overview-loading" aria-busy="true"><div class="loading-message"><h1>Loading local observations.</h1><p>Connecting to the app-owned native core.</p><p role="status">{observatory.problem}</p></div></main></logic>
-    <logic :if="observatory.model"><main :class="'main section-' + section.key">
-      <w-app-bar class="topbar"><span class="eyebrow">LOCAL AGENT &amp; RESOURCE MONITOR</span><div class="status-controls"><span :class="'live-state state-' + observatory.status"><i class="dot"></i>{observatory.status}</span></div></w-app-bar>
-      <section class="page-heading"><div><h1>{section.title}</h1><p>Reported sessions and tasks; measured local processes where supported.</p></div><div class="sample-info">Updated {observatory.model.sampled}<br /><span>Observed for {observatory.model.elapsed}</span></div></section>
-      <logic :if="observatory.problem"><w-alert variant="warning" class="alert" role="status">{observatory.problem}</w-alert></logic>
-      <loop :for="error of observatory.model.errors"><w-alert variant="warning" class="alert" role="status">{error}</w-alert></loop>
-      <section class="summary-grid grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Reported session sources">
-        <w-card variant="outlined" class="metric-card"><div class="metric-label">REPORTED HARNESSES</div><strong>{observatory.model.harnessCount}</strong><p>From explicit sources only</p></w-card>
-        <w-card variant="outlined" class="metric-card"><div class="metric-label">LINKED SESSIONS</div><strong>{observatory.model.linkedSessionCount}</strong><p>Verified chat IDs · no resource split</p></w-card>
-        <w-card variant="outlined" class="metric-card"><div class="metric-label">EVENT SOURCE RECORDS</div><strong>{observatory.model.eventSourceCount}</strong><p>Lifecycle or reported team status</p></w-card>
-        <w-card variant="outlined" class="metric-card"><div class="metric-label">RECOVERED RECORDS</div><strong>{observatory.model.recoveredSourceCount}</strong><p>Saved locally · awaiting a new report</p></w-card>
+  <logic :if="!observatory.model"><main class="main overview-loading" aria-busy="true"><div class="loading-message"><h1>Loading local observations.</h1><p>Connecting to the app-owned native core.</p><p role="status">{observatory.problem}</p></div></main></logic>
+  <logic :if="observatory.model"><main class="main">
+    <w-app-bar class="topbar"><div class="brand"><img class="brand-symbol" src="/shared/assets/observatory.svg" alt="" role="presentation" /><strong>Swarx Agent Observatory</strong></div><div class="status-controls"><span class="eyebrow">LOCAL AGENT &amp; RESOURCE MONITOR</span><span :class="'live-state state-' + observatory.status"><i class="dot"></i>{observatory.status}</span></div></w-app-bar>
+    <section class="page-heading"><div><h1>What’s running.</h1><p>Verified active agents from explicit local reports. Select an agent for its resources, process tree and past activity.</p></div><div class="sample-info">Updated {observatory.model.sampled}<br /><span>Observed for {observatory.model.elapsed}</span></div></section>
+    <logic :if="observatory.problem"><w-alert variant="warning" class="alert" role="status">{observatory.problem}</w-alert></logic>
+    <loop :for="error of observatory.model.errors"><w-alert variant="warning" class="alert" role="status">{error}</w-alert></loop>
+    <section class="summary-grid grid grid-cols-2 xl:grid-cols-4 gap-3" aria-label="Current work summary">
+      <loop :for="card of observatory.model.activeSummary.cards"><w-card variant="outlined" :class="'metric-card' + ((observatory.status === 'Disconnected' || !observatory.model.activeSummary.current) ? ' is-not-current' : '')" :data-summary="card.key"><div class="metric-label">{card.label}</div><strong>{observatory.status === 'Disconnected' ? '—' : card.value}</strong><p>{observatory.status === 'Disconnected' ? 'Not current · collector disconnected' : card.detail}</p></w-card></loop>
+    </section>
+    <section class="workspace-grid">
+      <section class="logical-panel" aria-label="Reported logical agents">
+        <slot></slot>
       </section>
-      <section class="workspace-grid">
-        <section :class="section.wrapper" :aria-label="section.label">
-          <slot></slot>
-        </section>
-      </section>
-      <footer class="main-footer"><span><i class="dot green"></i> Read-only collection · no administrator permissions</span><span>{observatory.model.samples} samples · 2s collection target</span></footer>
-    </main></logic>
-  </logic></loop>
+    </section>
+    <footer class="main-footer"><span><i class="dot green"></i> Read-only collection · no administrator permissions</span><span>{observatory.model.samples} samples · 2s collection target</span></footer>
+  </main></logic>
 </w-container>

@@ -59,18 +59,8 @@ export default class GraphService {
 
   /** @param {HTMLElement} view @param {import('/models/ViewSelection.ts').ViewSelection} selection @param {boolean} _force @returns {void} */
   draw(view, selection, _force = false) {
-    this.#tableSelection(view, selection);
     const groups = this.#visibleGroups(view);
     this.#drawGroups(groups, selection);
-  }
-
-  /** @param {HTMLElement} view @param {import('/models/ViewSelection.ts').ViewSelection} selection @returns {void} */
-  #tableSelection(view, selection) {
-    for (const element of view.querySelectorAll('.session-process-table .session-process-pick')) {
-      const node = /** @type {HTMLElement} */ (element);
-      const selected = [node.dataset.session === selection.session, Number(node.dataset.pid) === selection.sessionPid, node.dataset.started === selection.sessionStarted].every(Boolean);
-      node.classList.toggle(GraphService._SELECTED_CLASS, selected);
-    }
   }
 
   /** @param {HTMLElement} view @param {string} identifier @param {string} action @returns {void} */

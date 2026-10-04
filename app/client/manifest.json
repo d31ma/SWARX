@@ -28,50 +28,6 @@
                 "command"
               ]
             }
-          },
-          {
-            "id": "processes",
-            "label": "Processes",
-            "route": "/processes",
-            "shortcut": {
-              "key": "2",
-              "modifiers": [
-                "command"
-              ]
-            }
-          },
-          {
-            "id": "runtimes",
-            "label": "Runtimes",
-            "route": "/runtimes",
-            "shortcut": {
-              "key": "3",
-              "modifiers": [
-                "command"
-              ]
-            }
-          },
-          {
-            "id": "history",
-            "label": "Resource History",
-            "route": "/history",
-            "shortcut": {
-              "key": "4",
-              "modifiers": [
-                "command"
-              ]
-            }
-          },
-          {
-            "id": "activity",
-            "label": "Activity",
-            "route": "/activity",
-            "shortcut": {
-              "key": "5",
-              "modifiers": [
-                "command"
-              ]
-            }
           }
         ],
         "help": [

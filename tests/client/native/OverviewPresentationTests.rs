@@ -667,7 +667,9 @@ fn empty_model_keeps_waiting_and_missing_states() -> () {
 fn wire_fields_match_observatory_model_camel_case() -> () {
     let wire: serde_json::Value =
         serde_json::to_value(OverviewPresentationTests::view(&NativeSnapshot::default())).unwrap();
-    assert_eq!(wire["linkedSessionCount"], 0);
+    assert_eq!(wire["agentView"], "list");
+    assert_eq!(wire["agentDetail"], serde_json::Value::Null);
+    assert_eq!(wire["activeSummary"]["agents"], 0);
     assert_eq!(wire["sampleAge"], 0.0);
     assert_eq!(wire["cpuTotal"], "Waiting");
     assert!(wire["processLabel"]
@@ -685,7 +687,8 @@ fn wire_fields_match_observatory_model_camel_case() -> () {
     assert!(wire.get("chart_resources").is_none());
     assert!(wire.get("selected_session").is_none());
     assert!(wire.get("selected_session_process").is_none());
-    assert_eq!(wire.as_object().unwrap().len(), 41);
+    assert_eq!(wire["activeSessions"], serde_json::json!([]));
+    assert_eq!(wire.as_object().unwrap().len(), 40);
 }
 
 #[test]
@@ -823,7 +826,7 @@ fn search_does_not_filter_shared_totals_or_logical_agents() -> () {
 }
 
 #[test]
-fn source_counts_use_explicit_feed_modes_including_coordinator_reports() -> () {
+fn inactive_feed_modes_leave_no_working_agents() -> () {
     let mut snapshot: NativeSnapshot = OverviewPresentationTests::snapshot(Vec::new());
     snapshot.logical_views = vec![
         OverviewPresentationTests::source("one", "events"),
@@ -834,9 +837,8 @@ fn source_counts_use_explicit_feed_modes_including_coordinator_reports() -> () {
     ];
     snapshot.logical_views[0].stale = true;
     let view: NativeOverviewView = OverviewPresentationTests::view(&snapshot);
-    assert_eq!(view.event_source_count, 2);
-    assert_eq!(view.snapshot_source_count, 1);
-    assert_eq!(view.recovered_source_count, 1);
+    assert_eq!(view.active_summary.agents, 0);
+    assert_eq!(view.active_summary.tools, 0);
     assert_eq!(view.logical_count, 0);
     assert_eq!(view.logical_feed, "No fresh active-task reports");
     assert!(view
@@ -850,7 +852,7 @@ fn snapshots_and_recovered_sources_do_not_claim_live_event_feed() -> () {
     let mut snapshot: NativeSnapshot = OverviewPresentationTests::snapshot(Vec::new());
     snapshot.logical_views = vec![OverviewPresentationTests::source("saved", "recovered")];
     let view: NativeOverviewView = OverviewPresentationTests::view(&snapshot);
-    assert_eq!(view.event_source_count, 0);
+    assert_eq!(view.active_summary.agents, 0);
     assert_eq!(view.logical_feed, "No fresh active-task reports");
     assert!(view.logical_notice.contains("history stays in Activity"));
 }
@@ -870,13 +872,9 @@ fn native_session_links_and_counts_are_preserved() -> () {
         model: None,
         provider: None,
     }];
-    snapshot.linked_session_count = 1;
-    snapshot.harness_count = 2;
     let view: NativeOverviewView = OverviewPresentationTests::view(&snapshot);
     assert_eq!(view.session_groups[0].id.as_deref(), Some("explicit"));
     assert_eq!(view.session_groups[0].source, "Explicit binding");
-    assert_eq!(view.linked_session_count, 1);
-    assert_eq!(view.harness_count, 2);
 }
 
 #[test]
@@ -1063,7 +1061,13 @@ fn reported_agents_survive_the_initial_missing_metric_sample() -> () {
     )];
     let view = OverviewPresentationTests::view(&snapshot);
     assert_eq!(view.logical.len(), 1);
-    assert_eq!(view.event_source_count, 1);
+    assert_eq!(view.active_summary.agents, 1);
+    assert!(!view.active_summary.current);
+    assert_eq!(view.active_summary.cards[0].value, "\u{2014}");
+    assert_eq!(
+        view.active_summary.cards[0].detail,
+        "Not current \u{b7} no sample yet"
+    );
     assert_eq!(view.live_status, "Metrics unavailable");
     assert_eq!(view.sampled, "Waiting");
 }
@@ -1079,7 +1083,8 @@ fn failed_metrics_leave_reported_work_visible() -> () {
     let view = OverviewPresentationTests::view(&snapshot);
     assert_eq!(view.logical.len(), 1);
     assert_eq!(view.live_status, "Metrics unavailable");
-    assert_eq!(view.event_source_count, 1);
+    assert_eq!(view.active_summary.agents, 1);
+    assert!(!view.active_summary.current);
 }
 
 #[test]

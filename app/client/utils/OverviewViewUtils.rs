@@ -1,11 +1,13 @@
 use crate::models::{
-    NativeGroupMetrics, NativeLogicalAgentView, NativeOverviewView, NativeProcessMetrics,
-    NativeProcessOwner, NativeProcessRow, NativeResourceTotals, NativeRuntimeView,
-    NativeSessionActivityView, NativeSessionLink, NativeSessionResourceView, NativeSnapshot,
-    NativeTaskRecord, NativeTaskView, NativeViewSelection,
+    NativeActiveSessionView, NativeAgentDetailView, NativeGroupMetrics, NativeLogicalAgentView,
+    NativeOverviewView, NativeProcessMetrics, NativeProcessOwner, NativeProcessRow,
+    NativeResourceTotals, NativeRuntimeView, NativeSessionActivityView, NativeSessionLink,
+    NativeSessionResourceView, NativeSnapshot, NativeTaskRecord, NativeTaskView,
+    NativeViewSelection,
 };
 use crate::utils::{
-    LogicalViewUtils, MetricFormatUtils, SessionResourceUtils, SessionViewUtils, TimeFormatUtils,
+    ActiveSessionUtils, ActiveSummaryUtils, AgentDetailUtils, LogicalViewUtils, MetricFormatUtils,
+    SessionResourceUtils, SessionViewUtils, TimeFormatUtils,
 };
 use std::cmp::Ordering;
 
@@ -30,8 +32,6 @@ impl OverviewViewUtils {
     const MISSING_VALUES: &'static str = "not current";
     const EVENT_FEED: &'static str = "events";
     const COORDINATOR_FEED: &'static str = "coordinator-report";
-    const SNAPSHOT_FEED: &'static str = "snapshot";
-    const RECOVERED_FEED: &'static str = "recovered";
     const NO_RECORDS: i64 = 0;
     const FIRST_INDEX: usize = 0;
     const CODEX_ORDER: i64 = 0;
@@ -50,7 +50,6 @@ impl OverviewViewUtils {
         let detail: Option<NativeRuntimeView> = Self::find_group(&groups, &identifier);
         let sessions: Vec<NativeRuntimeView> = Self::filtered(&groups, &selection.query);
         let shared: Vec<NativeRuntimeView> = Self::shared(&groups);
-        let event_count: i64 = Self::event_count(&snapshot.logical_views);
         let instrumented: bool = Self::instrumented(&groups);
         let totals: &NativeResourceTotals = &snapshot.totals;
         let available: String = Self::available(snapshot.ready);
@@ -60,7 +59,18 @@ impl OverviewViewUtils {
             Self::running_agents(&snapshot.logical_views, now),
             &snapshot.harness_sessions,
         );
+        let reported: Vec<NativeLogicalAgentView> = SessionViewUtils::named_agents(
+            Self::current_views(&snapshot.logical_views, now),
+            &snapshot.harness_sessions,
+        );
         let logical_count: i64 = logical.len() as i64;
+        let active_sessions: Vec<NativeActiveSessionView> = ActiveSessionUtils::sessions(
+            &logical,
+            &snapshot.logical_views,
+            &selection.expanded_sessions,
+        );
+        let activity: Vec<NativeSessionActivityView> =
+            SessionViewUtils::named_activity(snapshot.activity.clone(), &snapshot.harness_sessions);
         let all_resource_sessions: Vec<NativeSessionResourceView> =
             SessionResourceUtils::build(&snapshot.session_groups, now);
         let all_contexts: Vec<NativeRuntimeView> =
@@ -70,8 +80,17 @@ impl OverviewViewUtils {
         );
         let shared_resources: Vec<NativeRuntimeView> =
             Self::filtered(&all_contexts, &selection.query);
-        let chart_resources: Vec<NativeRuntimeView> =
-            SessionResourceUtils::chart_resources(&resource_sessions, &shared_resources);
+        let agent_detail: Option<NativeAgentDetailView> = AgentDetailUtils::detail(
+            &selection.selected_agent,
+            (&logical, &reported),
+            &all_resource_sessions,
+            &activity,
+        );
+        let chart_resources: Vec<NativeRuntimeView> = SessionResourceUtils::chart_resources(
+            Self::detail_resources(agent_detail.as_ref()),
+            &resource_sessions,
+            &shared_resources,
+        );
         let selected_session: String =
             SessionResourceUtils::selected_key(&all_resource_sessions, selection);
         let selected_session_process: Option<NativeProcessRow> =
@@ -86,19 +105,19 @@ impl OverviewViewUtils {
                 .collect(),
             selected_session,
             selected_session_process,
-            linked_session_count: snapshot.linked_session_count,
-            harness_count: snapshot.harness_count,
-            event_source_count: event_count,
-            snapshot_source_count: Self::source_count(&snapshot.logical_views, Self::SNAPSHOT_FEED),
-            recovered_source_count: Self::source_count(
-                &snapshot.logical_views,
-                Self::RECOVERED_FEED,
+            active_summary: ActiveSummaryUtils::summary(
+                &active_sessions,
+                &live_status,
+                snapshot.sampled_at,
             ),
+            active_sessions,
+            agent_view: AgentDetailUtils::view_state(
+                &selection.selected_agent,
+                agent_detail.as_ref(),
+            ),
+            agent_detail: agent_detail.map(Self::detail_without_charts),
             logical,
-            activity: Self::harness_activity(SessionViewUtils::named_activity(
-                snapshot.activity.clone(),
-                &snapshot.harness_sessions,
-            )),
+            activity: Self::harness_activity(activity),
             logical_count,
             logical_feed: Self::feed(logical_count),
             logical_notice: Self::notice(logical_count),
@@ -163,6 +182,17 @@ impl OverviewViewUtils {
     fn session_without_charts(mut session: NativeSessionResourceView) -> NativeSessionResourceView {
         session.commands = Self::transfer_views(session.commands);
         session
+    }
+
+    fn detail_resources(detail: Option<&NativeAgentDetailView>) -> &[NativeRuntimeView] {
+        detail
+            .map(|value: &NativeAgentDetailView| -> &[NativeRuntimeView] { &value.resources })
+            .unwrap_or_default()
+    }
+
+    fn detail_without_charts(mut detail: NativeAgentDetailView) -> NativeAgentDetailView {
+        detail.resources = Self::transfer_views(detail.resources);
+        detail
     }
 
     fn without_charts(mut view: NativeRuntimeView) -> NativeRuntimeView {
@@ -349,15 +379,17 @@ impl OverviewViewUtils {
             .any(|group: &NativeRuntimeView| -> bool { group.group.instrumented })
     }
 
-    fn event_count(agents: &[NativeLogicalAgentView]) -> i64 {
-        agents
-            .iter()
-            .filter(|agent: &&NativeLogicalAgentView| -> bool { Self::event_source(agent) })
-            .count() as i64
-    }
-
     fn event_source(agent: &NativeLogicalAgentView) -> bool {
         [Self::EVENT_FEED, Self::COORDINATOR_FEED].contains(&agent.feed_mode.as_str())
+    }
+
+    fn current_views(agents: &[NativeLogicalAgentView], now: f64) -> Vec<NativeLogicalAgentView> {
+        agents
+            .iter()
+            .map(|agent: &NativeLogicalAgentView| -> NativeLogicalAgentView {
+                LogicalViewUtils::running_view(agent, now)
+            })
+            .collect()
     }
 
     fn running_agents(agents: &[NativeLogicalAgentView], now: f64) -> Vec<NativeLogicalAgentView> {
@@ -438,13 +470,6 @@ impl OverviewViewUtils {
         value
             .replace(Self::OLD_MISSING_REPORT, Self::MISSING_VALUES)
             .replace(Self::OLD_MISSING_LABEL, Self::NO_RECENT_REPORT)
-    }
-
-    fn source_count(agents: &[NativeLogicalAgentView], feed: &str) -> i64 {
-        agents
-            .iter()
-            .filter(|agent: &&NativeLogicalAgentView| -> bool { agent.feed_mode == feed })
-            .count() as i64
     }
 
     fn feed(count: i64) -> String {

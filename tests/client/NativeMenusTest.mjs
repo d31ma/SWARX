@@ -23,7 +23,7 @@ class NativeMenusTest {
   /** @type {string} */
   static EXECUTABLE = path.join(QaPathUtils.external('OBSERVATORY_APP_BUNDLE'), 'Contents/MacOS/AgentObservatory');
   /** @type {{checked_at: string, pid: number, status: string, actions: {name: string, passed: boolean, result: string}[], limits: string[], error?: string}} */
-  static receipt = {checked_at: new Date().toISOString(), pid: this.PID, status: 'running', actions: [], limits: ['Actual own-process Mac UI only; no permission or settings changes.', 'No custom Service actions, File Close or Command1–5 claim.', 'HideOthers/ShowAll, clipboard mutation, full-screen and zoom not exercised.']};
+  static receipt = {checked_at: new Date().toISOString(), pid: this.PID, status: 'running', actions: [], limits: ['Actual own-process Mac UI only; no permission or settings changes.', 'No custom Service actions, File Close or Command1–5 claim.', 'HideOthers/ShowAll, clipboard mutation, full-screen and zoom not exercised.', 'Edit › Select All not exercised: the single What’s running page has no text input.']};
 
   /** @returns {Promise<void>} */
   static async run() {
@@ -33,7 +33,6 @@ class NativeMenusTest {
       this.groups();
       await this.help();
       await this.monitor();
-      this.edit();
       await this.window();
       await this.about();
       await this.hide();
@@ -131,41 +130,8 @@ class NativeMenusTest {
   /** @returns {Promise<void>} */
   static async monitor() {
     this.click('File', 'Open Monitor');
-    await this.wait(/** @returns {string} */ () => this.text(), 'Processes');
-    const clicked = this.query(`repeat with itemRef in (get entire contents of window 1)
-      set ownElement to contents of itemRef
-      try
-        if (get role of ownElement) is "AXButton" and (get name of ownElement) contains "Processes" then
-          click ownElement
-          return "clicked"
-        end if
-      end try
-    end repeat
-    error "Own process navigation button not found."`);
-    assert.equal(clicked, 'clicked');
-    await this.wait(/** @returns {string} */ () => this.text(), 'Observed process groups');
-    this.record('Monitor route returns to measured process view', 'Actual sidebar navigation and process heading rendered.');
-  }
-
-  /** @param {string} action @returns {string} */
-  static input(action) {
-    return this.query(`set ownInput to missing value
-      repeat with itemRef in (get entire contents of window 1)
-        set ownElement to contents of itemRef
-        try
-          if (get role of ownElement) is "AXTextField" then set ownInput to ownElement
-        end try
-      end repeat
-      if ownInput is missing value then error "Own process filter input not found."
-      ${action}`);
-  }
-
-  /** @returns {void} */
-  static edit() {
-    this.input('set value of ownInput to "codex"\nclick ownInput\nreturn "focused"');
-    this.click('Edit', 'Select All');
-    assert.equal(this.input('return value of attribute "AXSelectedText" of ownInput'), 'codex');
-    this.record('focus-aware native Select All', 'Selected only the test text in our process filter input.');
+    await this.wait(/** @returns {string} */ () => this.text(), 'AGENTS WORKING');
+    this.record('Monitor route returns to What’s running', 'Actual current-work summary cards rendered.');
   }
 
   /** @returns {Promise<void>} */

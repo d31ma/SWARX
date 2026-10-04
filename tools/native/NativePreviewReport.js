@@ -1,12 +1,20 @@
 class NativePreviewReport {
   /** @type {string} */
-  static #NAV_SELECTOR = '.nav-item';
+  static #READY_SELECTOR = '.logical-panel';
+  /** @type {string} */
+  static #TAB_SELECTOR = '.agent-tab';
+  /** @type {string} */
+  static #CLOSE_SELECTOR = '.agent-drawer-close';
+  /** @type {string} */
+  static #OVERVIEW = "What's running";
+  /** @type {string} */
+  static #RESOURCES = 'Resources';
+  /** @type {string} */
+  static #TREE_VIEW_SELECTOR = '.process-tree-view';
   /** @type {string} */
   static #RUNNING = 'running';
   /** @type {string} */
   static #TABLE = 'table';
-  /** @type {string} */
-  static #TABLE_CARD_SELECTOR = '.session-process-card';
   /** @type {string} */
   static #TREE = 'tree';
   /** @type {string} */
@@ -16,17 +24,12 @@ class NativePreviewReport {
   /** @type {string} */
   static #HOLD = 'hold';
   /** @type {string} */
-  static #PROCESSES = 'Processes';
+  static #PROCESSES = 'Process tree';
   /** @type {string} */
-  static #GRAPH_TAB_SELECTOR = '[role=tab][data-graph-group]';
+  static #GRAPH_TAB_SELECTOR = '[role=tab][data-agent-tab]';
   /** @type {string} */
   static #COORDINATOR_SOURCE = 'Coordinator-reported team roster';
-  /** @type {string} */
-  static #TABLE_PICK_SELECTOR = '.session-process-pick[data-process-view="table"]';
-  /** @type {number} */
-  static #SESSION_SMALL_WIDTH = 1040;
-  /** @type {string} */
-  static #VIEW_TAB_SELECTOR = '.view-tabs w-btn';
+
   /** @type {string} */
   static #STATUS_CONTROL_SELECTOR = '.status-controls w-btn';
   /** @type {string} */
@@ -38,7 +41,7 @@ class NativePreviewReport {
   /** @type {string} */
   static #EMPTY_TEXT = '';
   /** @type {string} */
-  static #SELECTED_NAV_SELECTOR = '.nav-item.selected';
+  static #SELECTED_TAB_SELECTOR = '.agent-drawer.is-open .agent-tab[aria-selected="true"]';
   /** @type {string} */
   static #UPDATES = 'updates';
   /** @type {string} */
@@ -46,7 +49,7 @@ class NativePreviewReport {
   /** @type {string} */
   static #GRAPH_NODE_SELECTOR = '.graph-node';
   /** @type {string} */
-  static #COMMAND_RESOURCE_SELECTOR = '.command-resource';
+  static #COMMAND_RESOURCE_SELECTOR = '.history-card';
   /** @type {string} */
   static #ACTION_RUNNING = 'action-running';
   /** @type {string} */
@@ -54,13 +57,9 @@ class NativePreviewReport {
   /** @type {string} */
   static #ACTION_NAME_SELECTOR = '.action-history-heading strong';
   /** @type {string} */
-  static #STATUS_SELECTOR = '.status-pill';
-  /** @type {string} */
   static #ELAPSED_SELECTOR = '.action-elapsed';
   /** @type {string} */
-  static #ACTIVITY_CARD_SELECTOR = '.activity-card';
-  /** @type {string} */
-  static #AGENT_ROW_SELECTOR = '.logical-agent-row';
+  static #AGENT_ROW_SELECTOR = '.agent-row';
   /** @type {string} */
   static #AGENT_ATTRIBUTE = 'data-agent';
   /** @type {number} */
@@ -80,10 +79,6 @@ class NativePreviewReport {
   static #REQUIRED_POLLS = 3;
   /** @type {number} */
   static #REQUIRED_GROUPS = 2;
-  /** @type {number} */
-  static #WIDE_WIDTH = 1100;
-  /** @type {number} */
-  static #FULL_WIDTH = 1600;
   /** @type {number} */
   static #MAXIMUM_COLUMNS = 4;
   /** @type {number} */
@@ -105,7 +100,7 @@ class NativePreviewReport {
   /** @type {string} */
   static #TABLE_CARD = '.session-process-card';
   /** @type {string} */
-  static #HISTORY_GRID = '.session-history-grid';
+  static #HISTORY_GRID = '.history-grid';
   /** @type {string} */
   static #HISTORY_CARD = '.history-card';
   /** @type {string} */
@@ -163,7 +158,7 @@ class NativePreviewReport {
 
   /** @param {number} started @returns {Promise<void>} */
   static async #waitNavigation(started) {
-    while (document.querySelectorAll(this.#NAV_SELECTOR).length === this.#EMPTY_COUNT) await this.#waitIteration(started);
+    while (document.querySelector(this.#READY_SELECTOR) === null) await this.#waitIteration(started);
   }
 
   /** @returns {Promise<void>} */
@@ -185,21 +180,21 @@ class NativePreviewReport {
   /** @param {string} action @returns {Promise<void>} */
   static async #perform(action) {
     switch (action) {
-      case this.#RUNNING: this.section("What's running"); return;
-      case 'current-expiry': this.section("What's running"); return;
-      case 'descendants': this.section("What's running"); await this.#openDescendants(); return;
+      case this.#RUNNING: await this.section(this.#OVERVIEW); return;
+      case 'current-expiry': await this.section(this.#OVERVIEW); return;
+      case 'descendants': await this.section(this.#OVERVIEW); await this.#openDescendants(); return;
       case 'owned-tree': await this.#ownedTree(); return;
-      case 'owned-table': this.table(); await this.#openOwnedTable(); return;
-      case this.#TABLE: this.table(); return;
-      case this.#TREE: this.processes(); return;
+      case 'owned-table': throw this.#removed(action);
+      case this.#TABLE: throw this.#removed(action);
+      case this.#TREE: await this.processes(); return;
       case 'connector-first': await this.#connectorAt(0); return;
       case 'connector-second': await this.#connectorAt(1); return;
       case 'exercise': await this.exercise(); return;
       case 'pause': this.pause(); return;
       case 'resume': this.resume(); return;
-      case this.#HISTORY: this.section('Resource history'); return;
-      case 'activity': this.section('Activity'); return;
-      case 'runtimes': this.section('Runtimes'); return;
+      case this.#HISTORY: await this.section(this.#RESOURCES); return;
+      case 'activity': await this.section('Activity'); return;
+      case 'runtimes': throw this.#removed(action);
       case this.#POLLS: return;
       case 'settle': return;
       case this.#HOLD: throw new Error('Unsupported native QA action: ' + action);
@@ -207,22 +202,56 @@ class NativePreviewReport {
     }
   }
 
-  /** @param {string} name @returns {void} */
-  static section(name) {
-    if (this.#text(document.querySelector(this.#SELECTED_NAV_SELECTOR)).includes(name)) return;
-    this.#click(this.#NAV_SELECTOR, name);
+  /** @param {string} action @returns {Error} */
+  static #removed(action) {
+    return new Error('Unsupported native QA action: ' + action + '. The Table view and the Runtimes page were removed; use the agent details Process tree or Resources tab.');
   }
 
-  /** @returns {void} */
-  static table() {
-    this.section(this.#PROCESSES);
-    this.#click(this.#VIEW_TAB_SELECTOR, 'Table');
+  /** @returns {string} */
+  static #currentSection() {
+    const tab = document.querySelector(this.#SELECTED_TAB_SELECTOR);
+    if (tab === null) return this.#OVERVIEW;
+    return this.#text(tab);
   }
 
-  /** @returns {void} */
-  static processes() {
-    this.section(this.#PROCESSES);
-    this.#click(this.#VIEW_TAB_SELECTOR, 'Tree');
+  /** @param {string} name @returns {Promise<void>} */
+  static async section(name) {
+    if (this.#currentSection() === name) return;
+    await this.#showSection(name);
+  }
+
+  /** @param {string} name @returns {Promise<void>} */
+  static async #showSection(name) {
+    if (name === this.#OVERVIEW) {
+      this.#press(document.querySelector(this.#CLOSE_SELECTOR), 'agent details close');
+      return;
+    }
+    await this.#openDetails();
+    this.#click(this.#TAB_SELECTOR, name);
+  }
+
+  /** @returns {Promise<void>} */
+  static async #openDetails() {
+    if (document.querySelector(this.#TAB_SELECTOR) !== null) return;
+    this.#press(this.#detailRow(), 'agent row');
+    await this.#waitTabs(performance.now());
+  }
+
+  /** @returns {Element | null} */
+  static #detailRow() {
+    const rows = /** @type {HTMLElement[]} */ (Array.from(document.querySelectorAll(this.#AGENT_ROW_SELECTOR)));
+    const owned = rows.find(/** @param {HTMLElement} row @returns {boolean} */ row => row.dataset.agent === document.body.dataset.qaAgentId);
+    return owned ?? rows[0] ?? null;
+  }
+
+  /** @param {number} started @returns {Promise<void>} */
+  static async #waitTabs(started) {
+    while (document.querySelector(this.#TAB_SELECTOR) === null) await this.#waitIteration(started);
+  }
+
+  /** @returns {Promise<void>} */
+  static async processes() {
+    await this.section(this.#PROCESSES);
   }
 
   /** @returns {Promise<void>} */
@@ -262,65 +291,14 @@ class NativePreviewReport {
 
   /** @returns {Promise<void>} */
   static async #ownedTree() {
-    this.processes();
-    await this.#waitOwnedTable(performance.now());
-    const group = this.#ownedGroup();
-    await this.#selectGroup(group?.dataset.group ?? this.#EMPTY_TEXT);
+    await this.processes();
     await this.#waitOwnedNode(performance.now());
     this.#scrollOwner('.graph-node');
   }
 
-  /** @returns {HTMLElement | undefined} */
-  static #ownedGroup() {
-    return this.#ownerNode(this.#TABLE_CARD_SELECTOR);
-  }
-
-  /** @returns {Promise<void>} */
-  static async #openOwnedTable() {
-    await this.#waitOwnedTable(performance.now());
-    this.#pickOwnedTable();
-    await this.#waitSelectedTable(performance.now());
-    this.#requireCardsOnly();
-  }
-
-  /** @returns {void} */
-  static #pickOwnedTable() {
-    const card = this.#ownedGroup();
-    const button = /** @type {HTMLElement | null | undefined} */ (card?.querySelector(this.#TABLE_PICK_SELECTOR));
-    document.body.dataset.qaTablePid = button?.dataset.pid;
-    document.body.dataset.qaTableStarted = button?.dataset.started;
-    document.body.dataset.qaTableGroup = card?.dataset.group;
-    this.#press(button ?? null, 'owned runtime Table card');
-  }
-
-  /** @param {number} started @returns {Promise<void>} */
-  static async #waitSelectedTable(started) {
-    while (!this.#selectedTable()) await this.#waitIteration(started);
-  }
-
-  /** @returns {boolean} */
-  static #selectedTable() {
-    const card = this.#ownedGroup();
-    const button = /** @type {HTMLElement | null | undefined} */ (card?.querySelector(this.#TABLE_PICK_SELECTOR + '.selected'));
-    return [Boolean(button), Boolean(button?.dataset.pid), Boolean(button?.dataset.started), button?.dataset.pid === document.body.dataset.qaTablePid,
-      button?.dataset.started === document.body.dataset.qaTableStarted,
-      card?.dataset.group === document.body.dataset.qaTableGroup].every(Boolean);
-  }
-
-  /** @returns {void} */
-  static #requireCardsOnly() {
-    const hierarchy = document.querySelector('.session-process-table .tree-expansion,.session-process-table .tree-node,.session-process-table .process-table-rows');
-    if (hierarchy !== null) throw new Error('Native Table duplicates the process hierarchy below runtime cards.');
-  }
-
-  /** @param {number} started @returns {Promise<void>} */
-  static async #waitOwnedTable(started) {
-    while (this.#ownedGroup() === undefined) await this.#waitIteration(started);
-  }
-
   /** @param {number} index @returns {Promise<void>} */
   static async #connectorAt(index) {
-    this.processes();
+    await this.processes();
     await this.#waitConnectorCount(index, performance.now());
     const identifier = this.#groupIds()[index];
     await this.connector(identifier);
@@ -333,7 +311,7 @@ class NativePreviewReport {
 
   /** @param {string} identifier @returns {Promise<void>} */
   static async connector(identifier) {
-    this.processes();
+    await this.processes();
     await this.#selectGroup(identifier);
   }
 
@@ -570,11 +548,17 @@ class NativePreviewReport {
 
   /** @param {{section: string, mode: string, width: number, height: number, check: string}} input @param {number} before @returns {boolean} */
   static #ready(input, before) {
-    const section = this.#text(document.querySelector(this.#SELECTED_NAV_SELECTOR));
-    const mode = /** @type {HTMLElement | null} */ (document.querySelector('.session-process-list'))?.dataset.processView ?? this.#EMPTY_TEXT;
+    const section = this.#currentSection();
+    const mode = this.#mode();
     return [section.includes(input.section), this.#modeReady(input.mode, mode),
       this.#viewportReady(input),
       this.#conditionReady(input.check, before)].every(Boolean);
+  }
+
+  /** @returns {string} */
+  static #mode() {
+    if (document.querySelector(this.#TREE_VIEW_SELECTOR) === null) return this.#EMPTY_TEXT;
+    return this.#TREE;
   }
 
   /** @param {{width: number, height: number, check: string}} input @returns {boolean} */
@@ -614,7 +598,7 @@ class NativePreviewReport {
       case 'action-history': return this.#historyComplete();
       case 'descendant-open-polls': return [this.#samples() >= before + this.#REQUIRED_POLLS, document.querySelector('.command-descendants')?.hasAttribute('open') === true, document.querySelector('.command-child') !== null].every(Boolean);
       case 'descendant-linked': return document.querySelector('.command-child') !== null;
-      case 'descendant-owner': return [Array.from(document.querySelectorAll('.process-owner')).some(/** @param {Element} label @returns {boolean} */ label => this.#text(label).includes('Current child lineage')), this.#selectedTable()].every(Boolean);
+      case 'descendant-owner': return Array.from(document.querySelectorAll('.process-owner')).some(/** @param {Element} label @returns {boolean} */ label => this.#text(label).includes('Current child lineage'));
       case 'command-linked': return document.querySelector(this.#COMMAND_RESOURCE_SELECTOR) !== null;
       case this.#ACTION_RUNNING: return this.#runningAction() !== undefined;
       case 'action-progress': return [this.#samples() >= before + this.#REQUIRED_POLLS, this.#actionAdvanced()].every(Boolean);
@@ -644,19 +628,18 @@ class NativePreviewReport {
   /** @returns {boolean} */
   static #currentWorkVisible() {
     const row = this.#currentWorkRow();
-    const action = this.#text(row?.querySelector('.current-action strong') ?? null);
-    const status = this.#text(row?.querySelector(this.#STATUS_SELECTOR) ?? null);
+    const action = this.#text(row?.querySelector('.agent-tool-name') ?? null);
+    const status = row?.dataset.status ?? this.#EMPTY_TEXT;
     return [this.#currentOwner(row), ['active', this.#RUNNING].includes(status), action === document.body.dataset.qaActionName].every(Boolean);
   }
 
   /** @returns {boolean} */
   static #currentTaskOnly() {
     const row = this.#currentWorkRow();
-    const status = this.#text(row?.querySelector(this.#STATUS_SELECTOR) ?? null);
-    const task = this.#text(row?.querySelector('.assignment strong') ?? null);
+    const status = row?.dataset.status ?? this.#EMPTY_TEXT;
+    const task = this.#text(row?.querySelector('.agent-task') ?? null);
     return [this.#currentOwner(row), ['active', this.#RUNNING].includes(status), Boolean(task.trim()),
-      row?.querySelector('.current-action') === null,
-      row?.querySelector(this.#COMMAND_RESOURCE_SELECTOR) === null].every(Boolean);
+      row?.querySelector('.agent-tool.is-idle') !== null].every(Boolean);
   }
 
   /** @returns {boolean} */
@@ -764,19 +747,19 @@ class NativePreviewReport {
   static #report(iconLoaded) {
     const canvas = document.querySelector('.resource-chart');
     return {capturedAt: new Date().toISOString(), native: document.body.dataset.platform,
-      section: this.#text(document.querySelector(this.#SELECTED_NAV_SELECTOR)),
-      commandResources: Array.from(document.querySelectorAll(this.#COMMAND_RESOURCE_SELECTOR), /** @param {Element} element @returns {{binding: string | undefined, text: string}} */ element => ({binding: /** @type {HTMLElement} */ (element).dataset.binding, text: this.#text(element)})),
+      section: this.#currentSection(),
+      commandResources: Array.from(document.querySelectorAll(this.#COMMAND_RESOURCE_SELECTOR), /** @param {Element} element @returns {{binding: string | undefined, text: string}} */ element => ({binding: /** @type {HTMLElement} */ (element).dataset.group, text: this.#text(element)})),
       qaStage: document.body.dataset.nativeQaStage, qaBefore: document.body.dataset.nativeQaBefore,
       samples: this.#text(document.querySelector(this.#SAMPLE_SELECTOR)), sampleCount: this.#samples(),
       width: innerWidth, height: innerHeight, horizontalOverflow: document.documentElement.scrollWidth > innerWidth,
       documentScroll: document.documentElement.scrollHeight > innerHeight, live: this.#live(),
       groups: document.querySelectorAll('.session-process-pick').length,
       graphGroups: document.querySelectorAll(this.#GROUP_SELECTOR).length, graphNodes: document.querySelectorAll(this.#GRAPH_NODE_SELECTOR).length, graphTabBounds: this.#tabBounds(),
-      tableLayout: this.#grid(this.#TABLE_GRID, this.#TABLE_CARD), contextTableLayout: this.#grid('.context-resource-grid', this.#TABLE_CARD), historyLayout: this.#grid(this.#HISTORY_GRID, '.session-history-card'), contextHistoryLayout: this.#grid('.context-history-grid', this.#HISTORY_CARD),
+      tableLayout: this.#grid(this.#TABLE_GRID, this.#TABLE_CARD), contextTableLayout: this.#grid('.context-resource-grid', this.#TABLE_CARD), historyLayout: this.#grid(this.#HISTORY_GRID, this.#HISTORY_CARD), contextHistoryLayout: this.#grid('.context-history-grid', this.#HISTORY_CARD),
       interaction: this.#interaction(), chartPoints: this.#points(canvas), chartUnit: this.#chartUnit(canvas),
-      sessionContainers: document.querySelectorAll('.session-card').length, flatAgentCards: document.querySelectorAll('.agent-grid > .logical-agent-row').length,
+      sessionContainers: document.querySelectorAll('.session-card').length, flatAgentCards: document.querySelectorAll('.session-grid > .agent-row').length,
       historyCards: document.querySelectorAll(this.#HISTORY_CARD).length, runtimeCards: document.querySelectorAll('.runtime-card').length,
-      activityCards: document.querySelectorAll(this.#ACTIVITY_CARD_SELECTOR).length, sidebarOverflow: this.#sidebarOverflow(),
+      activityCards: document.querySelectorAll(this.#ACTION_ROW_SELECTOR).length, sidebarOverflow: this.#sidebarOverflow(),
       summaryBounds: this.#summaryBounds(), logicalRecords: this.#logicalRecords(), logicalRows: document.querySelectorAll(this.#AGENT_ROW_SELECTOR).length, appIconLoaded: iconLoaded, diagnostics: this.#diagnostics()};
   }
 
@@ -800,7 +783,7 @@ class NativePreviewReport {
 
   /** @param {Element} tab @returns {{id: string, height: number, textTop: number, textBottom: number, top: number, bottom: number, lineHeight: string, appearance: string}} */
   static #tabBound(tab) {
-    return {...this.#elementTextBound(tab), id: String(/** @type {HTMLElement} */ (tab).dataset.graphGroup),
+    return {...this.#elementTextBound(tab), id: String(/** @type {HTMLElement} */ (tab).dataset.agentTab),
       appearance: getComputedStyle(tab).appearance};
   }
 
@@ -852,10 +835,10 @@ class NativePreviewReport {
   /** @param {Element} row @returns {{id: string, name: string, status: string, source: string, task: string, sessionId: string | undefined, taskId: string | undefined, currentAction: string, commandResourceCount: number}} */
   static #logicalRecord(row) {
     const data = /** @type {HTMLElement} */ (row).dataset;
-    return {id: data.agent ?? this.#EMPTY_TEXT, name: this.#text(row.querySelector('h3')),
-      status: data.status ?? this.#text(row.querySelector(this.#STATUS_SELECTOR)), source: data.source ?? this.#text(row.querySelector('.feed-time')),
-      task: this.#text(row.querySelector('.assignment strong')), sessionId: data.session, taskId: data.task,
-      currentAction: this.#text(row.querySelector('.current-action strong')),
+    return {id: data.agent ?? this.#EMPTY_TEXT, name: this.#text(row.closest('.session-card')?.querySelector('h3') ?? null),
+      status: data.status ?? this.#EMPTY_TEXT, source: data.source ?? this.#EMPTY_TEXT,
+      task: this.#text(row.querySelector('.agent-task')), sessionId: data.session, taskId: data.task,
+      currentAction: this.#text(row.querySelector('.agent-tool-name')),
       commandResourceCount: row.querySelectorAll(this.#COMMAND_RESOURCE_SELECTOR).length};
   }
 
@@ -919,9 +902,7 @@ class NativePreviewReport {
   static #assertCheck(report, input) {
     switch (input.check) {
       case 'current-work-completed': this.#requireHistoryLabels(); return;
-      case this.#TABLE: this.#requireCardsOnly(); this.#requireSessionGrids(report.tableLayout, report.contextTableLayout, input.width); return;
-      case this.#HISTORY: this.#requireSessionGrids(report.historyLayout, report.contextHistoryLayout, input.width); return;
-      case 'activity-layout': this.#requireActivityGrid(this.#grid('.activity-grid', this.#ACTIVITY_CARD_SELECTOR), this.#tableColumns(input.width)); return;
+      case this.#HISTORY: this.#requireDrawerGrid(report.historyLayout); return;
       case this.#ZOOM: this.#requireZoom(report.interaction); return;
       case this.#POLLS: this.#requireZoom(report.interaction); this.#requireScroll(report.interaction); return;
       case this.#HOLD: this.#requirePaused(report.sampleCount, report.live); return;
@@ -934,12 +915,10 @@ class NativePreviewReport {
     if (!this.#historyComplete()) throw new Error('Native QA completion no longer matches its exact reported action.');
   }
 
-  /** @param {{columns: number[], cards: {width: number}[]}} sessions @param {{columns: number[], cards: {width: number}[]}} context @param {number} width @returns {void} */
-  static #requireSessionGrids(sessions, context, width) {
-    const expected = this.#sessionColumns(width);
-    this.#requireSessionCapacity(sessions, expected);
-    this.#requireSessionCapacity(context, expected);
-    this.#requireMeasuredCards(sessions.cards.length + context.cards.length);
+  /** @param {{columns: number[], cards: {width: number}[]}} grid @returns {void} */
+  static #requireDrawerGrid(grid) {
+    this.#requireSessionCapacity(grid, this.#SINGLE_COLUMN);
+    this.#requireMeasuredCards(grid.cards.length);
   }
 
   /** @param {{columns: number[], cards: {width: number}[]}} grid @param {number} expected @returns {void} */
@@ -953,39 +932,15 @@ class NativePreviewReport {
     if (count === this.#EMPTY_COUNT) throw new Error('Native QA needs actual session or context cards for this view.');
   }
 
-  /** @param {number} width @returns {number} */
-  static #sessionColumns(width) {
-    if (width <= this.#SESSION_SMALL_WIDTH) return this.#SINGLE_COLUMN;
-    return this.#REQUIRED_GROUPS;
-  }
-
   /** @param {{columns: number[], cards: {x: number, y: number, width: number, height: number}[]}} layout @param {number} expected @returns {void} */
   static #requireGrid(layout, expected) {
     const ready = this.#gridReady(layout, expected);
     this.#requireLayout(ready, expected, layout.columns.length);
   }
 
-  /** @param {{columns: number[], cards: {x: number, y: number, width: number, height: number}[]}} layout @param {number} expected @returns {void} */
-  static #requireActivityGrid(layout, expected) {
-    const ready = [layout.columns.length === expected, layout.cards.length > this.#EMPTY_COUNT, this.#cardsFitColumns(layout)].every(Boolean);
-    this.#requireLayout(ready, expected, layout.columns.length);
-  }
-
   /** @param {{columns: number[], cards: {width: number}[]}} layout @returns {boolean} */
   static #cardsFitColumns(layout) {
     return layout.cards.every(/** @param {{width: number}} card @returns {boolean} */ card => Math.abs(card.width - layout.columns[0]) <= this.#SIZE_TOLERANCE);
-  }
-
-  /** @param {number} width @returns {number} */
-  static #tableColumns(width) {
-    if (width >= this.#FULL_WIDTH) return this.#MAXIMUM_COLUMNS;
-    return this.#expectedColumns(width);
-  }
-
-  /** @param {number} width @returns {number} */
-  static #expectedColumns(width) {
-    if (width >= this.#WIDE_WIDTH) return this.#REQUIRED_GROUPS;
-    return this.#SINGLE_COLUMN;
   }
 
   /** @param {{columns: number[], cards: {x: number, y: number, width: number, height: number}[]}} layout @param {number} expected @returns {boolean} */

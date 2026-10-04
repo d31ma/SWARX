@@ -9,7 +9,13 @@ export default class ObservatoryService {
     /** @type {string} */
     static _EMPTY_TEXT = '';
     /** @type {string} */
-    static _CONTEXT_PREFIX = 'context:';
+    static _LOADING_VIEW = 'loading';
+    /** @type {string} */
+    static _LIST_VIEW = 'list';
+    /** @type {string} */
+    static _DRAWER_SELECTOR = '.agent-drawer';
+    /** @type {string} */
+    static _ROW_SELECTOR = '.agent-row';
     /** @type {string} */
     static _COLLECTOR_UNAVAILABLE = 'Local measurements unavailable. Retrying automatically; last values may be older.';
     /** @type {import('/services/native/monitoring/SnapshotService.js').default | undefined} */
@@ -32,15 +38,17 @@ export default class ObservatoryService {
     /** @type {string} */
     #selected = ObservatoryService._EMPTY_TEXT;
     /** @type {string} */
-    query = ObservatoryService._EMPTY_TEXT;
-    /** @type {string} */
     status = 'Connecting';
     /** @type {string} */
     series = 'cpu';
     /** @type {string} */
-    processView = 'table';
-    /** @type {string} Process tree tab shown in the Tree view; kept while it still exists. */
-    graphGroup = ObservatoryService._EMPTY_TEXT;
+    selectedAgent = ObservatoryService._EMPTY_TEXT;
+    /** @type {string} */
+    agentTab = 'resources';
+    /** @type {string} */
+    agentView = ObservatoryService._LIST_VIEW;
+    /** @type {string[]} */
+    #expandedSessions = [];
     /** @type {number} */
     #selectedProcessNumber = 0;
     /** @type {string} */
@@ -104,9 +112,32 @@ export default class ObservatoryService {
         void this.#renderIfReady();
     }
 
-    /** @param {Event} _event @param {string} mode @returns {void} */
-    setProcessView(_event, mode) {
-        this.processView = mode;
+    /** @param {Event} _event @param {string} identifier @returns {void} */
+    openAgent(_event, identifier) {
+        this.selectedAgent = identifier;
+        this.agentView = ObservatoryService._LOADING_VIEW;
+        this.search();
+        this.#focusAfterRender(identifier, ObservatoryService._DRAWER_SELECTOR);
+    }
+
+    /** @param {Event} _event @returns {void} */
+    closeAgent(_event) {
+        const identifier = this.selectedAgent;
+        this.selectedAgent = ObservatoryService._EMPTY_TEXT;
+        this.agentView = ObservatoryService._LIST_VIEW;
+        this.search();
+        this.#focusAfterRender(identifier, ObservatoryService._ROW_SELECTOR);
+    }
+
+    /** @param {Event} _event @param {string} key @returns {void} */
+    toggleSession(_event, key) {
+        this.#expandedSessions = this.#toggled(key, this.#without(key));
+        this.search();
+    }
+
+    /** @param {Event} _event @param {string} tab @returns {void} */
+    setAgentTab(_event, tab) {
+        this.agentTab = tab;
         void this.#renderIfReady();
     }
 
@@ -116,10 +147,37 @@ export default class ObservatoryService {
         this.#schedule();
     }
 
-    /** @param {Event} _event @param {string} identifier @returns {void} */
-    #showGraph(_event, identifier) {
-        this.graphGroup = identifier;
-        void this.#renderIfReady();
+    /** @param {string} key @returns {string[]} */
+    #without(key) {
+        return this.#expandedSessions.filter(/** @param {string} item @returns {boolean} */ item => item !== key);
+    }
+
+    /** @param {string} key @param {string[]} without @returns {string[]} */
+    #toggled(key, without) {
+        if (this.#expandedSessions.includes(key)) {
+            return without;
+        }
+        return [...this.#expandedSessions, key];
+    }
+
+    /** @param {Event} event @returns {void} */
+    #closeOpenAgent(event) {
+        if (this.selectedAgent === ObservatoryService._EMPTY_TEXT) {
+            return;
+        }
+        this.closeAgent(event);
+    }
+
+    /** @param {string} identifier @param {string} selector @returns {void} */
+    #focusAfterRender(identifier, selector) {
+        void this.#focusRendered(identifier, selector)
+            .catch(/** @param {unknown} error @returns {void} */ error => this.#chartFailure(error));
+    }
+
+    /** @param {string} identifier @param {string} selector @returns {Promise<void>} */
+    async #focusRendered(identifier, selector) {
+        await this.#scheduler().render();
+        this.#presentation().focusAgent(identifier, selector);
     }
 
     /** @returns {import('/models/ViewSelection.ts').ViewSelection} */
@@ -129,12 +187,12 @@ export default class ObservatoryService {
             mode: this.series,
             model: this.model,
             pid: this.#selectedProcessNumber,
-            graphGroup: this.graphGroup,
             session: this.#selectedSession,
             sessionPid: this.#sessionProcessNumber,
             sessionStarted: this.#sessionProcessStarted,
-            showGraph: /** @param {Event} event @param {string} identifier @returns {void} */
-                (event, identifier) => this.#showGraph(event, identifier),
+            showTab: /** @param {Event} event @param {string} tab @returns {void} */
+                (event, tab) => this.setAgentTab(event, tab),
+            close: /** @param {Event} event @returns {void} */ event => this.#closeOpenAgent(event),
             pick: /** @param {Event} event @param {string} group @param {number} identifier @returns {void} */
                 (event, group, identifier) => this.#selectProcess(event, group, identifier)
         };
@@ -165,7 +223,6 @@ export default class ObservatoryService {
     /** @param {Event} event @param {string} group @param {number} identifier @returns {void} */
     #selectProcess(event, group, identifier) {
         this.#selectedProcessNumber = identifier;
-        this.graphGroup = group;
         this.#select(event, group);
     }
 
@@ -214,9 +271,10 @@ export default class ObservatoryService {
 
     /** @returns {import('/models/NativeViewSelection.ts').NativeViewSelection} */
     #nativeSelection() {
-        return { selected: this.#selected, query: this.query, pid: this.#selectedProcessNumber,
+        return { selected: this.#selected, query: ObservatoryService._EMPTY_TEXT, pid: this.#selectedProcessNumber,
             selectedSession: this.#selectedSession, sessionPid: this.#sessionProcessNumber,
-            sessionStarted: this.#sessionProcessStarted };
+            sessionStarted: this.#sessionProcessStarted, selectedAgent: this.selectedAgent,
+            expandedSessions: [...this.#expandedSessions] };
     }
 
     /** @param {number} revision @param {import('/models/NativeViewSelection.ts').NativeViewSelection} selection @returns {Promise<void>} */
@@ -240,7 +298,7 @@ export default class ObservatoryService {
     /** @param {import('/models/ObservatoryModel.ts').ObservatoryModel} model @returns {void} */
     #acceptCurrent(model) {
         this.model = model;
-        this.graphGroup = this.#currentGraph(this.#treeGroups(model));
+        this.agentView = model.agentView;
         this.#selected = model.selected;
         this.#selectedSession = model.selectedSession;
         this.#sessionProcessNumber = this.#processPid(model.selectedSessionProcess);
@@ -249,21 +307,6 @@ export default class ObservatoryService {
         this.problem = ObservatoryService._EMPTY_TEXT;
         delete this.#element().dataset.nativeFailure;
         void this.#renderCharts().catch(/** @param {unknown} error @returns {void} */ error => this.#chartFailure(error));
-    }
-
-    /** @param {import('/models/ObservatoryModel.ts').ObservatoryModel} model @returns {string[]} */
-    #treeGroups(model) {
-        const sessions = model.resourceSessions.filter(/** @param {import('/models/SessionResourceView.ts').SessionResourceView} session @returns {boolean} */
-            session => session.graph.nodes.length > 0).map(/** @param {import('/models/SessionResourceView.ts').SessionResourceView} session @returns {string} */ session => session.key);
-        const shared = model.sharedResources.filter(/** @param {import('/models/RuntimeView.ts').RuntimeView} runtime @returns {boolean} */
-            runtime => runtime.graph.nodes.length > 0).map(/** @param {import('/models/RuntimeView.ts').RuntimeView} runtime @returns {string} */ runtime => ObservatoryService._CONTEXT_PREFIX + runtime.id);
-        return [...sessions, ...shared];
-    }
-
-    /** @param {string[]} groups @returns {string} */
-    #currentGraph(groups) {
-        const kept = groups.filter(/** @param {string} group @returns {boolean} */ group => group === this.graphGroup);
-        return [...kept, ...groups, ObservatoryService._EMPTY_TEXT][0];
     }
 
     /** @param {import('/models/ProcessRow.ts').ProcessRow | null | undefined} process @returns {number | null} */

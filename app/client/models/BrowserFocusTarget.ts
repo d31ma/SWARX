@@ -8,4 +8,7 @@ export type BrowserFocusTarget = {
   kind: 'zoom';
   group: string;
   action: string;
+} | {
+  kind: 'agent';
+  control: string;
 };

@@ -5,10 +5,10 @@ export interface ViewSelection {
   mode: string;
   model?: ObservatoryModel;
   pid?: number;
-  graphGroup?: string;
   session?: string;
   sessionPid?: number | null;
   sessionStarted?: string | null;
-  showGraph?: (event: Event, group: string) => void;
+  showTab?: (event: Event, tab: string) => void;
+  close?: (event: Event) => void;
   pick?: (event: Event, group: string, process: number) => void;
 }

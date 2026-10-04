@@ -5,4 +5,6 @@ export interface NativeViewSelection {
   selectedSession: string;
   sessionPid: number | null;
   sessionStarted: string | null;
+  selectedAgent: string;
+  expandedSessions: string[];
 }

@@ -40,15 +40,15 @@ class ViewContinuityServiceTest {
   /** @returns {KeyboardFixture} */
   static keyboardFixture() {
     const values = fixture();
-    const first = new GraphTab('session:first');
-    const last = new GraphTab('session:last');
+    const first = new GraphTab('resources');
+    const last = new GraphTab('activity');
     /** @type {string[]} */
     const selected = [];
     values.view.tabs = [first, last];
     values.watcher.bind(/** @type {HTMLElement} */ (/** @type {unknown} */ (values.view)), values.lifecycle.signal,
       /** @returns {ViewSelection} */ () => ({group: null, mode: 'cpu',
         /** @param {Event} event @param {string} identifier @returns {void} */
-        showGraph(event, identifier) { selected.push(identifier); }}));
+        showTab(event, identifier) { selected.push(identifier); }}));
     return {...values, first, last, selected};
   }
   /** @param {KeyboardFixture} values @param {string} key @param {ScrollElement} target @returns {KeyboardInput} */
@@ -94,7 +94,7 @@ class ScrollElement {
     this.scrollLeft = 0;
   }
   /** @param {string} selector @returns {boolean} */
-  matches(selector) { return selector === '.session-list'; }
+  matches(selector) { return selector === '.logical-scroll'; }
   /** @param {string} _selector @returns {ScrollElement | null} */
   closest(_selector) { return null; }
 }
@@ -115,7 +115,7 @@ class GraphTab extends ScrollElement {
   /** @param {string} identifier */
   constructor(identifier) {
     super();
-    this.dataset.graphGroup = identifier;
+    this.dataset.agentTab = identifier;
     /** @type {boolean} */
     this.focused = false;
     /** @type {FocusOptions | null} */
@@ -124,9 +124,9 @@ class GraphTab extends ScrollElement {
     this.scrollOptions = null;
   }
   /** @param {string} selector @returns {GraphTab | null} */
-  closest(selector) { return selector === '[data-graph-group]' ? this : null; }
+  closest(selector) { return selector === '[data-agent-tab]' ? this : null; }
   /** @param {string} selector @returns {boolean} */
-  matches(selector) { return selector === '[data-graph-group]'; }
+  matches(selector) { return selector === '[data-agent-tab]'; }
   /** @param {FocusOptions} options @returns {void} */
   focus(options) { this.focused = true; this.focusOptions = options; }
   /** @param {ScrollIntoViewOptions} options @returns {void} */
@@ -166,6 +166,10 @@ class FocusControl extends ScrollElement {
   static process(view = 'tree', session = 'Codex:exact-session', started = 'exact-birth') {
     return new FocusControl('.session-process-pick', {session, pid: '11', started, processView: view});
   }
+  /** @param {string} control @returns {FocusControl} */
+  static agent(control) {
+    return new FocusControl('[data-agent-focus]', {agentFocus: control});
+  }
   /** @param {string} [group] @param {string} [action] @returns {FocusControl} */
   static zoom(group = 'Codex:exact-session', action = 'in') {
     return new FocusControl('[data-zoom]', {group, zoom: action});
@@ -203,11 +207,11 @@ class TestView {
   /** @param {string} name @returns {void} */
   removeEventListener(name) { this.listeners.delete(name); }
   /** @param {string} selector @returns {ScrollElement | null} */
-  querySelector(selector) { return selector === '.session-list' ? this.panel : null; }
+  querySelector(selector) { return selector === '.logical-scroll' ? this.panel : null; }
   /** @param {string} selector @returns {ScrollElement[]} */
   querySelectorAll(selector) {
-    if (selector === '[data-graph-group]') { return this.tabs; }
-    if (['.session-process-pick', '[data-zoom]'].includes(selector)) {
+    if (selector === '[data-agent-tab]') { return this.tabs; }
+    if (['.session-process-pick', '[data-zoom]', '[data-agent-focus]', '.agent-row', '.agent-drawer'].includes(selector)) {
       return this.controls.filter(/** @param {FocusControl} element @returns {boolean} */ element => element.matches(selector));
     }
     return this.details.filter(/** @param {CommandDetails} element @returns {boolean} */ element => element.matches(selector));
@@ -301,10 +305,10 @@ test('bind registers the live view and dispose removes every listener and observ
   assert.equal(TestResizeObserver.instances[0].disconnected, 1);
 });
 
-test('Home selects and focuses the first graph tab without scrolling focus', /** @returns {void} */ () => {
+test('Home selects and focuses the first agent tab without scrolling focus', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   const event = ViewContinuityServiceTest.press(values, 'Home', values.last);
-  assert.deepEqual(values.selected, ['session:first']);
+  assert.deepEqual(values.selected, ['resources']);
   assert.equal(values.first.focused, true);
   assert.equal(values.first.focusOptions?.preventScroll, true);
   assert.equal(values.first.scrollOptions?.block, 'nearest');
@@ -313,31 +317,31 @@ test('Home selects and focuses the first graph tab without scrolling focus', /**
   values.watcher.dispose();
 });
 
-test('End selects and focuses the last graph tab', /** @returns {void} */ () => {
+test('End selects and focuses the last agent tab', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   ViewContinuityServiceTest.press(values, 'End', values.first);
-  assert.deepEqual(values.selected, ['session:last']);
+  assert.deepEqual(values.selected, ['activity']);
   assert.equal(values.last.focused, true);
   values.watcher.dispose();
 });
 
-test('ArrowLeft wraps the first graph tab to the last', /** @returns {void} */ () => {
+test('ArrowLeft wraps the first agent tab to the last', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   ViewContinuityServiceTest.press(values, 'ArrowLeft', values.first);
-  assert.deepEqual(values.selected, ['session:last']);
+  assert.deepEqual(values.selected, ['activity']);
   assert.equal(values.last.focused, true);
   values.watcher.dispose();
 });
 
-test('ArrowRight wraps the last graph tab to the first', /** @returns {void} */ () => {
+test('ArrowRight wraps the last agent tab to the first', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   ViewContinuityServiceTest.press(values, 'ArrowRight', values.last);
-  assert.deepEqual(values.selected, ['session:first']);
+  assert.deepEqual(values.selected, ['resources']);
   assert.equal(values.first.focused, true);
   values.watcher.dispose();
 });
 
-test('an unrelated key retains browser keyboard behavior and graph selection', /** @returns {void} */ () => {
+test('an unrelated key retains browser keyboard behavior and tab selection', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   const event = ViewContinuityServiceTest.press(values, 'Tab', values.first);
   assert.deepEqual(values.selected, []);
@@ -346,7 +350,7 @@ test('an unrelated key retains browser keyboard behavior and graph selection', /
   values.watcher.dispose();
 });
 
-test('navigation outside a graph tab retains selection', /** @returns {void} */ () => {
+test('navigation outside an agent tab retains selection', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   const event = ViewContinuityServiceTest.press(values, 'Home', values.view.panel);
   assert.deepEqual(values.selected, []);
@@ -354,13 +358,13 @@ test('navigation outside a graph tab retains selection', /** @returns {void} */ 
   values.watcher.dispose();
 });
 
-test('poll replacement restores a lost graph tab focus by its identifier', /** @returns {Promise<void>} */ async () => {
+test('poll replacement restores a lost agent tab focus by its identifier', /** @returns {Promise<void>} */ async () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   const focus = values.view.listeners.get('focusin');
   assert.ok(focus);
   focus(/** @type {Event} */ (/** @type {unknown} */ ({target: values.last})));
-  const replacement = new GraphTab('session:last');
-  values.view.tabs = [replacement, new GraphTab('session:other')];
+  const replacement = new GraphTab('activity');
+  values.view.tabs = [replacement, new GraphTab('tree')];
   const boundaryDocument = /** @type {{activeElement: object | null, body: object}} */ (/** @type {unknown} */ (globalThis.document));
   boundaryDocument.activeElement = boundaryDocument.body;
   await restorePoll();
@@ -817,5 +821,47 @@ test("clicking details content is not disclosure intent", /** @returns {Promise<
   toggle(view, replacement);
   await restorePoll();
   assert.equal(replacement.open, true);
+  watcher.dispose();
+});
+
+test('Escape asks the selection to close the agent details', /** @returns {void} */ () => {
+  const values = fixture();
+  /** @type {string[]} */
+  const closed = [];
+  values.watcher.bind(/** @type {HTMLElement} */ (/** @type {unknown} */ (values.view)), values.lifecycle.signal,
+    /** @returns {ViewSelection} */ () => ({group: null, mode: 'cpu',
+      /** @param {Event} event @returns {void} */
+      close(event) { closed.push(/** @type {KeyboardEvent} */ (event).key); }}));
+  const listener = values.view.listeners.get('keydown');
+  assert.ok(listener);
+  listener(/** @type {Event} */ (/** @type {unknown} */ ({key: 'Enter', target: values.view.panel, preventDefault() {}})));
+  listener(/** @type {Event} */ (/** @type {unknown} */ ({key: 'Escape', target: values.view.panel, preventDefault() {}})));
+  assert.deepEqual(closed, ['Escape']);
+  values.watcher.dispose();
+});
+
+test('focusAgent focuses only the element for the exact agent without scrolling', /** @returns {void} */ () => {
+  const {view, watcher} = fixture();
+  const other = new FocusControl('.agent-row', {agent: 'session:helper-1'});
+  const target = new FocusControl('.agent-row', {agent: 'session:helper'});
+  view.controls = [other, target];
+  watcher.focusAgent('session:helper', '.agent-row');
+  assert.equal(target.focused, true);
+  assert.equal(target.focusOptions?.preventScroll, true);
+  assert.equal(other.focused, false);
+  watcher.focusAgent('missing-agent', '.agent-drawer');
+  watcher.dispose();
+});
+
+test('focus continuity restores a replaced agent row by its focus key', /** @returns {Promise<void>} */ async () => {
+  const {view, watcher} = fixture();
+  ViewContinuityServiceTest.focus(view, FocusControl.agent('row:session:helper'));
+  const replacement = FocusControl.agent('row:session:helper');
+  const neighbour = FocusControl.agent('row:session');
+  view.controls = [neighbour, replacement];
+  ViewContinuityServiceTest.loseFocus();
+  await restorePoll();
+  assert.equal(replacement.focused, true);
+  assert.equal(neighbour.focused, false);
   watcher.dispose();
 });

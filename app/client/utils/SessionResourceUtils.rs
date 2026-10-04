@@ -68,14 +68,21 @@ impl SessionResourceUtils {
     }
 
     pub fn chart_resources(
+        priority: &[NativeRuntimeView],
         sessions: &[NativeSessionResourceView],
         contexts: &[NativeRuntimeView],
     ) -> Vec<NativeRuntimeView> {
         let mut sources: Vec<NativeRuntimeView> = Vec::new();
         let mut seen: BTreeSet<(String, i32, String, String)> = BTreeSet::new();
+        Self::chart_groups(priority, (&mut seen, &mut sources));
         Self::chart_sessions(sessions, (&mut seen, &mut sources));
         Self::chart_groups(contexts, (&mut seen, &mut sources));
         sources
+    }
+
+    pub fn command_tree(commands: &[NativeRuntimeView]) -> Vec<NativeProcessRow> {
+        let processes: Vec<NativeProcessMetrics> = Self::processes(commands);
+        ProcessTreeUtils::build(&processes, Self::root(&processes))
     }
 
     fn filtered_views(
@@ -240,8 +247,7 @@ impl SessionResourceUtils {
     }
 
     fn summary(session: &mut NativeSessionResourceView) -> () {
-        let processes: Vec<NativeProcessMetrics> = Self::processes(&session.commands);
-        session.tree = ProcessTreeUtils::build(&processes, Self::root(&processes));
+        session.tree = Self::command_tree(&session.commands);
         session.graph = ProcessGraphUtils::build(&session.tree);
         session.command_count = session.commands.len() as i64;
         session.process_count = session.tree.len() as i64;
@@ -250,9 +256,7 @@ impl SessionResourceUtils {
 
     fn session(session: &NativeSessionView, now: f64) -> NativeSessionResourceView {
         let commands: Vec<NativeRuntimeView> = Self::commands(session, now);
-        let processes: Vec<NativeProcessMetrics> = Self::processes(&commands);
-        let tree: Vec<NativeProcessRow> =
-            ProcessTreeUtils::build(&processes, Self::root(&processes));
+        let tree: Vec<NativeProcessRow> = Self::command_tree(&commands);
         NativeSessionResourceView {
             key: session.key.clone(),
             id: session.id.clone(),

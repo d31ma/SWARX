@@ -109,8 +109,8 @@ class BrowserInjectionTest {
 
   /** @returns {import('../../app/client/models/ViewSelection.ts').ViewSelection} */
   static viewSelection() {
-    return {group: null, mode: 'cpu', model: undefined, pid: 0, graphGroup: '', session: '', sessionPid: null, sessionStarted: null,
-      /** @returns {void} */ showGraph() {}, /** @returns {void} */ pick() {}};
+    return {group: null, mode: 'cpu', model: undefined, pid: 0, session: '', sessionPid: null, sessionStarted: null,
+      /** @returns {void} */ showTab() {}, /** @returns {void} */ close() {}, /** @returns {void} */ pick() {}};
   }
 
   /** @returns {HTMLElement} */
@@ -121,12 +121,12 @@ class BrowserInjectionTest {
   }
 
   /** @returns {NativeSelection} */
-  static selection() { return {selected: '', query: '', pid: 0, selectedSession: '', sessionPid: null, sessionStarted: null}; }
+  static selection() { return {selected: '', query: '', pid: 0, selectedSession: '', sessionPid: null, sessionStarted: null, selectedAgent: '', expandedSessions: []}; }
 
   /** @returns {ObservatoryModel} */
   static overview() {
-    return {sessionGroups: [], resourceSessions: [], sharedResources: [], chartResources: [], selectedSession: '', selectedSessionProcess: null, linkedSessionCount: 0, harnessCount: 0, eventSourceCount: 0,
-      snapshotSourceCount: 0, recoveredSourceCount: 0, sessions: [], runtimes: [], shared: [], logical: [],
+    return {sessionGroups: [], resourceSessions: [], sharedResources: [], chartResources: [], selectedSession: '', selectedSessionProcess: null, activeSessions: [],
+      activeSummary: {current: true, agents: 0, subAgents: 0, sessions: 0, tools: 0, harnesses: [], cards: []}, agentDetail: null, agentView: 'list', sessions: [], runtimes: [], shared: [], logical: [],
       activity: [], logicalCount: 0, logicalFeed: 'No linked task events', logicalNotice: '', detail: null,
       selected: '', errors: [], limitations: [], cpuTotal: 'Unavailable', resident: 'Unavailable', peak: 'Unavailable',
       downloadTotal: 'Unavailable', uploadTotal: 'Unavailable', completed: 0, reported: 0, elapsed: '0s', samples: 17,

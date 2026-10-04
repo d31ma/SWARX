@@ -91,7 +91,7 @@ class PresentationView extends PresentationElement {
     /** @type {Map<string, Set<(event: Event) => void>>} */
     this.listeners = new Map();
     /** @type {PresentationElement} */
-    this.panel = new PresentationElement('.session-list');
+    this.panel = new PresentationElement('.logical-scroll');
     /** @type {PresentationElement} */
     this.details = new PresentationElement('.command-descendants', {binding: 'session:root'});
     /** @type {PresentationCard} */
@@ -115,7 +115,7 @@ class PresentationView extends PresentationElement {
   /** @returns {number} */
   listenerCount() { return Array.from(this.listeners.values()).reduce(/** @param {number} count @param {Set<(event: Event) => void>} listeners @returns {number} */ (count, listeners) => count + listeners.size, 0); }
   /** @param {string} selector @returns {PresentationElement | null} */
-  querySelector(selector) { return selector === '.session-list' ? this.panel : null; }
+  querySelector(selector) { return selector === '.logical-scroll' ? this.panel : null; }
   /** @param {string} selector @returns {PresentationElement[]} */
   querySelectorAll(selector) {
     switch (selector) {
@@ -130,7 +130,7 @@ class PresentationView extends PresentationElement {
   replacePoll() {
     this.panel.isConnected = false;
     this.details.isConnected = false;
-    this.panel = new PresentationElement('.session-list');
+    this.panel = new PresentationElement('.logical-scroll');
     this.details = new PresentationElement('.command-descendants', {binding: 'session:root'});
     this.card.canvas.isConnected = false;
     this.card = new PresentationCard();

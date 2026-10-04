@@ -21,6 +21,11 @@ export default class PresentationService {
     this.#chart().draw(view, selection);
   }
 
+  /** @param {string} identifier @param {string} selector @returns {void} */
+  focusAgent(identifier, selector) {
+    this.#continuity().focusAgent(identifier, selector);
+  }
+
   /** @returns {void} */
   @OnStop
   dispose() {
