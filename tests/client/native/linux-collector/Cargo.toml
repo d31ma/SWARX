@@ -1,0 +1,8 @@
+[package]
+name = "observatory-linux-collector-tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libc = "=0.2.189"
+serde = { version = "=1.0.229", features = ["derive"] }
