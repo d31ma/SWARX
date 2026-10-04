@@ -1,6 +1,6 @@
 use crate::models::{NativeCapabilities, NativeGroup, NativeRuntimeView, NativeSnapshot};
 use crate::utils::{
-    ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, ProcessGraphUtils,
+    BackgroundTaskUtils, ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, ProcessGraphUtils,
     ProcessOwnerUtils, ProcessTreeUtils, RuntimeViewUtils, SessionViewUtils,
 };
 use crate::{EventSource, MetricSource, ObservationClock};
@@ -104,6 +104,7 @@ impl MonitorService {
         result.linked_session_count = SessionViewUtils::linked_count(&result.session_groups);
         result.harness_count = SessionViewUtils::harness_count(&result.session_groups);
         result.activity = self.activity.view(&result.logical_agents, now);
+        result.background_tasks = BackgroundTaskUtils::tasks(&result, now);
         result
     }
 

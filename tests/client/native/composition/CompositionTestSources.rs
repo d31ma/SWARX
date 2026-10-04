@@ -12,7 +12,7 @@ impl CompositionTestSources {
         "activity/ActivityHistoryService",
         "sessions/HarnessSessionService",
     ];
-    const UTILITIES: [&'static str; 17] = [
+    const UTILITIES: [&'static str; 18] = [
         "MetricFormatUtils",
         "ProcessTreeUtils",
         "RuntimeViewUtils",

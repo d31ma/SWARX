@@ -235,6 +235,16 @@ fn a_process_reached_from_two_roots_counts_once() -> () {
         "1.7 KiB"
     );
     assert_eq!(detail.graph.nodes.len(), 3);
+    // Each value sits in the corner of the chart panel for its series.
+    let series: Vec<(&str, &str)> = detail
+        .metrics
+        .iter()
+        .map(|metric: &NativeSessionMetricView| -> (&str, &str) { (metric.key.as_str(), metric.series.as_str()) })
+        .collect();
+    assert_eq!(
+        series,
+        [("cpu", "cpu"), ("memory", "memory"), ("received", "network"), ("sent", "network"), ("disk-read", "disk"), ("disk-write", "disk")]
+    );
     assert_eq!(detail.resource_scope, "session");
 }
 

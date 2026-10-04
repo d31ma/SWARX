@@ -32,8 +32,10 @@ impl SessionUsageUtils {
         "disk-read",
         "disk-write",
     ];
+    const SERIES: [&'static str; Self::CHANNELS] =
+        ["cpu", "memory", "network", "network", "disk", "disk"];
     const LABELS: [&'static str; Self::CHANNELS] = [
-        "CPU · own process shares summed",
+        "CPU",
         "Resident memory",
         "Network receive",
         "Network send",
@@ -160,6 +162,7 @@ impl SessionUsageUtils {
     ) -> NativeSessionMetricView {
         NativeSessionMetricView {
             key: Self::KEYS[channel].to_owned(),
+            series: Self::SERIES[channel].to_owned(),
             label: Self::LABELS[channel].to_owned(),
             value: total
                 .0

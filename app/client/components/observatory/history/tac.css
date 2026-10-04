@@ -27,19 +27,32 @@
   color: #e1bd87;
 }
 
+.history-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px 16px;
+  margin-bottom: 10px;
+}
+
+.history-card-header h3 {
+  flex: 1 1 220px;
+}
+
 .session-metrics {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
-  gap: 10px;
-  margin: 12px 0 10px;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px 18px;
+  max-width: 100%;
+  margin-left: auto;
+  text-align: right;
 }
 
 .session-metric {
   min-width: 0;
-  padding: 10px 12px;
-  border: 1px solid #3d4a68;
-  border-radius: 8px;
-  background: #1c2434;
+  max-width: 240px;
 }
 
 .session-metric small {
@@ -52,8 +65,9 @@
 
 .session-metric strong {
   display: block;
-  margin-top: 4px;
-  font-size: 18px;
+  margin-top: 2px;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
   line-height: 1.3;
   overflow-wrap: anywhere;
@@ -117,7 +131,7 @@
 }
 
 .history-card h3 {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: 15px;
   line-height: 1.5;
   overflow-wrap: anywhere;
