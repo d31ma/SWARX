@@ -50,9 +50,13 @@
   column-gap: 14px;
 }
 
+/* Full-width inline blocks: WebKit carries a block's bottom margin across a column break, which
+   pushed the next column down; a line box ends at the card instead. */
 .session-area.has-session .session-card {
-  display: block;
+  display: inline-block;
+  width: 100%;
   margin: 0 0 14px;
+  vertical-align: top;
   break-inside: avoid;
 }
 
