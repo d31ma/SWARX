@@ -36,8 +36,14 @@ impl LogicalEventService {
         self.socket.start(Arc::clone(&self.receiver))
     }
 
+    // The socket stops first, so no event arrives after the final roster write.
     fn stop(&mut self) -> () {
         self.socket.stop();
+        self.flush();
+    }
+
+    pub fn flush(&self) -> () {
+        self.receiver.flush();
     }
 
     fn rows(&self) -> Vec<NativeLogicalAgent> {

@@ -71,6 +71,13 @@ mod harness_process_root_reader {
     ));
 }
 pub use harness_process_root_reader::*;
+mod roster_storage {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../../../app/client/shared/native/RosterStorage.rs"
+    ));
+}
+pub use roster_storage::*;
 pub mod utils {
     mod context {
         include!(concat!(
@@ -150,8 +157,17 @@ pub mod services {
         include!(concat!(env!("OUT_DIR"), "/LogicalRosterStoreService.rs"));
     }
     pub use logical_roster_store_service::LogicalRosterStoreService;
+    pub mod logical_roster_buffer_service {
+        include!(concat!(env!("OUT_DIR"), "/LogicalRosterBufferService.rs"));
+    }
+    pub use logical_roster_buffer_service::LogicalRosterBufferService;
+    pub mod logical_roster_writer_service {
+        use super::LogicalRosterBufferService;
+        include!(concat!(env!("OUT_DIR"), "/LogicalRosterWriterService.rs"));
+    }
+    pub use logical_roster_writer_service::LogicalRosterWriterService;
     pub mod logical_roster_recovery_service {
-        use super::{LogicalExecutionHistoryService, LogicalRosterStoreService};
+        use super::{LogicalExecutionHistoryService, LogicalRosterWriterService};
         include!(concat!(env!("OUT_DIR"), "/LogicalRosterRecoveryService.rs"));
     }
     pub use logical_roster_recovery_service::LogicalRosterRecoveryService;

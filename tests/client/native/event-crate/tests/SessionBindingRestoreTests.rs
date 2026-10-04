@@ -215,6 +215,7 @@ impl SessionBindingRestoreTests {
         change(&mut live);
         *app.observed.lock().unwrap() = Ok(Some(live));
         assert!(Self::restored(&app).is_empty(), "{name}");
+        app.receiver.flush();
         assert_eq!(
             Self::saved(&directory)["bindings"],
             serde_json::json!([]),
@@ -278,6 +279,7 @@ fn a_restart_restores_the_link_only_while_pid_start_and_executable_still_match()
     // The restored lease ends like any other: without a hook or a live shell child it expires.
     app.clock.set(600.0, 431.0);
     assert!(app.receiver.command_bindings().is_empty());
+    app.receiver.flush();
     assert_eq!(
         SessionBindingRestoreTests::saved(&directory)["bindings"],
         serde_json::json!([])
@@ -371,6 +373,7 @@ fn a_sub_agent_hook_after_a_restart_links_the_recovered_session_and_the_link_sur
     assert_eq!(bindings[0].scope, "session-harness-process");
     assert_eq!(bindings[0].validation, "os-identity-matched");
     assert_eq!(bindings[0].run_id, "second-run");
+    app.receiver.flush();
     let saved: serde_json::Value = SessionBindingRestoreTests::saved(&directory);
     assert_eq!(
         saved["bindings"][0]["owner"]["agent_id"],
@@ -390,6 +393,7 @@ fn a_sub_agent_hook_after_a_restart_links_the_recovered_session_and_the_link_sur
     later.tool_use_id = Some("toolu_01FixtureAfterSecondRestart".to_owned());
     SessionBindingRestoreTests::events(&next, &later);
     assert_eq!(next.receiver.command_bindings().len(), 1);
+    next.receiver.flush();
     assert_eq!(
         SessionBindingRestoreTests::saved(&directory)["bindings"]
             .as_array()

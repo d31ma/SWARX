@@ -1,10 +1,10 @@
-use crate::ObservationClock;
 use crate::models::{
     NativeCommandBinding, NativeCommandBindingEvent, NativeCommandBindingReceipt,
     NativeCommandContext, NativeCommandDiscriminator, NativeLogicalAgent, NativeLogicalEvent,
     NativeLogicalReceipt, NativeSessionBindingRecord,
 };
 use crate::utils::NativeCommandContextUtils;
+use crate::{ObservationClock, RosterStorage};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 #[Service]
@@ -29,11 +29,19 @@ impl LogicalEventReceiverService {
         store: Result<LogicalRosterStoreService, String>,
         commands: NativeCommandEventService,
     ) -> Self {
+        Self::with_storage(clock, store.map(Self::shared_store), commands)
+    }
+
+    pub fn with_storage(
+        clock: Arc<dyn ObservationClock>,
+        storage: Result<Arc<dyn RosterStorage>, String>,
+        commands: NativeCommandEventService,
+    ) -> Self {
         Self {
             state: Mutex::new(LogicalStateService::default()),
             clock,
             wire: LogicalEventWireService::default(),
-            recovery: Mutex::new(LogicalRosterRecoveryService::new(store)),
+            recovery: Mutex::new(LogicalRosterRecoveryService::new(storage)),
             commands,
         }
     }
@@ -51,6 +59,11 @@ impl LogicalEventReceiverService {
 
     pub fn revision(&self) -> i64 {
         self.state_lock().revision()
+    }
+
+    // Writes the pending roster and session links now; used on stop and Quit.
+    pub fn flush(&self) -> () {
+        self.recovery_lock().flush();
     }
 
     // Startup: the roster first, then the previous run's session links, each re-validated
@@ -149,10 +162,9 @@ impl LogicalEventReceiverService {
         let time: (f64, f64) = self.clock.now();
         let mut state: MutexGuard<'_, LogicalStateService> = self.state_lock();
         let revision: i64 = state.apply(&event, time.0)?;
-        let live: Vec<NativeLogicalAgent> = state.rows(time.0);
         let rows: Vec<NativeLogicalAgent> = self.current_rows(&state, time.0);
         self.retained_bindings(&rows, time);
-        self.recovery_lock().persist(&live, time.0);
+        self.recovery_lock().persist(rows);
         Ok(self.wire.accepted(revision))
     }
 
@@ -192,6 +204,10 @@ impl LogicalEventReceiverService {
             binding,
         };
         Ok(self.wire.accepted_command(revision, command))
+    }
+
+    fn shared_store(store: LogicalRosterStoreService) -> Arc<dyn RosterStorage> {
+        Arc::new(store)
     }
 
     fn state_lock(&self) -> MutexGuard<'_, LogicalStateService> {

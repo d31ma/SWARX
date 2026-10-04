@@ -1,3 +1,4 @@
+use crate::RosterStorage;
 use crate::models::{
     NativeLogicalAgent, NativeRosterSnapshot, NativeSessionBindingFile, NativeSessionBindingRecord,
 };
@@ -101,5 +102,23 @@ impl LogicalRosterStoreService {
 
     fn serialization_failure(_failure: serde_json::Error) -> String {
         "Invalid roster data.".to_string()
+    }
+}
+
+impl RosterStorage for LogicalRosterStoreService {
+    fn load(&self, now: f64) -> Result<Vec<NativeLogicalAgent>, String> {
+        LogicalRosterStoreService::load(self, now)
+    }
+
+    fn load_bindings(&self) -> Result<Vec<NativeSessionBindingRecord>, String> {
+        LogicalRosterStoreService::load_bindings(self)
+    }
+
+    fn save(&self, rows: &[NativeLogicalAgent]) -> Result<(), String> {
+        LogicalRosterStoreService::save(self, rows)
+    }
+
+    fn save_bindings(&self, records: &[NativeSessionBindingRecord]) -> Result<(), String> {
+        LogicalRosterStoreService::save_bindings(self, records)
     }
 }

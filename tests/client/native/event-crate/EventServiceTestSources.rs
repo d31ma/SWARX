@@ -6,7 +6,7 @@ pub struct EventServiceTestSources {}
 
 impl EventServiceTestSources {
     const MARKER: &'static str = "#[Service]";
-    const FILES: [&'static str; 27] = [
+    const FILES: [&'static str; 29] = [
         "events/LogicalEventService.rs",
         "events/LogicalEventReceiverService.rs",
         "events/LogicalStateService.rs",
@@ -24,6 +24,8 @@ impl EventServiceTestSources {
         "events/transport/LogicalRosterPolicyService.rs",
         "events/transport/LogicalRosterStoreService.rs",
         "events/transport/LogicalRosterRecoveryService.rs",
+        "events/transport/LogicalRosterBufferService.rs",
+        "events/transport/LogicalRosterWriterService.rs",
         "commands/NativeCommandBindingRegistryService.rs",
         "commands/NativeCommandBindingService.rs",
         "commands/NativeCommandEventService.rs",

@@ -9,6 +9,8 @@ pub mod models {
     pub use native_roster_snapshot::NativeRosterSnapshot;
 }
 
+pub use event_slice::RosterStorage;
+
 pub mod services {
     pub mod roster_file {
         include!(concat!(env!("OUT_DIR"), "/LogicalRosterFileService.rs"));

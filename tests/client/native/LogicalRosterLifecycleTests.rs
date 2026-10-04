@@ -113,6 +113,7 @@ fn unsafe_cache_write_stays_accepted_and_exposes_error_without_following_symlink
     assert!(receipt.accepted);
     assert_eq!(receipt.revision, Some(1));
     assert!(receipt.error.is_none());
+    fixture.source.flush();
     assert_eq!(fixture.source.revision(), 1);
     assert_eq!(fixture.source.rows()[0].id, "worker");
     assert!(fixture.source.errors()[0].starts_with("Roster recovery unavailable:"));
@@ -124,6 +125,7 @@ fn unsafe_cache_write_stays_accepted_and_exposes_error_without_following_symlink
             .accepted
     );
     assert_eq!(fixture.source.revision(), 2);
+    fixture.source.flush();
     assert!(fixture.source.errors().is_empty());
     assert!(cache.is_file());
 }
@@ -152,6 +154,7 @@ fn invalid_cache_does_not_disable_endpoint_or_claim_live_restore() -> () {
             .accepted
     );
     assert_eq!(reopened.revision(), 1);
+    reopened.flush();
     assert!(reopened.errors().is_empty());
     assert!(!reopened.rows()[0].stale);
     reopened.stop();
@@ -178,6 +181,7 @@ fn unavailable_cache_keeps_endpoint_usable_and_preserves_live_state() -> () {
             .accepted
     );
     assert_eq!(reopened.revision(), 1);
+    reopened.flush();
     assert_eq!(reopened.errors().len(), 1);
     assert_eq!(reopened.rows()[0].status, "active");
     assert_eq!(fs::read(&cache).unwrap(), b"{}");
