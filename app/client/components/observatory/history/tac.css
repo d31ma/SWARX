@@ -101,6 +101,12 @@
   background: #3c4974!important;
 }
 
+.history-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
 .history-card {
   display: block;
   min-width: 0;

@@ -16,11 +16,13 @@
         <w-btn :variant="observatory.series === 'network' ? 'tonal' : 'text'" on:click="observatory.setSeries('network')">Network I/O</w-btn>
         <w-btn :variant="observatory.series === 'disk' ? 'tonal' : 'text'" on:click="observatory.setSeries('disk')">Disk I/O</w-btn>
       </div>
-      <article class="history-card" :data-group="observatory.model.sessionDetail.chartId">
-        <h3>Session usage · {observatory.model.sessionDetail.processCount} current processes · {observatory.model.sessionDetail.rootCount} verified roots</h3>
-        <div class="chart-shell"><canvas class="resource-chart" :data-group="observatory.model.sessionDetail.chartId" :aria-label="observatory.model.sessionDetail.title + ' measured session usage history'" role="img"></canvas><div class="chart-empty">Waiting for measured samples.</div></div>
-        <p class="chart-caption">Two-minute window. Each point sums the processes of this session measured at that sample, each counted once; a gap means none was measured. CPU above 100% means more than one core. Hover for time and value.</p>
-      </article>
+      <div class="history-grid">
+        <article class="history-card" :data-group="observatory.model.sessionDetail.chartId">
+          <h3>Session usage · {observatory.model.sessionDetail.processCount} current processes · {observatory.model.sessionDetail.rootCount} verified roots</h3>
+          <div class="chart-shell"><canvas class="resource-chart" :data-group="observatory.model.sessionDetail.chartId" :aria-label="observatory.model.sessionDetail.title + ' measured session usage history'" role="img"></canvas><div class="chart-empty">Waiting for measured samples.</div></div>
+          <p class="chart-caption">Two-minute window. Each point sums the processes of this session measured at that sample, each counted once; a gap means none was measured. CPU above 100% means more than one core. Hover for time and value.</p>
+        </article>
+      </div>
     </logic>
     <logic :if="!observatory.model.sessionDetail.processCount"><div class="empty">No measured session usage.<p>Metrics appear when a verified session harness or command link with a matching OS identity is reported for this session. No remote model work is measured.</p></div></logic>
   </section>
