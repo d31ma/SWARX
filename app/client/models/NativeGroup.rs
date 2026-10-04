@@ -1,5 +1,6 @@
 use crate::models::{
     NativeGroupMetrics, NativeProcessGraph, NativeProcessMetrics, NativeProcessOwner, NativeProcessRow,
+    NativeProcessTreeSample,
 };
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
@@ -25,4 +26,7 @@ pub struct NativeGroup {
     pub graph: NativeProcessGraph,
     pub metrics: Option<NativeGroupMetrics>,
     pub history: Vec<Vec<Option<f64>>>,
+    // Native-only per-sample root and descendant measurements for session aggregation.
+    #[serde(default, skip_serializing)]
+    pub tree_history: Vec<NativeProcessTreeSample>,
 }

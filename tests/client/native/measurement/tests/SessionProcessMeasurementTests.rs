@@ -199,3 +199,60 @@ fn a_reused_harness_pid_is_never_adopted() -> () {
     assert!(fixture.sample(reused).is_empty());
     assert_eq!(fixture.active(), 0);
 }
+
+#[test]
+fn each_tick_records_the_root_and_current_descendants_with_their_own_values() -> () {
+    let mut fixture: SessionProcessMeasurementTests = SessionProcessMeasurementTests::new();
+    fixture.sample(SessionProcessMeasurementTests::table(10.0));
+    let observations: Vec<NativeCommandObservation> =
+        fixture.sample(SessionProcessMeasurementTests::table(10.5));
+    let observation: &NativeCommandObservation = &observations[0];
+    assert_eq!(observation.tree_history.len(), 2);
+    assert!(observation.tree_history[0].time < observation.tree_history[1].time);
+    let latest = &observation.tree_history[1];
+    assert_eq!(latest.time, observation.sampled_at);
+    let mut pids: Vec<i32> = latest.processes.iter().map(|process| process.pid).collect();
+    pids.sort();
+    assert_eq!(
+        pids,
+        vec![
+            SessionProcessMeasurementTests::ROOT,
+            SessionProcessMeasurementTests::SHELL,
+            SessionProcessMeasurementTests::TOOL
+        ]
+    );
+    assert_eq!(latest.processes[0].cpu_percent, Some(50.0));
+    fixture.state.capture_commands(fixture.clock.now());
+    fixture.clock.advance(1.0);
+    fixture.state.command_failed(fixture.clock.now());
+    let failed: Vec<NativeCommandObservation> = fixture.state.command_observations();
+    assert_eq!(failed[0].tree_history.len(), 3);
+    assert!(failed[0].tree_history[2].processes.is_empty());
+}
+
+#[test]
+fn the_root_reports_its_own_network_rates_from_the_same_tick() -> () {
+    let mut fixture: SessionProcessMeasurementTests = SessionProcessMeasurementTests::new();
+    for received in [1000_i64, 3000] {
+        let network = std::collections::BTreeMap::from([(
+            SessionProcessMeasurementTests::ROOT,
+            (received, received / 2),
+        )]);
+        fixture.state.capture_commands(fixture.clock.now());
+        fixture.clock.advance(1.0);
+        fixture.state.apply(
+            Vec::new(),
+            SessionProcessMeasurementTests::table(10.0),
+            Some(network),
+            fixture.clock.now(),
+        );
+    }
+    let observations: Vec<NativeCommandObservation> = fixture.state.command_observations();
+    let root = observations[0].metrics.as_ref().unwrap();
+    assert_eq!(root.received_per_second, Some(2000.0));
+    assert_eq!(root.sent_per_second, Some(1000.0));
+    assert_eq!(
+        observations[0].tree_history[1].processes[0].received_per_second,
+        Some(2000.0)
+    );
+}

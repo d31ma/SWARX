@@ -25,4 +25,6 @@ pub struct NativeActivityRecord {
     pub elapsed_label: Option<String>,
     pub exit_code: Option<i64>,
     pub captured_at: f64,
+    #[serde(default)]
+    pub role_label: String,
 }

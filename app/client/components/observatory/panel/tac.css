@@ -691,6 +691,18 @@ h1 {
   border-radius: 9px;
   padding: 16px;
 }
+/* An open session panel is a layout column beside the cards, never an overlay. */
+.logical-panel.has-session {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(420px, 45%, 900px);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 16px;
+}
+@media(max-width:920px) {
+  .logical-panel.has-session {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 @media(max-width:800px) {
   .observatory {
     height: 100dvh;

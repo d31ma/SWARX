@@ -22,6 +22,17 @@
   line-height: 1.6;
 }
 
+.activity-role {
+  display: inline-block;
+  margin: 4px 0 0;
+  padding: 0 6px;
+  border: 1px solid #4b5f8e;
+  border-radius: 4px;
+  color: #cfd8f4;
+  font-size: 11px;
+  line-height: 18px;
+}
+
 .action-history-list {
   min-width: 0;
   margin-top: 8px;

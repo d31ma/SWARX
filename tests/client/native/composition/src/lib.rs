@@ -55,7 +55,7 @@ mod session_activity_identity_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"
 #[cfg(test)]
 mod session_resource_navigation_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../SessionResourceNavigationTests.rs")); }
 #[cfg(test)]
-mod agent_detail_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../AgentDetailTests.rs")); }
+mod session_detail_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../SessionDetailTests.rs")); }
 #[cfg(test)]
 mod active_summary_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../ActiveSummaryTests.rs")); }
 #[cfg(test)]

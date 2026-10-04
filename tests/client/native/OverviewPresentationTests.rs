@@ -667,8 +667,9 @@ fn empty_model_keeps_waiting_and_missing_states() -> () {
 fn wire_fields_match_observatory_model_camel_case() -> () {
     let wire: serde_json::Value =
         serde_json::to_value(OverviewPresentationTests::view(&NativeSnapshot::default())).unwrap();
-    assert_eq!(wire["agentView"], "list");
-    assert_eq!(wire["agentDetail"], serde_json::Value::Null);
+    assert_eq!(wire["sessionView"], "list");
+    assert_eq!(wire["sessionDetail"], serde_json::Value::Null);
+    assert!(wire.get("agentDetail").is_none());
     assert_eq!(wire["activeSummary"]["agents"], 0);
     assert_eq!(wire["sampleAge"], 0.0);
     assert_eq!(wire["cpuTotal"], "Waiting");

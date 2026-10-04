@@ -13,9 +13,9 @@ export default class ObservatoryService {
     /** @type {string} */
     static _LIST_VIEW = 'list';
     /** @type {string} */
-    static _DRAWER_SELECTOR = '.agent-drawer';
+    static _PANEL_SELECTOR = '.session-panel';
     /** @type {string} */
-    static _ROW_SELECTOR = '.agent-row';
+    static _CARD_SELECTOR = '.session-card-open';
     /** @type {string} */
     static _COLLECTOR_UNAVAILABLE = 'Local measurements unavailable. Retrying automatically; last values may be older.';
     /** @type {import('/services/native/monitoring/SnapshotService.js').default | undefined} */
@@ -42,17 +42,15 @@ export default class ObservatoryService {
     /** @type {string} */
     series = 'cpu';
     /** @type {string} */
-    selectedAgent = ObservatoryService._EMPTY_TEXT;
+    selectedSession = ObservatoryService._EMPTY_TEXT;
     /** @type {string} */
-    agentTab = 'resources';
+    sessionTab = 'resources';
     /** @type {string} */
-    agentView = ObservatoryService._LIST_VIEW;
+    sessionView = ObservatoryService._LIST_VIEW;
     /** @type {string[]} */
     #expandedSessions = [];
     /** @type {number} */
     #selectedProcessNumber = 0;
-    /** @type {string} */
-    #selectedSession = ObservatoryService._EMPTY_TEXT;
     /** @type {number | null} */
     #sessionProcessNumber = null;
     /** @type {string | null} */
@@ -98,9 +96,8 @@ export default class ObservatoryService {
         this.#search();
     }
 
-    /** @param {Event} _event @param {string} session @param {number} identifier @param {string} started @returns {void} */
-    selectSessionProcess(_event, session, identifier, started) {
-        this.#selectedSession = session;
+    /** @param {Event} _event @param {number} identifier @param {string} started @returns {void} */
+    selectSessionProcess(_event, identifier, started) {
         this.#sessionProcessNumber = identifier;
         this.#sessionProcessStarted = started;
         this.#search();
@@ -112,21 +109,30 @@ export default class ObservatoryService {
         void this.#renderIfReady();
     }
 
-    /** @param {Event} _event @param {string} identifier @returns {void} */
-    openAgent(_event, identifier) {
-        this.selectedAgent = identifier;
-        this.agentView = ObservatoryService._LOADING_VIEW;
+    // Opens the session panel for the exact ActiveSessionUtils key; a process pick belongs to one session.
+    /** @param {Event} _event @param {string} key @returns {void} */
+    openSession(_event, key) {
+        this.selectedSession = key;
+        this.sessionView = ObservatoryService._LOADING_VIEW;
+        this.#clearSessionProcess();
         this.#search();
-        this.#focusAfterRender(identifier, ObservatoryService._DRAWER_SELECTOR);
+        this.#focusAfterRender(key, ObservatoryService._PANEL_SELECTOR);
     }
 
     /** @param {Event} _event @returns {void} */
-    closeAgent(_event) {
-        const identifier = this.selectedAgent;
-        this.selectedAgent = ObservatoryService._EMPTY_TEXT;
-        this.agentView = ObservatoryService._LIST_VIEW;
+    closeSession(_event) {
+        const key = this.selectedSession;
+        this.selectedSession = ObservatoryService._EMPTY_TEXT;
+        this.sessionView = ObservatoryService._LIST_VIEW;
+        this.#clearSessionProcess();
         this.#search();
-        this.#focusAfterRender(identifier, ObservatoryService._ROW_SELECTOR);
+        this.#focusAfterRender(key, ObservatoryService._CARD_SELECTOR);
+    }
+
+    /** @returns {void} */
+    #clearSessionProcess() {
+        this.#sessionProcessNumber = null;
+        this.#sessionProcessStarted = null;
     }
 
     /** @param {Event} _event @param {string} key @returns {void} */
@@ -136,8 +142,8 @@ export default class ObservatoryService {
     }
 
     /** @param {Event} _event @param {string} tab @returns {void} */
-    #setAgentTab(_event, tab) {
-        this.agentTab = tab;
+    #setSessionTab(_event, tab) {
+        this.sessionTab = tab;
         void this.#renderIfReady();
     }
 
@@ -161,11 +167,11 @@ export default class ObservatoryService {
     }
 
     /** @param {Event} event @returns {void} */
-    #closeOpenAgent(event) {
-        if (this.selectedAgent === ObservatoryService._EMPTY_TEXT) {
+    #closeOpenSession(event) {
+        if (this.selectedSession === ObservatoryService._EMPTY_TEXT) {
             return;
         }
-        this.closeAgent(event);
+        this.closeSession(event);
     }
 
     /** @param {string} identifier @param {string} selector @returns {void} */
@@ -177,7 +183,7 @@ export default class ObservatoryService {
     /** @param {string} identifier @param {string} selector @returns {Promise<void>} */
     async #focusRendered(identifier, selector) {
         await this.#scheduler().render();
-        this.#presentation().focusAgent(identifier, selector);
+        this.#presentation().focusSession(identifier, selector);
     }
 
     /** @returns {import('/models/ViewSelection.ts').ViewSelection} */
@@ -187,12 +193,12 @@ export default class ObservatoryService {
             mode: this.series,
             model: this.model,
             pid: this.#selectedProcessNumber,
-            session: this.#selectedSession,
+            session: this.selectedSession,
             sessionPid: this.#sessionProcessNumber,
             sessionStarted: this.#sessionProcessStarted,
             showTab: /** @param {Event} event @param {string} tab @returns {void} */
-                (event, tab) => this.#setAgentTab(event, tab),
-            close: /** @param {Event} event @returns {void} */ event => this.#closeOpenAgent(event),
+                (event, tab) => this.#setSessionTab(event, tab),
+            close: /** @param {Event} event @returns {void} */ event => this.#closeOpenSession(event),
             pick: /** @param {Event} event @param {string} group @param {number} identifier @returns {void} */
                 (event, group, identifier) => this.#selectProcess(event, group, identifier)
         };
@@ -269,12 +275,12 @@ export default class ObservatoryService {
         this.#busy = false;
     }
 
+    // Tac reads native arguments by Rust field name, so these keys are the exact NativeViewSelection fields.
     /** @returns {import('/models/NativeViewSelection.ts').NativeViewSelection} */
     #nativeSelection() {
         return { selected: this.#selected, query: ObservatoryService._EMPTY_TEXT, pid: this.#selectedProcessNumber,
-            selectedSession: this.#selectedSession, sessionPid: this.#sessionProcessNumber,
-            sessionStarted: this.#sessionProcessStarted, selectedAgent: this.selectedAgent,
-            expandedSessions: [...this.#expandedSessions] };
+            selected_session: this.selectedSession, session_pid: this.#sessionProcessNumber,
+            session_started: this.#sessionProcessStarted, expanded_sessions: [...this.#expandedSessions] };
     }
 
     /** @param {number} revision @param {import('/models/NativeViewSelection.ts').NativeViewSelection} selection @returns {Promise<void>} */
@@ -298,9 +304,8 @@ export default class ObservatoryService {
     /** @param {import('/models/ObservatoryModel.ts').ObservatoryModel} model @returns {void} */
     #acceptCurrent(model) {
         this.model = model;
-        this.agentView = model.agentView;
+        this.sessionView = model.sessionView;
         this.#selected = model.selected;
-        this.#selectedSession = model.selectedSession;
         this.#sessionProcessNumber = this.#processPid(model.selectedSessionProcess);
         this.#sessionProcessStarted = this.#processStart(model.selectedSessionProcess);
         this.status = model.liveStatus;

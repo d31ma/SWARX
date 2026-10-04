@@ -1,6 +1,6 @@
 use crate::models::{
     NativeCommandBinding, NativeCommandObservation, NativeCommandSample, NativeProcess,
-    NativeProcessMetrics, NativeResourceTotals,
+    NativeProcessMetrics, NativeProcessTreeSample, NativeResourceTotals,
 };
 use crate::utils::ProcessLineageUtils;
 use std::collections::{BTreeMap, BTreeSet};
@@ -62,6 +62,7 @@ impl NativeCommandMeasurementService {
         measured: &BTreeMap<i32, NativeProcessMetrics>,
     ) -> () {
         Self::descendants(&mut self.latest, processes, measured);
+        Self::record_trees(&mut self.latest, &mut self.states);
     }
 
     fn descendants(
@@ -71,7 +72,85 @@ impl NativeCommandMeasurementService {
     ) -> () {
         for observation in observations {
             observation.descendants = Self::observed_children(observation, processes, measured);
+            observation.metrics = observation.metrics.take().map(
+                |root: NativeProcessMetrics| -> NativeProcessMetrics {
+                    Self::root_network(root, measured)
+                },
+            );
         }
+    }
+
+    // The root counter has no socket counters; this tick's per-process rates for the same
+    // identity fill them, so the root is measured like its descendants.
+    fn root_network(
+        root: NativeProcessMetrics,
+        measured: &BTreeMap<i32, NativeProcessMetrics>,
+    ) -> NativeProcessMetrics {
+        let sampled: Option<&NativeProcessMetrics> =
+            measured
+                .get(&root.pid)
+                .filter(|candidate: &&NativeProcessMetrics| -> bool {
+                    candidate.started == root.started
+                });
+        NativeProcessMetrics {
+            received_per_second: sampled.and_then(|value: &NativeProcessMetrics| -> Option<f64> {
+                value.received_per_second
+            }),
+            sent_per_second: sampled
+                .and_then(|value: &NativeProcessMetrics| -> Option<f64> { value.sent_per_second }),
+            received_bytes_delta: sampled.and_then(|value: &NativeProcessMetrics| -> Option<i64> {
+                value.received_bytes_delta
+            }),
+            sent_bytes_delta: sampled
+                .and_then(|value: &NativeProcessMetrics| -> Option<i64> { value.sent_bytes_delta }),
+            ..root
+        }
+    }
+
+    fn record_trees(
+        observations: &mut [NativeCommandObservation],
+        states: &mut BTreeMap<String, NativeCommandSample>,
+    ) -> () {
+        for observation in observations {
+            let sample: NativeProcessTreeSample = Self::tree_sample(observation);
+            observation.tree_history = states
+                .get_mut(&observation.binding_id)
+                .map(
+                    |state: &mut NativeCommandSample| -> Vec<NativeProcessTreeSample> {
+                        Self::bounded_tree(&mut state.tree_history, sample);
+                        state.tree_history.clone()
+                    },
+                )
+                .unwrap_or_default();
+        }
+    }
+
+    fn tree_sample(observation: &NativeCommandObservation) -> NativeProcessTreeSample {
+        let mut processes: Vec<NativeProcessMetrics> =
+            observation.metrics.iter().cloned().collect();
+        processes.extend(observation.descendants.iter().cloned());
+        NativeProcessTreeSample {
+            time: observation.sampled_at,
+            processes,
+        }
+    }
+
+    // One sample per tick: a repeated attach for the same time replaces it.
+    fn bounded_tree(
+        history: &mut Vec<NativeProcessTreeSample>,
+        sample: NativeProcessTreeSample,
+    ) -> () {
+        history.retain(|previous: &NativeProcessTreeSample| -> bool {
+            [
+                previous.time >= sample.time - Self::HISTORY_SECONDS,
+                previous.time < sample.time,
+            ]
+            .into_iter()
+            .all(std::convert::identity)
+        });
+        history.push(sample);
+        let remove: usize = history.len().saturating_sub(Self::HISTORY_SAMPLES);
+        history.drain(..remove);
     }
 
     fn observed_children(
@@ -315,6 +394,7 @@ impl NativeCommandMeasurementService {
             descendants: Vec::new(),
             totals: state.totals.clone(),
             history: state.history.clone(),
+            tree_history: state.tree_history.clone(),
         }
     }
 
@@ -373,6 +453,13 @@ impl NativeCommandMeasurementService {
             state.process = None;
             state.monotonic = None;
             Self::history(&mut state.history, None, time.0);
+            Self::bounded_tree(
+                &mut state.tree_history,
+                NativeProcessTreeSample {
+                    time: time.0,
+                    processes: Vec::new(),
+                },
+            );
             result.push(Self::observation(binding, None, &state, time.0));
             self.states.insert(binding.id.clone(), state);
         }

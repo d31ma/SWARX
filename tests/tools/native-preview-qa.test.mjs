@@ -36,6 +36,8 @@ class QaElement {
     this.style={};
     /** @type {string} */
     this.className='';
+    /** @type {string} */
+    this.innerHTML='';
     /** @type {number} */
     this.clientWidth=400;
     /** @type {number} */
@@ -85,13 +87,22 @@ function environment(options={}) {
   const cards=Array.from({length:4},/** @param {unknown} _ @param {number} index @returns {QaElement} */ (_,index)=>new QaElement('card'+index,{x:20+index*420,y:100,width:400,height:180}));
   const canvas=new QaElement('chart');
   const records=options.logicalRows??[{id:'fixture-default-agent',name:'Fixture session',status:'running',source:'Fixture',task:'Fixture task'}];
+  /** @type {QaElement[]} */
+  const sessionControls=[];
   const logicalRows=records.map(/** @param {QaLogicalRecord} record @returns {QaElement} */ record=>{
     const row=new QaElement('agent');
-    row.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.drawer=true;state.opened=record.id;state.section=state.tab;});
+    // Rows are read-only; the session card control opens the session panel.
+    const control=new QaElement(record.name);
+    control.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.drawer=true;state.opened=record.id;state.section=state.tab;});
+    sessionControls.push(control);
     row.closest=/** @param {string} selector @returns {QaElement | null} */ selector=>{
       if(selector!=='.session-card')return null;
       const card=new QaElement('session');
-      card.query=/** @param {string} inner @returns {QaElement | null} */ inner=>inner==='h3'?new QaElement(record.name):null;
+      card.query=/** @param {string} inner @returns {QaElement | null} */ inner=>{
+        if(inner==='h3')return new QaElement(record.name);
+        if(inner==='.session-card-open')return control;
+        return null;
+      };
       return card;
     };
     row.attributes['data-agent']=record.id;
@@ -149,9 +160,10 @@ function environment(options={}) {
   close.click=/** @returns {void} */ ()=>queueMicrotask(/** @returns {void} */ ()=>{state.drawer=false;state.section="What's running";});
   const queryAll=/** @param {string} selector @returns {QaElement[]} */ selector=>{
     if(selector==='.agent-row')return logicalRows;
-    if(selector==='.agent-tab')return state.drawer?tabs:[];
+    if(selector==='.session-tab')return state.drawer?tabs:[];
+    if(selector==='.session-card-open')return sessionControls;
     if(selector==='.action-history-row')return actionRows;
-    if(selector==='[role=tab][data-agent-tab]')return [];
+    if(selector==='[role=tab][data-session-tab]')return [];
     if(selector==='.session-process-card')return options.noGroups?[]:graphs;
     if(selector==='.session-process-pick')return cards;
     if(selector==='.graph-group')return options.noGroups||state.groupPending?[]:graphs;
@@ -178,9 +190,11 @@ function environment(options={}) {
     }),
     querySelectorAll:queryAll,
     querySelector:/** @param {string} selector @returns {QaElement | null} */ selector=>{
-      if(selector==='.agent-drawer.is-open .agent-tab[aria-selected="true"]')return state.drawer?new QaElement(state.section):null;
-      if(selector==='.agent-tab')return state.drawer?tabs[0]:null;
-      if(selector==='.agent-drawer-close')return state.drawer?close:null;
+      if(selector==='.session-panel.is-open .session-tab[aria-selected="true"]')return state.drawer?new QaElement(state.section):null;
+      if(selector==='.session-tab')return state.drawer?tabs[0]:null;
+      if(selector==='.session-panel-close')return state.drawer?close:null;
+      if(selector==='.session-card-open')return sessionControls[0]??null;
+      if(selector==='#session-panel'){const panel=new QaElement('panel');panel.dataset={session:state.opened,sessionView:state.drawer?'detail':'list'};return panel;}
       if(selector==='.process-tree-view')return state.drawer&&state.section==='Process tree'?new QaElement('tree view'):null;
       if(selector==='.logical-panel')return state.clock >= (options.navigationDelay ?? 0) ? new QaElement(options.logicalText??'') : null;
       if(selector==='.activity-overview')return new QaElement(options.activityText??'');
@@ -262,7 +276,7 @@ test('zoom verification waits through a poll replacing the current graph',/** @r
   assert.equal(interaction(report).baseline.after[1].scale,'scale(1)');
 });
 
-test('report opens the agent details and waits for the Process tree tab before recording 1240x850',/** @returns {Promise<void>} */ async()=>{
+test('report opens the session details and waits for the Process tree tab before recording 1240x850',/** @returns {Promise<void>} */ async()=>{
   const context=environment();
   const report=parse(await context.report.verify(input(),true));
   assert.equal(report.section,'Process tree');
@@ -283,11 +297,11 @@ test('small tree records the actual 1000x700 viewport',/** @returns {Promise<voi
 for(const action of ['table','owned-table','runtimes']) {
   test('removed '+action+' step fails with an explicit note',/** @returns {Promise<void>} */ async()=>{
     const context=environment();
-    await assert.rejects(context.report.verify(input(action,''),true),/were removed; use the agent details Process tree or Resources tab/);
+    await assert.rejects(context.report.verify(input(action,''),true),/were removed; use the session details Process tree or Resources tab/);
   });
 }
 
-test('Activity tab opens from the owned agent row and reports its section',/** @returns {Promise<void>} */ async()=>{
+test('Activity tab opens from the session card holding the owned agent row and reports its section',/** @returns {Promise<void>} */ async()=>{
   const context=environment({logicalRows:[{id:'other',name:'Other',status:'running',source:'Fixture',task:'Other task'},{id:'coord:00000000-0000-4000-8000-000000000001:/root',name:'Root',status:'running',source:'Fixture',task:'Root task'}]});
   const request={label:'activity',action:'activity',section:'Activity',mode:'',check:'',width:1240,height:850,agentRecordId:'coord:00000000-0000-4000-8000-000000000001:/root'};
   const report=parse(await context.report.verify(request,true));
@@ -296,7 +310,7 @@ test('Activity tab opens from the owned agent row and reports its section',/** @
   assert.equal(context.state.opened,'coord:00000000-0000-4000-8000-000000000001:/root');
 });
 
-test("returning to What's running closes the agent details",/** @returns {Promise<void>} */ async()=>{
+test("returning to What's running closes the session details",/** @returns {Promise<void>} */ async()=>{
   const context=environment();
   await tree(context);
   assert.equal(context.state.drawer,true);
@@ -559,4 +573,15 @@ test('actual stale action status still cannot prove completion',/** @returns {Pr
   const context=environment({actions:[{id:'fixture-action',agent:'coord:00000000-0000-4000-8000-000000000001:/root',sessionId:'00000000-0000-4000-8000-000000000001',taskId:'fixture-task',name:'fixture_action',status:'stale',source:'Coordinator-reported team roster',running:false}]});
   const request={...focusedInput('current-work-completed'),action:'activity',section:'Activity'};
   await assert.rejects(context.report.verify(request,true),/timed out/);
+});
+
+test('open-first-session clicks the first session card control and reports the panel state',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({logicalRows:[{id:'first-agent',name:'First session',status:'running',source:'Fixture',task:'First task'},{id:'second-agent',name:'Second session',status:'running',source:'Fixture',task:'Second task'}]});
+  const request={label:'native-session-open',action:'open-first-session',section:'Resources',mode:'',check:'',width:1240,height:850};
+  const report=JSON.parse(await context.report.verify(request,true));
+  assert.equal(context.state.drawer,true);
+  assert.equal(context.state.opened,'first-agent');
+  assert.equal(report.diagnostics.panel.session,'first-agent');
+  assert.equal(report.diagnostics.panel.view,'detail');
+  assert.equal('drawer' in report.diagnostics,false);
 });

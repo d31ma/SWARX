@@ -1,5 +1,5 @@
 use crate::models::{
-    NativeActiveSessionView, NativeActiveSummaryView, NativeAgentDetailView,
+    NativeActiveSessionView, NativeActiveSummaryView, NativeSessionDetailView,
     NativeLogicalAgentView, NativeProcessRow, NativeRuntimeView, NativeSessionActivityView,
     NativeSessionResourceView, NativeSessionView,
 };
@@ -22,10 +22,10 @@ pub struct NativeOverviewView {
     pub active_sessions: Vec<NativeActiveSessionView>,
     #[serde(default, rename = "activeSummary")]
     pub active_summary: NativeActiveSummaryView,
-    #[serde(default, rename = "agentDetail")]
-    pub agent_detail: Option<NativeAgentDetailView>,
-    #[serde(default, rename = "agentView")]
-    pub agent_view: String,
+    #[serde(default, rename = "sessionDetail")]
+    pub session_detail: Option<NativeSessionDetailView>,
+    #[serde(default, rename = "sessionView")]
+    pub session_view: String,
     pub sessions: Vec<NativeRuntimeView>,
     pub runtimes: Vec<NativeRuntimeView>,
     pub shared: Vec<NativeRuntimeView>,

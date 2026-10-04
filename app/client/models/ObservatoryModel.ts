@@ -6,7 +6,7 @@ import type { SessionResourceView } from '/models/SessionResourceView.ts';
 import type { ProcessRow } from '/models/ProcessRow.ts';
 import type { ActiveSummaryView } from '/models/ActiveSummaryView.ts';
 import type { ActiveSessionView } from '/models/ActiveSessionView.ts';
-import type { AgentDetailView } from '/models/AgentDetailView.ts';
+import type { SessionDetailView } from '/models/SessionDetailView.ts';
 export interface ObservatoryModel {
   sessionGroups: SessionView[];
   resourceSessions: SessionResourceView[];
@@ -16,8 +16,8 @@ export interface ObservatoryModel {
   selectedSessionProcess: ProcessRow | null;
   activeSessions: ActiveSessionView[];
   activeSummary: ActiveSummaryView;
-  agentDetail: AgentDetailView | null;
-  agentView: string;
+  sessionDetail: SessionDetailView | null;
+  sessionView: string;
   sessions: RuntimeView[];
   runtimes: RuntimeView[];
   shared: RuntimeView[];

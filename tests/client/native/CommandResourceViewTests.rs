@@ -58,6 +58,7 @@ impl CommandResourceViewTests {
             totals: NativeResourceTotals::default(),
             history: Vec::new(),
             descendants: Vec::new(),
+            tree_history: Vec::new(),
         }
     }
 

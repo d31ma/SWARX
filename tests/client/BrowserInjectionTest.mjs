@@ -124,12 +124,12 @@ class BrowserInjectionTest {
   }
 
   /** @returns {NativeSelection} */
-  static selection() { return {selected: '', query: '', pid: 0, selectedSession: '', sessionPid: null, sessionStarted: null, selectedAgent: '', expandedSessions: []}; }
+  static selection() { return {selected: '', query: '', pid: 0, selected_session: '', session_pid: null, session_started: null, expanded_sessions: []}; }
 
   /** @returns {ObservatoryModel} */
   static overview() {
     return {sessionGroups: [], resourceSessions: [], sharedResources: [], chartResources: [], selectedSession: '', selectedSessionProcess: null, activeSessions: [],
-      activeSummary: {current: true, agents: 0, subAgents: 0, sessions: 0, tools: 0, harnesses: [], cards: []}, agentDetail: null, agentView: 'list', sessions: [], runtimes: [], shared: [], logical: [],
+      activeSummary: {current: true, agents: 0, subAgents: 0, sessions: 0, tools: 0, harnesses: [], cards: []}, sessionDetail: null, sessionView: 'list', sessions: [], runtimes: [], shared: [], logical: [],
       activity: [], logicalCount: 0, logicalFeed: 'No linked task events', logicalNotice: '', detail: null,
       selected: '', errors: [], limitations: [], cpuTotal: 'Unavailable', resident: 'Unavailable', peak: 'Unavailable',
       downloadTotal: 'Unavailable', uploadTotal: 'Unavailable', completed: 0, reported: 0, elapsed: '0s', samples: 17,

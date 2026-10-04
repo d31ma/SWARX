@@ -358,6 +358,7 @@ impl SessionHarnessPresentation {
                 resident_bytes: Some(4096),
                 ..NativeProcessMetrics::default()
             }],
+            tree_history: Vec::new(),
             totals: NativeResourceTotals::default(),
             history: vec![
                 vec![Some(98.0), Some(3.0), Some(1024.0), None, None, None, None],

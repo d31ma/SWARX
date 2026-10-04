@@ -1,0 +1,28 @@
+<aside id="session-panel" :class="'session-panel' + (observatory.selectedSession ? ' is-open' : '')" aria-labelledby="session-panel-title" :inert="observatory.selectedSession ? null : ''" tabindex="-1" :data-session="observatory.selectedSession" :data-session-view="observatory.sessionView">
+  <logic :if="observatory.selectedSession">
+    <header class="session-panel-header">
+      <div class="session-panel-identity">
+        <button type="button" class="session-panel-back" data-session-focus="back" on:click="observatory.closeSession()">← All sessions</button>
+        <logic :if="observatory.sessionView === 'loading'"><h2 id="session-panel-title">Loading session details</h2><p class="session-panel-note" role="status">Reading the latest local report for this session.</p></logic>
+        <logic :if="observatory.sessionView === 'missing'"><h2 id="session-panel-title">Session no longer reported</h2><p class="session-panel-note" role="status">The local feed no longer reports this session, so its details are unavailable. Close this panel to return to What’s running.</p></logic>
+        <logic :if="observatory.sessionView === 'detail' || observatory.sessionView === 'inactive'">
+          <p class="session-panel-state"><span :class="'session-state ' + (observatory.model.sessionDetail.active ? 'is-active' : 'is-inactive')">{observatory.model.sessionDetail.stateLabel}</span><span>{observatory.model.sessionDetail.harness}</span></p>
+          <h2 id="session-panel-title" :title="observatory.model.sessionDetail.title">{observatory.model.sessionDetail.title}</h2>
+          <p class="session-harness">{observatory.model.sessionDetail.harness} · {observatory.model.sessionDetail.countLabel}</p>
+          <logic :if="observatory.sessionView === 'inactive'"><p class="session-panel-note" role="status">No active agents now. Measured resources and past activity stay available while this session is still reported.</p></logic>
+        </logic>
+      </div>
+      <button type="button" class="session-panel-close" data-session-focus="close" aria-label="Close session details" on:click="observatory.closeSession()">×</button>
+    </header>
+    <logic :if="observatory.sessionView === 'detail' || observatory.sessionView === 'inactive'">
+      <div class="session-tabs" role="tablist" aria-label="Session details">
+        <button type="button" role="tab" id="session-tab-resources" class="session-tab" data-session-tab="resources" aria-controls="session-panel-resources" :aria-selected="observatory.sessionTab === 'resources' ? 'true' : 'false'" :tabindex="observatory.sessionTab === 'resources' ? '0' : '-1'">Resources</button>
+        <button type="button" role="tab" id="session-tab-tree" class="session-tab" data-session-tab="tree" aria-controls="session-panel-tree" :aria-selected="observatory.sessionTab === 'tree' ? 'true' : 'false'" :tabindex="observatory.sessionTab === 'tree' ? '0' : '-1'">Process tree</button>
+        <button type="button" role="tab" id="session-tab-activity" class="session-tab" data-session-tab="activity" aria-controls="session-panel-activity" :aria-selected="observatory.sessionTab === 'activity' ? 'true' : 'false'" :tabindex="observatory.sessionTab === 'activity' ? '0' : '-1'">Activity</button>
+      </div>
+    </logic>
+  </logic>
+  <div class="session-panel-body">
+    <slot></slot>
+  </div>
+</aside>

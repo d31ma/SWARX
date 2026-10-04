@@ -1,25 +1,27 @@
-<logic :if="observatory.agentView === 'detail' && observatory.agentTab === 'resources'">
-  <section id="agent-panel-resources" role="tabpanel" aria-labelledby="agent-tab-resources" class="history-scroll agent-panel" tabindex="0" :data-agent="observatory.model.agentDetail.id" :data-scope="observatory.model.agentDetail.resourceScope">
-    <logic :if="observatory.model.agentDetail.resources.length">
-      <p :class="'resource-scope scope-' + observatory.model.agentDetail.resourceScope">{observatory.model.agentDetail.resourceLabel}</p>
+<logic :if="(observatory.sessionView === 'detail' || observatory.sessionView === 'inactive') && observatory.sessionTab === 'resources'">
+  <section id="session-panel-resources" role="tabpanel" aria-labelledby="session-tab-resources" class="history-scroll session-tab-panel" tabindex="0" :data-session="observatory.model.sessionDetail.key" :data-scope="observatory.model.sessionDetail.resourceScope">
+    <p :class="'resource-scope scope-' + observatory.model.sessionDetail.resourceScope">{observatory.model.sessionDetail.resourceLabel}</p>
+    <div class="session-metrics" role="list" aria-label="Current measured session usage">
+      <loop :for="metric of observatory.model.sessionDetail.metrics">
+        <div role="listitem" :class="'session-metric' + (metric.available ? '' : ' is-unavailable')" :data-metric="metric.key"><small>{metric.label}</small><strong>{metric.value}</strong><p>{metric.detail}</p></div>
+      </loop>
+    </div>
+    <ul class="session-notes">
+      <loop :for="note of observatory.model.sessionDetail.notes"><li>{note}</li></loop>
+    </ul>
+    <logic :if="observatory.model.sessionDetail.processCount">
       <div class="chart-tabs" role="group" aria-label="History metric">
         <w-btn :variant="observatory.series === 'cpu' ? 'tonal' : 'text'" on:click="observatory.setSeries('cpu')">CPU</w-btn>
         <w-btn :variant="observatory.series === 'memory' ? 'tonal' : 'text'" on:click="observatory.setSeries('memory')">Memory</w-btn>
         <w-btn :variant="observatory.series === 'network' ? 'tonal' : 'text'" on:click="observatory.setSeries('network')">Network I/O</w-btn>
         <w-btn :variant="observatory.series === 'disk' ? 'tonal' : 'text'" on:click="observatory.setSeries('disk')">Disk I/O</w-btn>
       </div>
-      <div class="history-grid">
-        <loop :for="runtime of observatory.model.agentDetail.resources">
-          <article class="history-card" :data-group="runtime.id">
-            <h3>{runtime.name} · PID {runtime.pid}</h3>
-            <p class="runtime-card-scope">Root only; descendants excluded · birth {runtime.started} · {runtime.processCount} current processes</p>
-            <div class="runtime-card-metrics"><div><small>ROOT CPU · ONE CORE</small><strong>{runtime.cpu}</strong></div><div><small>ROOT RSS</small><strong>{runtime.memory}</strong></div><div><small>NETWORK RECEIVE</small><strong>{runtime.download}</strong></div><div><small>NETWORK SEND</small><strong>{runtime.upload}</strong></div><div><small>ROOT DISK READ</small><strong>{runtime.diskRead}</strong></div><div><small>ROOT DISK WRITE</small><strong>{runtime.diskWrite}</strong></div></div>
-            <div class="chart-shell"><canvas class="resource-chart" :data-group="runtime.id" :aria-label="runtime.name + ' measured history'" role="img"></canvas><div class="chart-empty">Waiting for measured samples.</div></div>
-            <p class="chart-caption">Two-minute window; missing values leave gaps. Hover for time and value. {runtime.networkNote}.</p>
-          </article>
-        </loop>
-      </div>
+      <article class="history-card" :data-group="observatory.model.sessionDetail.chartId">
+        <h3>Session usage · {observatory.model.sessionDetail.processCount} current processes · {observatory.model.sessionDetail.rootCount} verified roots</h3>
+        <div class="chart-shell"><canvas class="resource-chart" :data-group="observatory.model.sessionDetail.chartId" :aria-label="observatory.model.sessionDetail.title + ' measured session usage history'" role="img"></canvas><div class="chart-empty">Waiting for measured samples.</div></div>
+        <p class="chart-caption">Two-minute window. Each point sums the processes of this session measured at that sample, each counted once; a gap means none was measured. CPU above 100% means more than one core. Hover for time and value.</p>
+      </article>
     </logic>
-    <logic :if="!observatory.model.agentDetail.resources.length"><div class="empty">{observatory.model.agentDetail.resourceLabel}<p>Charts appear when a verified command link with a matching OS identity is reported for this agent or its session. No remote model work is measured.</p></div></logic>
+    <logic :if="!observatory.model.sessionDetail.processCount"><div class="empty">No measured session usage.<p>Metrics appear when a verified session harness or command link with a matching OS identity is reported for this session. No remote model work is measured.</p></div></logic>
   </section>
 </logic>

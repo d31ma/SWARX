@@ -22,4 +22,5 @@ export interface ActivityRecord {
   elapsed_label: string | null;
   exit_code: number | null;
   captured_at: number;
+  role_label: string;
 }

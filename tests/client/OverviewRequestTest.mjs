@@ -5,9 +5,9 @@ import { test } from 'node:test';
 import { BrowserServiceTestUtils } from './BrowserServiceTestUtils.mjs';
 
 /** @typedef {import('../../app/client/models/NativeViewSelection.ts').NativeViewSelection} NativeSelection */
-/** @typedef {Pick<import('../../app/client/models/ObservatoryModel.ts').ObservatoryModel, 'selected' | 'liveStatus' | 'detail' | 'selectedSession' | 'selectedSessionProcess' | 'resourceSessions' | 'sharedResources' | 'agentView'>} TestResponse */
+/** @typedef {Pick<import('../../app/client/models/ObservatoryModel.ts').ObservatoryModel, 'selected' | 'liveStatus' | 'detail' | 'selectedSession' | 'selectedSessionProcess' | 'resourceSessions' | 'sharedResources' | 'sessionView'>} TestResponse */
 /** @typedef {{selection: NativeSelection, resolve: (value: TestResponse | PromiseLike<TestResponse>) => void, reject: (reason?: unknown) => void}} PendingRequest */
-/** @typedef {{model?: TestResponse, series: string, selectedAgent: string, agentTab: string, agentView: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, session: string, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, openAgent: (event: object, id: string) => void, closeAgent: (event: object) => void, toggleSession: (event: object, key: string) => void}} FixtureController *
+/** @typedef {{model?: TestResponse, series: string, selectedSession: string, sessionTab: string, sessionView: string, problem: string, status: string, snapshot: {read: (selection: NativeSelection) => Promise<TestResponse>}, taskScheduler: {render: () => Promise<void>}, lifecycle: AbortSignal, view: RequestView, presentation: import('../../app/client/services/browser/PresentationService.js').default, initialize: () => void, dispose: () => void, search: () => void, selectSessionProcess: (event: object, pid: number, started: string) => void, setSeries: (event: object, mode: string) => void, openSession: (event: object, key: string) => void, closeSession: (event: object) => void, toggleSession: (event: object, key: string) => void}} FixtureController *
 /** @typedef {{controller: FixtureController, requests: PendingRequest[], poll: (() => void) | null}} RequestFrame */
 /** @typedef {Omit<RequestFrame, 'controller'> & {controller: FixtureController | null}} PreparingFrame */
 
@@ -16,6 +16,15 @@ class OverviewRequestTest {
   static SOURCE = new URL('../../app/client/services/ObservatoryService.js', import.meta.url);
   /** @type {URL} */
   static STAGED_SOURCE = new URL('../../client/services/ObservatoryService.js', import.meta.url);
+  /** @type {URL} */
+  static NATIVE_SELECTION = new URL('../../app/client/models/NativeViewSelection.rs', import.meta.url);
+
+  // Tac hands native call arguments to Rust by exact field name (serde renames do not apply).
+  /** @returns {string[]} */
+  static nativeFields() {
+    const source = readFileSync(OverviewRequestTest.NATIVE_SELECTION, 'utf8');
+    return [...source.matchAll(/^\s*pub (\w+):/gm)].map(/** @param {RegExpMatchArray} match @returns {string} */ match => match[1]);
+  }
 
   /** @returns {URL} */
   static source() {
@@ -107,7 +116,11 @@ class OverviewRequestTest {
     const frame = OverviewRequestTest.frame();
     frame.controller.initialize();
     await OverviewRequestTest.flush();
-    frame.requests[0].resolve({...OverviewRequestTest.response('selected-runtime'),
+    frame.controller.openSession({}, 'Codex:actual-id');
+    frame.controller.selectSessionProcess({}, 42, 'actual-birth');
+    frame.requests[0].resolve(OverviewRequestTest.response('ignored'));
+    await OverviewRequestTest.flush();
+    frame.requests[1].resolve({...OverviewRequestTest.response('selected-runtime'), sessionView: 'detail',
       selectedSession: 'Codex:actual-id', selectedSessionProcess: OverviewRequestTest.selectedProcess()});
     await OverviewRequestTest.flush();
     return frame;
@@ -123,21 +136,21 @@ class OverviewRequestTest {
 
   /** @param {RequestFrame} frame @returns {Promise<void>} */
   static async assertRetainedSelection(frame) {
-    assert.equal(frame.requests.length, 1);
+    assert.equal(frame.requests.length, 2);
     assert.ok(frame.poll);
     frame.poll();
     await OverviewRequestTest.flush();
-    assert.equal(frame.requests.length, 2);
-    const selection = frame.requests[1].selection;
-    assert.deepEqual({...selection, expandedSessions: [...selection.expandedSessions]}, {
+    assert.equal(frame.requests.length, 3);
+    const selection = frame.requests[2].selection;
+    assert.deepEqual({...selection, expanded_sessions: [...selection.expanded_sessions]}, {
       selected: 'selected-runtime', query: '', pid: 0,
-      selectedSession: 'Codex:actual-id', sessionPid: 42, sessionStarted: 'actual-birth',
-      selectedAgent: '', expandedSessions: []});
+      selected_session: 'Codex:actual-id', session_pid: 42, session_started: 'actual-birth',
+      expanded_sessions: []});
   }
 
   /** @param {string} selected @returns {TestResponse} */
   static response(selected) {
-    return { selected, liveStatus: 'Live', detail: null, selectedSession: '', selectedSessionProcess: null, resourceSessions: [], sharedResources: [], agentView: 'list' };
+    return { selected, liveStatus: 'Live', detail: null, selectedSession: '', selectedSessionProcess: null, resourceSessions: [], sharedResources: [], sessionView: 'list' };
   }
 }
 
@@ -177,10 +190,10 @@ class RequestView {
 
 class RequestTabTarget extends RequestView {
   /** @param {string} name */
-  constructor(name) {super(); this.dataset = {agentTab: name};}
+  constructor(name) {super(); this.dataset = {sessionTab: name};}
   /** @param {string} selector @returns {Element | null} */
   closest(selector) {
-    if (selector === '[data-agent-tab]') return /** @type {Element} */ (/** @type {unknown} */ (this));
+    if (selector === '[data-session-tab]') return /** @type {Element} */ (/** @type {unknown} */ (this));
     return null;
   }
   /** @returns {void} */
@@ -217,24 +230,36 @@ test('initial controller has no fabricated native model', /** @returns {Promise<
   assert.equal(frame.controller.model, undefined);
 });
 
+test('the read selection carries exactly the Rust NativeViewSelection field names', /** @returns {Promise<void>} */ async () => {
+  const frame = OverviewRequestTest.frame();
+  await started(frame);
+  frame.controller.openSession({}, 'Claude:session-one');
+  await OverviewRequestTest.flush();
+  const selection = frame.requests[1].selection;
+  assert.deepEqual(Object.keys(selection).sort(), OverviewRequestTest.nativeFields().sort());
+  assert.equal(selection.selected_session, 'Claude:session-one');
+  assert.equal('selectedSession' in selection, false);
+  frame.controller.dispose();
+});
+
 test('latest selection replaces queued requests and rejects an older response', /** @returns {Promise<void>} */ async () => {
   const frame = OverviewRequestTest.frame();
   frame.controller.initialize();
   await OverviewRequestTest.flush();
-  frame.controller.openAgent({}, 'first-agent');
-  frame.controller.openAgent({}, 'latest-agent');
+  frame.controller.openSession({}, 'Claude:first');
+  frame.controller.openSession({}, 'Claude:latest');
   frame.controller.view.pick('selected-runtime', 42);
   assert.equal(frame.requests.length, 1);
   frame.requests[0].resolve(OverviewRequestTest.response('stale-runtime'));
   await OverviewRequestTest.flush();
   assert.equal(frame.controller.model, undefined);
   assert.equal(frame.requests.length, 2);
-  assert.equal(frame.requests[1].selection.selectedAgent, 'latest-agent');
+  assert.equal(frame.requests[1].selection.selected_session, 'Claude:latest');
   assert.equal(frame.requests[1].selection.selected, 'selected-runtime');
   frame.requests[1].resolve(OverviewRequestTest.response('selected-runtime'));
   await OverviewRequestTest.flush();
   assert.equal(OverviewRequestTest.acceptedModel(frame).selected, 'selected-runtime');
-  assert.equal(frame.controller.selectedAgent, 'latest-agent');
+  assert.equal(frame.controller.selectedSession, 'Claude:latest');
   assert.equal(frame.controller.status, 'Live');
   frame.controller.dispose();
 });
@@ -262,7 +287,7 @@ test('a stale bridge rejection does not overwrite the latest request state', /**
   const frame = OverviewRequestTest.frame();
   frame.controller.initialize();
   await OverviewRequestTest.flush();
-  frame.controller.openAgent({}, 'new-agent');
+  frame.controller.openSession({}, 'Claude:new');
   frame.requests[0].reject(new Error('outdated failure'));
   await OverviewRequestTest.flush();
   assert.equal(frame.controller.problem, '');
@@ -294,17 +319,18 @@ test('current bridge failure remains readable and later polling recovers', /** @
   frame.controller.dispose();
 });
 
-test('session process selection sends exact identity without changing runtime selection', /** @returns {Promise<void>} */ async () => {
+test('session process selection sends exact identity within the open session', /** @returns {Promise<void>} */ async () => {
   const frame = OverviewRequestTest.frame();
   frame.controller.initialize();
   await OverviewRequestTest.flush();
-  frame.controller.selectSessionProcess({}, 'Codex:actual-id', 42, 'actual-birth');
+  frame.controller.openSession({}, 'Codex:actual-id');
+  frame.controller.selectSessionProcess({}, 42, 'actual-birth');
   frame.requests[0].resolve(OverviewRequestTest.response('ignored'));
   await OverviewRequestTest.flush();
   assert.equal(frame.requests[1].selection.selected, '');
-  assert.equal(frame.requests[1].selection.selectedSession, 'Codex:actual-id');
-  assert.equal(frame.requests[1].selection.sessionPid, 42);
-  assert.equal(frame.requests[1].selection.sessionStarted, 'actual-birth');
+  assert.equal(frame.requests[1].selection.selected_session, 'Codex:actual-id');
+  assert.equal(frame.requests[1].selection.session_pid, 42);
+  assert.equal(frame.requests[1].selection.session_started, 'actual-birth');
   frame.controller.dispose();
 });
 
@@ -312,27 +338,27 @@ test('an unavailable session process is cleared before the next poll', /** @retu
   const frame = OverviewRequestTest.frame();
   frame.controller.initialize();
   await OverviewRequestTest.flush();
-  frame.controller.selectSessionProcess({}, 'Codex:actual-id', 42, 'retired-birth');
+  frame.controller.openSession({}, 'Codex:actual-id');
+  frame.controller.selectSessionProcess({}, 42, 'retired-birth');
   frame.requests[0].resolve(OverviewRequestTest.response('old'));
   await OverviewRequestTest.flush();
-  frame.requests[1].resolve({...OverviewRequestTest.response('runtime'), selectedSession: 'Codex:actual-id'});
+  frame.requests[1].resolve({...OverviewRequestTest.response('runtime'), sessionView: 'detail', selectedSession: 'Codex:actual-id'});
   await OverviewRequestTest.flush();
   assert.ok(frame.poll);
   frame.poll();
   await OverviewRequestTest.flush();
-  assert.equal(frame.requests[2].selection.selectedSession, 'Codex:actual-id');
-  assert.equal(frame.requests[2].selection.sessionPid, null);
-  assert.equal(frame.requests[2].selection.sessionStarted, null);
+  assert.equal(frame.requests[2].selection.selected_session, 'Codex:actual-id');
+  assert.equal(frame.requests[2].selection.session_pid, null);
+  assert.equal(frame.requests[2].selection.session_started, null);
   frame.controller.dispose();
 });
-
 
 test('series changes preserve the verified selection through the next poll', /** @returns {Promise<void>} */ async () => {
   const frame = await OverviewRequestTest.selectedFrame();
   frame.controller.setSeries({}, 'network');
   await OverviewRequestTest.flush();
   assert.equal(frame.controller.series, 'network');
-  assert.equal(frame.controller.agentTab, 'resources');
+  assert.equal(frame.controller.sessionTab, 'resources');
   assert.equal(OverviewRequestTest.acceptedModel(frame).selectedSessionProcess?.started, 'actual-birth');
   await OverviewRequestTest.assertRetainedSelection(frame);
   frame.controller.dispose();
@@ -342,13 +368,12 @@ test('Tab changes preserve the series and exact process identity through the nex
   const frame = await OverviewRequestTest.selectedFrame();
   frame.controller.view.tab('tree');
   await OverviewRequestTest.flush();
-  assert.equal(frame.controller.agentTab, 'tree');
+  assert.equal(frame.controller.sessionTab, 'tree');
   assert.equal(frame.controller.series, 'cpu');
   assert.equal(OverviewRequestTest.acceptedModel(frame).selectedSessionProcess?.pid, 42);
   await OverviewRequestTest.assertRetainedSelection(frame);
   frame.controller.dispose();
 });
-
 
 test('a bound process click selects runtime and PID without exposing an internal selector', /** @returns {Promise<void>} */ async () => {
   const frame = OverviewRequestTest.frame();
@@ -376,108 +401,120 @@ async function started(frame) {
 }
 
 /** @param {string} view @returns {TestResponse} */
-function agentResponse(view) {
-  return {...OverviewRequestTest.response('runtime'), agentView: view};
+function sessionResponse(view) {
+  return {...OverviewRequestTest.response('runtime'), sessionView: view};
 }
 
-test('openAgent sends the exact agent id and shows loading until that read arrives', /** @returns {Promise<void>} */ async () => {
+test('openSession sends the exact session key and shows loading until that read arrives', /** @returns {Promise<void>} */ async () => {
   const frame = OverviewRequestTest.frame();
   await started(frame);
-  frame.controller.openAgent({}, 'session-one:helper');
-  assert.equal(frame.controller.selectedAgent, 'session-one:helper');
-  assert.equal(frame.controller.agentView, 'loading');
+  frame.controller.openSession({}, 'Claude:session-one');
+  assert.equal(frame.controller.selectedSession, 'Claude:session-one');
+  assert.equal(frame.controller.sessionView, 'loading');
   await OverviewRequestTest.flush();
-  assert.equal(frame.requests[1].selection.selectedAgent, 'session-one:helper');
-  frame.requests[1].resolve(agentResponse('detail'));
+  assert.equal(frame.requests[1].selection.selected_session, 'Claude:session-one');
+  frame.requests[1].resolve(sessionResponse('detail'));
   await OverviewRequestTest.flush();
-  assert.equal(frame.controller.agentView, 'detail');
+  assert.equal(frame.controller.sessionView, 'detail');
   frame.controller.dispose();
 });
 
-test('the selected agent and tab survive polls, including an honest missing state', /** @returns {Promise<void>} */ async () => {
+test('the open session and tab survive polls, including honest inactive and missing states', /** @returns {Promise<void>} */ async () => {
   const frame = OverviewRequestTest.frame();
   await started(frame);
-  frame.controller.openAgent({}, 'agent-a');
+  frame.controller.openSession({}, 'Claude:session-a');
   frame.controller.view.tab('activity');
   await OverviewRequestTest.flush();
-  frame.requests[1].resolve(agentResponse('detail'));
+  frame.requests[1].resolve(sessionResponse('detail'));
   await OverviewRequestTest.flush();
   assert.ok(frame.poll);
   frame.poll();
   await OverviewRequestTest.flush();
-  assert.equal(frame.requests[2].selection.selectedAgent, 'agent-a');
-  frame.requests[2].resolve(agentResponse('missing'));
+  assert.equal(frame.requests[2].selection.selected_session, 'Claude:session-a');
+  frame.requests[2].resolve(sessionResponse('inactive'));
   await OverviewRequestTest.flush();
-  assert.equal(frame.controller.selectedAgent, 'agent-a');
-  assert.equal(frame.controller.agentView, 'missing');
-  assert.equal(frame.controller.agentTab, 'activity');
+  assert.equal(frame.controller.sessionView, 'inactive');
+  frame.poll();
+  await OverviewRequestTest.flush();
+  frame.requests[3].resolve(sessionResponse('missing'));
+  await OverviewRequestTest.flush();
+  assert.equal(frame.controller.selectedSession, 'Claude:session-a');
+  assert.equal(frame.controller.sessionView, 'missing');
+  assert.equal(frame.controller.sessionTab, 'activity');
+  frame.poll();
+  await OverviewRequestTest.flush();
+  assert.equal(frame.requests[4].selection.selected_session, 'Claude:session-a');
   frame.controller.dispose();
 });
 
-test('switching agents keeps the current tab and requests the new agent', /** @returns {Promise<void>} */ async () => {
+test('switching sessions keeps the current tab and requests the new session', /** @returns {Promise<void>} */ async () => {
   const frame = OverviewRequestTest.frame();
   await started(frame);
-  frame.controller.openAgent({}, 'agent-a');
+  frame.controller.openSession({}, 'Claude:session-a');
   frame.controller.view.tab('tree');
-  frame.controller.openAgent({}, 'agent-b');
+  frame.controller.openSession({}, 'Claude:session-b');
   await OverviewRequestTest.flush();
-  assert.equal(frame.requests[1].selection.selectedAgent, 'agent-a');
-  frame.requests[1].resolve(agentResponse('detail'));
+  assert.equal(frame.requests[1].selection.selected_session, 'Claude:session-a');
+  frame.requests[1].resolve(sessionResponse('detail'));
   await OverviewRequestTest.flush();
-  assert.equal(frame.controller.agentView, 'loading');
-  assert.equal(frame.controller.agentTab, 'tree');
-  assert.equal(frame.requests[2].selection.selectedAgent, 'agent-b');
+  assert.equal(frame.controller.sessionView, 'loading');
+  assert.equal(frame.controller.sessionTab, 'tree');
+  assert.equal(frame.requests[2].selection.selected_session, 'Claude:session-b');
   frame.controller.dispose();
 });
 
-test('closeAgent clears the selection and the next read omits it', /** @returns {Promise<void>} */ async () => {
+test('closeSession clears the selection and the next read omits it', /** @returns {Promise<void>} */ async () => {
   const frame = OverviewRequestTest.frame();
   await started(frame);
-  frame.controller.openAgent({}, 'agent-a');
+  frame.controller.openSession({}, 'Claude:session-a');
   await OverviewRequestTest.flush();
-  frame.requests[1].resolve(agentResponse('detail'));
+  frame.requests[1].resolve(sessionResponse('detail'));
   await OverviewRequestTest.flush();
-  frame.controller.closeAgent({});
-  assert.equal(frame.controller.selectedAgent, '');
-  assert.equal(frame.controller.agentView, 'list');
+  frame.controller.closeSession({});
+  assert.equal(frame.controller.selectedSession, '');
+  assert.equal(frame.controller.sessionView, 'list');
   await OverviewRequestTest.flush();
-  assert.equal(frame.requests[2].selection.selectedAgent, '');
+  assert.equal(frame.requests[2].selection.selected_session, '');
   frame.controller.dispose();
 });
 
-test('Escape closes an open agent and does nothing when none is open', /** @returns {Promise<void>} */ async () => {
+test('Escape closes an open session and does nothing when none is open', /** @returns {Promise<void>} */ async () => {
   const frame = OverviewRequestTest.frame();
   await started(frame);
   frame.controller.view.press('Escape');
   await OverviewRequestTest.flush();
   assert.equal(frame.requests.length, 1);
-  frame.controller.openAgent({}, 'agent-a');
+  frame.controller.openSession({}, 'Claude:session-a');
   await OverviewRequestTest.flush();
-  frame.requests[1].resolve(agentResponse('detail'));
+  frame.requests[1].resolve(sessionResponse('detail'));
   await OverviewRequestTest.flush();
   frame.controller.view.press('Escape');
-  assert.equal(frame.controller.selectedAgent, '');
+  assert.equal(frame.controller.selectedSession, '');
   await OverviewRequestTest.flush();
-  assert.equal(frame.requests[2].selection.selectedAgent, '');
+  assert.equal(frame.requests[2].selection.selected_session, '');
   frame.controller.dispose();
 });
 
-test('session expansion is sent by exact key, survives polls and toggles back', /** @returns {Promise<void>} */ async () => {
+test('session expansion is sent by exact key, survives polls and never opens the panel', /** @returns {Promise<void>} */ async () => {
   const frame = OverviewRequestTest.frame();
   await started(frame);
   frame.controller.toggleSession({}, 'Claude:session-one');
+  assert.equal(frame.controller.selectedSession, '');
+  assert.equal(frame.controller.sessionView, 'list');
   await OverviewRequestTest.flush();
-  assert.deepEqual([...frame.requests[1].selection.expandedSessions], ['Claude:session-one']);
-  frame.requests[1].resolve(agentResponse('list'));
+  assert.deepEqual([...frame.requests[1].selection.expanded_sessions], ['Claude:session-one']);
+  assert.equal(frame.requests[1].selection.selected_session, '');
+  frame.requests[1].resolve(sessionResponse('list'));
   await OverviewRequestTest.flush();
   assert.ok(frame.poll);
   frame.poll();
   await OverviewRequestTest.flush();
-  assert.deepEqual([...frame.requests[2].selection.expandedSessions], ['Claude:session-one']);
-  frame.requests[2].resolve(agentResponse('list'));
+  assert.deepEqual([...frame.requests[2].selection.expanded_sessions], ['Claude:session-one']);
+  frame.requests[2].resolve(sessionResponse('list'));
   await OverviewRequestTest.flush();
   frame.controller.toggleSession({}, 'Claude:session-one');
   await OverviewRequestTest.flush();
-  assert.deepEqual([...frame.requests[3].selection.expandedSessions], []);
+  assert.deepEqual([...frame.requests[3].selection.expanded_sessions], []);
+  assert.equal(frame.controller.selectedSession, '');
   frame.controller.dispose();
 });

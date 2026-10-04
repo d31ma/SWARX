@@ -1,4 +1,6 @@
-use crate::models::{NativeCommandOwner, NativeProcessMetrics, NativeResourceTotals};
+use crate::models::{
+    NativeCommandOwner, NativeProcessMetrics, NativeProcessTreeSample, NativeResourceTotals,
+};
 
 #[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct NativeCommandObservation {
@@ -17,4 +19,6 @@ pub struct NativeCommandObservation {
     pub descendants: Vec<NativeProcessMetrics>,
     pub totals: NativeResourceTotals,
     pub history: Vec<Vec<Option<f64>>>,
+    #[serde(default, skip_serializing)]
+    pub tree_history: Vec<NativeProcessTreeSample>,
 }

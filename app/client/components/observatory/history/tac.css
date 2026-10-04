@@ -23,8 +23,60 @@
   overflow-wrap: anywhere;
 }
 
-.resource-scope.scope-shared {
+.resource-scope.scope-none {
   color: #e1bd87;
+}
+
+.session-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 170px), 1fr));
+  gap: 10px;
+  margin: 12px 0 10px;
+}
+
+.session-metric {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid #3d4a68;
+  border-radius: 8px;
+  background: #1c2434;
+}
+
+.session-metric small {
+  display: block;
+  color: #afbdd9;
+  font-size: 11px;
+  letter-spacing: .4px;
+  line-height: 1.4;
+}
+
+.session-metric strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.session-metric p {
+  margin: 4px 0 0;
+  color: #a9b7d2;
+  font-size: 11px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.session-metric.is-unavailable strong {
+  color: #9caecc;
+}
+
+.session-notes {
+  margin: 0 0 4px;
+  padding-left: 18px;
+  color: #b4bfd8;
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 .chart-tabs {
@@ -49,12 +101,6 @@
   background: #3c4974!important;
 }
 
-.history-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 16px;
-}
-
 .history-card {
   display: block;
   min-width: 0;
@@ -65,41 +111,9 @@
 }
 
 .history-card h3 {
-  margin: 0;
-  font-size: 16px;
+  margin: 0 0 10px;
+  font-size: 15px;
   line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.runtime-card-scope {
-  margin: 6px 0 12px;
-  color: #afbdd9;
-  font-size: 12px;
-  line-height: 1.5;
-  overflow-wrap: anywhere;
-}
-
-.runtime-card-metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px 15px;
-  margin-bottom: 14px;
-}
-
-.runtime-card-metrics small {
-  display: block;
-  color: #afbdd9;
-  font-size: 11px;
-  letter-spacing: .6px;
-  line-height: 1.4;
-}
-
-.runtime-card-metrics strong {
-  display: block;
-  margin-top: 4px;
-  font-size: 16px;
-  font-weight: 500;
-  line-height: 1.4;
   overflow-wrap: anywhere;
 }
 
@@ -158,9 +172,6 @@
 @media (max-width: 700px) {
   .history-scroll {
     padding: 12px 14px 16px;
-  }
-  .runtime-card-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .history-card {
     padding: 12px;

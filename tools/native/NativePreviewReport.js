@@ -2,9 +2,9 @@ class NativePreviewReport {
   /** @type {string} */
   static #READY_SELECTOR = '.logical-panel';
   /** @type {string} */
-  static #TAB_SELECTOR = '.agent-tab';
+  static #TAB_SELECTOR = '.session-tab';
   /** @type {string} */
-  static #CLOSE_SELECTOR = '.agent-drawer-close';
+  static #CLOSE_SELECTOR = '.session-panel-close';
   /** @type {string} */
   static #OVERVIEW = "What's running";
   /** @type {string} */
@@ -26,7 +26,7 @@ class NativePreviewReport {
   /** @type {string} */
   static #PROCESSES = 'Process tree';
   /** @type {string} */
-  static #GRAPH_TAB_SELECTOR = '[role=tab][data-agent-tab]';
+  static #GRAPH_TAB_SELECTOR = '[role=tab][data-session-tab]';
   /** @type {string} */
   static #COORDINATOR_SOURCE = 'Coordinator-reported team roster';
 
@@ -41,7 +41,7 @@ class NativePreviewReport {
   /** @type {string} */
   static #EMPTY_TEXT = '';
   /** @type {string} */
-  static #SELECTED_TAB_SELECTOR = '.agent-drawer.is-open .agent-tab[aria-selected="true"]';
+  static #SELECTED_TAB_SELECTOR = '.session-panel.is-open .session-tab[aria-selected="true"]';
   /** @type {string} */
   static #UPDATES = 'updates';
   /** @type {string} */
@@ -62,6 +62,10 @@ class NativePreviewReport {
   static #AGENT_ROW_SELECTOR = '.agent-row';
   /** @type {string} */
   static #AGENT_ATTRIBUTE = 'data-agent';
+  /** @type {string} */
+  static #SESSION_CONTROL_SELECTOR = '.session-card-open';
+  /** @type {string} */
+  static #PANEL_SELECTOR = '#session-panel';
   /** @type {number} */
   static #EMPTY_COUNT = 0;
   /** @type {number} */
@@ -150,11 +154,12 @@ class NativePreviewReport {
     if ([focused, !supplied].every(Boolean)) throw new Error('Native QA identity requires explicit agent, session, task and action record IDs.');
   }
 
+  // Clicks the first session card control; the card, not an agent row, opens the session panel.
   /** @returns {Promise<void>} */
-  static async #openFirstAgent() {
+  static async #openFirstSession() {
     const started = performance.now();
-    while (document.querySelector('.agent-row') === null) await this.#waitIteration(started);
-    /** @type {HTMLElement} */ (document.querySelector('.agent-row')).click();
+    while (document.querySelector(this.#SESSION_CONTROL_SELECTOR) === null) await this.#waitIteration(started);
+    /** @type {HTMLElement} */ (document.querySelector(this.#SESSION_CONTROL_SELECTOR)).click();
     await this.#waitIteration(started);
   }
 
@@ -205,7 +210,8 @@ class NativePreviewReport {
       case 'runtimes': throw this.#removed(action);
       case this.#POLLS: return;
       case 'settle': return;
-      case 'open-first-agent': await this.#openFirstAgent(); return;
+      case 'open-first-session': await this.#openFirstSession(); return;
+      case 'open-first-agent': await this.#openFirstSession(); return;
       case this.#HOLD: throw new Error('Unsupported native QA action: ' + action);
       default: throw new Error('Unknown native QA action: ' + action);
     }
@@ -213,7 +219,7 @@ class NativePreviewReport {
 
   /** @param {string} action @returns {Error} */
   static #removed(action) {
-    return new Error('Unsupported native QA action: ' + action + '. The Table view and the Runtimes page were removed; use the agent details Process tree or Resources tab.');
+    return new Error('Unsupported native QA action: ' + action + '. The Table view and the Runtimes page were removed; use the session details Process tree or Resources tab.');
   }
 
   /** @returns {string} */
@@ -232,7 +238,7 @@ class NativePreviewReport {
   /** @param {string} name @returns {Promise<void>} */
   static async #showSection(name) {
     if (name === this.#OVERVIEW) {
-      this.#press(document.querySelector(this.#CLOSE_SELECTOR), 'agent details close');
+      this.#press(document.querySelector(this.#CLOSE_SELECTOR), 'session details close');
       return;
     }
     await this.#openDetails();
@@ -242,15 +248,17 @@ class NativePreviewReport {
   /** @returns {Promise<void>} */
   static async #openDetails() {
     if (document.querySelector(this.#TAB_SELECTOR) !== null) return;
-    this.#press(this.#detailRow(), 'agent row');
+    this.#press(this.#detailControl(), 'session card');
     await this.#waitTabs(performance.now());
   }
 
+  // The card control of the session holding the owned agent row, else the first session card.
   /** @returns {Element | null} */
-  static #detailRow() {
+  static #detailControl() {
     const rows = /** @type {HTMLElement[]} */ (Array.from(document.querySelectorAll(this.#AGENT_ROW_SELECTOR)));
     const owned = rows.find(/** @param {HTMLElement} row @returns {boolean} */ row => row.dataset.agent === document.body.dataset.qaAgentId);
-    return owned ?? rows[0] ?? null;
+    const card = owned?.closest('.session-card')?.querySelector(this.#SESSION_CONTROL_SELECTOR) ?? null;
+    return card ?? document.querySelector(this.#SESSION_CONTROL_SELECTOR);
   }
 
   /** @param {number} started @returns {Promise<void>} */
@@ -772,7 +780,7 @@ class NativePreviewReport {
       summaryBounds: this.#summaryBounds(), logicalRecords: this.#logicalRecords(), logicalRows: document.querySelectorAll(this.#AGENT_ROW_SELECTOR).length, appIconLoaded: iconLoaded, diagnostics: this.#diagnostics()};
   }
 
-  /** @returns {{path: string, elements: number, document: Record<string, string | undefined>, failures: {tag: string, native: string | undefined, chart: string | undefined, mount: string | null}[], timing: {paint: [string, number][], marks: [string, number][], slow: [string, number, number][]}, drawer: {view: string | undefined, agent: string | undefined, html: string | undefined}}} */
+  /** @returns {{path: string, elements: number, document: Record<string, string | undefined>, failures: {tag: string, native: string | undefined, chart: string | undefined, mount: string | null}[], timing: {paint: [string, number][], marks: [string, number][], slow: [string, number, number][]}, panel: {view: string | undefined, session: string | undefined, html: string | undefined}}} */
   static #diagnostics() {
     const failures = Array.from(document.querySelectorAll('[data-native-failure],[data-chart-failure],[data-tachyon-mount-error]'),
       /** @param {Element} element @returns {{tag: string, native: string | undefined, chart: string | undefined, mount: string | null}} */ element => ({tag: element.tagName.toLowerCase(),
@@ -782,9 +790,9 @@ class NativePreviewReport {
       marks: entries('mark').map(/** @param {PerformanceEntry} entry @returns {[string, number]} */ entry => [entry.name, Math.round(entry.startTime)]),
       slow: entries('resource').filter(/** @param {PerformanceEntry} entry @returns {boolean} */ entry => entry.duration > 200).map(
         /** @param {PerformanceEntry} entry @returns {[string, number, number]} */ entry => [String(entry.name).split('/').pop() ?? '', Math.round(entry.startTime), Math.round(entry.duration)])};
-    const drawer = /** @type {HTMLElement | null} */ (document.querySelector?.('#agent-drawer') ?? null);
-    const drawerState = {view: drawer?.dataset.agentView, agent: drawer?.dataset.agent, html: drawer?.innerHTML.slice(0, 2500)};
-    return {path: globalThis.location?.pathname ?? '', elements: document.getElementsByTagName?.('*').length ?? 0, document: {...document.documentElement?.dataset}, failures, timing, drawer: drawerState};
+    const panel = /** @type {HTMLElement | null} */ (document.querySelector?.(this.#PANEL_SELECTOR) ?? null);
+    const panelState = {view: panel?.dataset.sessionView, session: panel?.dataset.session, html: panel?.innerHTML.slice(0, 2500)};
+    return {path: globalThis.location?.pathname ?? '', elements: document.getElementsByTagName?.('*').length ?? 0, document: {...document.documentElement?.dataset}, failures, timing, panel: panelState};
   }
 
   /** @returns {{id: string, height: number, textTop: number, textBottom: number, top: number, bottom: number, lineHeight: string, appearance: string}[]} */
@@ -794,7 +802,7 @@ class NativePreviewReport {
 
   /** @param {Element} tab @returns {{id: string, height: number, textTop: number, textBottom: number, top: number, bottom: number, lineHeight: string, appearance: string}} */
   static #tabBound(tab) {
-    return {...this.#elementTextBound(tab), id: String(/** @type {HTMLElement} */ (tab).dataset.agentTab),
+    return {...this.#elementTextBound(tab), id: String(/** @type {HTMLElement} */ (tab).dataset.sessionTab),
       appearance: getComputedStyle(tab).appearance};
   }
 

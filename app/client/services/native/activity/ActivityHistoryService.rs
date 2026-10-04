@@ -283,6 +283,7 @@ impl ActivityHistoryService {
             elapsed_label: Self::elapsed(execution, current_feed, now),
             exit_code: execution.exit_code,
             captured_at: Self::ordering_time(execution.started_at),
+            role_label: String::new(),
         }
     }
 

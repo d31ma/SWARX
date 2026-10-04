@@ -22,8 +22,8 @@ export default class PresentationService {
   }
 
   /** @param {string} identifier @param {string} selector @returns {void} */
-  focusAgent(identifier, selector) {
-    this.#continuity().focusAgent(identifier, selector);
+  focusSession(identifier, selector) {
+    this.#continuity().focusSession(identifier, selector);
   }
 
   /** @returns {void} */

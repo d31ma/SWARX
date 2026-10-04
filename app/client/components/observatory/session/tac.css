@@ -1,0 +1,194 @@
+:scope {
+  display: contents;
+}
+
+/* A layout column beside the session cards (see the panel grid), hidden while no session is open. */
+.session-panel {
+  display: none;
+}
+
+.session-panel.is-open {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #485879;
+  border-radius: 9px;
+  background: #171c27;
+}
+
+.session-panel:focus-visible {
+  outline: 2px solid #b7c4ff;
+  outline-offset: -2px;
+}
+
+.session-panel-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.session-panel-identity {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-panel-header h2 {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.session-panel-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.session-state {
+  padding: 2px 8px;
+  border: 1px solid;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.session-state.is-active {
+  color: #bfe8cf;
+  border-color: #3f7a5a;
+  background: #1e3328;
+}
+
+.session-state.is-inactive {
+  color: #e1bd87;
+  border-color: #80683f;
+  background: #3e3328;
+}
+
+.session-harness {
+  margin: 2px 0 0;
+  color: #c9d3ec;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.session-panel-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.session-panel-back {
+  display: none;
+  appearance: none;
+  min-height: 36px;
+  margin: 0 0 8px;
+  padding: 6px 10px;
+  border: 1px solid #485879;
+  border-radius: 8px;
+  background: #202838;
+  color: #d0d8ff;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.session-panel-close {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #485879;
+  border-radius: 8px;
+  background: #202838;
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.session-panel-close:hover,
+.session-panel-back:hover {
+  border-color: #7d8fd1;
+  background: #2b3654;
+}
+
+.session-panel-close:focus-visible,
+.session-panel-back:focus-visible {
+  outline: 2px solid #b7c4ff;
+  outline-offset: 2px;
+}
+
+.session-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+
+.session-tab {
+  appearance: none;
+  min-height: 44px;
+  padding: 12px 14px 10px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #b0bdd6;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.session-tab:hover {
+  color: var(--text);
+}
+
+.session-tab[aria-selected="true"] {
+  border-bottom-color: #9daaff;
+  color: #e3e8ff;
+}
+
+.session-tab:focus-visible {
+  outline: 2px solid #b7c4ff;
+  outline-offset: -2px;
+  border-radius: 4px;
+}
+
+.session-panel-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Narrow windows: the panel takes the content width and the cards hide, so Back is shown. */
+@media (max-width: 920px) {
+  .session-panel-back {
+    display: inline-flex;
+    align-items: center;
+  }
+}
+
+@media (max-width: 640px) {
+  .session-panel-header {
+    padding: 12px 14px 10px;
+  }
+  .session-tabs {
+    padding: 0 10px;
+  }
+}

@@ -2,6 +2,14 @@
   display: contents;
 }
 
+.session-area {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .panel-heading h2 {
   font-size: 15px;
   font-weight: 500;
@@ -28,18 +36,31 @@
 
 .session-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
   gap: 14px;
   align-items: start;
   align-content: start;
 }
 
 .session-card {
+  position: relative;
   min-width: 0;
   padding: 12px 12px 10px;
   border: 1px solid #425071;
   border-radius: 8px;
   background: #202838;
+  transition: background-color .15s ease, border-color .15s ease;
+}
+
+.session-card:hover {
+  border-color: #6c7fb4;
+  background: #232d42;
+}
+
+.session-card.is-selected {
+  border-color: #b9adff;
+  background: #2a3152;
+  box-shadow: inset 3px 0 0 #b9adff;
 }
 
 .session-card.is-unlinked {
@@ -60,6 +81,42 @@
   white-space: nowrap;
 }
 
+/* The title button is the card's one control; its overlay makes the whole card open the panel. */
+.session-card-open {
+  appearance: none;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.session-card-open::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 8px;
+}
+
+.session-card-open:focus-visible {
+  outline: none;
+}
+
+.session-card-open:focus-visible::after {
+  outline: 2px solid #b7c4ff;
+  outline-offset: 2px;
+}
+
 .session-card-heading p {
   margin: 2px 0 0;
   color: #c9d3ec;
@@ -75,7 +132,6 @@
 }
 
 .agent-row {
-  appearance: none;
   box-sizing: border-box;
   width: 100%;
   min-height: 30px;
@@ -84,31 +140,14 @@
   align-items: center;
   gap: 10px;
   padding: 4px 6px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
   color: var(--text);
-  font: inherit;
   font-size: 13px;
   line-height: 20px;
-  text-align: left;
-  cursor: pointer;
-  transition: background-color .15s ease, border-color .15s ease;
 }
 
-.agent-row:hover {
-  background: #283350;
-}
-
-.agent-row:focus-visible,
 .session-toggle:focus-visible {
   outline: 2px solid #b7c4ff;
   outline-offset: 1px;
-}
-
-.agent-row.is-selected {
-  border-color: #b9adff;
-  background: #2f3658;
 }
 
 .agent-role {
@@ -163,6 +202,8 @@
 }
 
 .session-toggle {
+  position: relative;
+  z-index: 1;
   appearance: none;
   margin: 6px 0 0;
   padding: 4px 6px;
@@ -211,8 +252,15 @@
   }
 }
 
+/* Below this window width the session panel takes the whole content width; Back returns here. */
+@media (max-width: 920px) {
+  .session-area.has-session {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .agent-row {
+  .session-card {
     transition: none;
   }
 }

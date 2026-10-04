@@ -31,9 +31,9 @@ export default class ViewContinuityService {
   /** @type {string} */
   static _FOCUS_EVENT = 'focusin';
   /** @type {string} */
-  static _TAB_SELECTOR = '[data-agent-tab]';
+  static _TAB_SELECTOR = '[data-session-tab]';
   /** @type {string} */
-  static _AGENT_FOCUS_SELECTOR = '[data-agent-focus]';
+  static _SESSION_FOCUS_SELECTOR = '[data-session-focus]';
   /** @type {string} */
   static _ESCAPE_KEY = 'Escape';
   /** @type {string} */
@@ -44,8 +44,8 @@ export default class ViewContinuityService {
   static _PROCESS_FOCUS_KIND = 'process';
   /** @type {'zoom'} */
   static _ZOOM_FOCUS_KIND = 'zoom';
-  /** @type {'agent'} */
-  static _AGENT_FOCUS_KIND = 'agent';
+  /** @type {'session'} */
+  static _SESSION_FOCUS_KIND = 'session';
   /** @type {string[]} */
   static _HIDDEN_VISIBILITIES = ['hidden', 'collapse'];
   /** @type {string} */
@@ -129,14 +129,14 @@ export default class ViewContinuityService {
   }
 
   /** @param {string} identifier @param {string} selector @returns {void} */
-  focusAgent(identifier, selector) {
-    this.#focusElement(this.#agentElement(identifier, selector));
+  focusSession(identifier, selector) {
+    this.#focusElement(this.#sessionElement(identifier, selector));
   }
 
   /** @param {string} identifier @param {string} selector @returns {HTMLElement | undefined} */
-  #agentElement(identifier, selector) {
+  #sessionElement(identifier, selector) {
     return this.#elements(selector).find(
-      /** @param {HTMLElement} element @returns {boolean} */ element => element.dataset.agent === identifier
+      /** @param {HTMLElement} element @returns {boolean} */ element => element.dataset.session === identifier
     );
   }
 
@@ -670,7 +670,7 @@ export default class ViewContinuityService {
   /** @param {Event} event @param {HTMLElement} tab @returns {void} */
   #showTab(event, tab) {
     tab.scrollIntoView({block: ViewContinuityService._NEAREST_SCROLL, inline: ViewContinuityService._NEAREST_SCROLL});
-    this.#currentSelection().showTab?.(event, this.#identifier(tab.dataset.agentTab));
+    this.#currentSelection().showTab?.(event, this.#identifier(tab.dataset.sessionTab));
   }
 
   /** @param {Event} event @returns {void} */
@@ -685,11 +685,11 @@ export default class ViewContinuityService {
   #controlFocus(target) {
     const process = /** @type {HTMLElement | null | undefined} */ (target?.closest(ViewContinuityService._PROCESS_FOCUS_SELECTOR));
     const zoom = /** @type {HTMLElement | null} */ (this.#closestZoom(target));
-    const agent = /** @type {HTMLElement | null | undefined} */ (target?.closest(ViewContinuityService._AGENT_FOCUS_SELECTOR));
+    const session = /** @type {HTMLElement | null | undefined} */ (target?.closest(ViewContinuityService._SESSION_FOCUS_SELECTOR));
     const processFocus = this.#processFocus(process?.dataset);
     const zoomFocus = this.#zoomFocus(zoom?.dataset);
     const control = this.#firstControlFocus(processFocus, zoomFocus);
-    return this.#firstControlFocus(control, this.#agentFocus(agent?.dataset));
+    return this.#firstControlFocus(control, this.#sessionFocus(session?.dataset));
   }
 
   /** @param {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} first @param {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} second @returns {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} */
@@ -698,11 +698,11 @@ export default class ViewContinuityService {
   }
 
   /** @param {DOMStringMap | undefined} data @returns {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} */
-  #agentFocus(data) {
-    if (!data?.agentFocus) {
+  #sessionFocus(data) {
+    if (!data?.sessionFocus) {
       return null;
     }
-    return {kind: ViewContinuityService._AGENT_FOCUS_KIND, control: data.agentFocus};
+    return {kind: ViewContinuityService._SESSION_FOCUS_KIND, control: data.sessionFocus};
   }
 
   /** @param {DOMStringMap | undefined} data @returns {import('/models/BrowserFocusTarget.ts').BrowserFocusTarget | null} */
@@ -764,7 +764,7 @@ export default class ViewContinuityService {
   #focusSelector(target) {
     switch (target.kind) {
       case ViewContinuityService._PROCESS_FOCUS_KIND: return ViewContinuityService._PROCESS_FOCUS_SELECTOR;
-      case ViewContinuityService._AGENT_FOCUS_KIND: return ViewContinuityService._AGENT_FOCUS_SELECTOR;
+      case ViewContinuityService._SESSION_FOCUS_KIND: return ViewContinuityService._SESSION_FOCUS_SELECTOR;
       default: return ViewContinuityService._ZOOM_SELECTOR;
     }
   }
@@ -774,7 +774,7 @@ export default class ViewContinuityService {
     switch (target.kind) {
       case ViewContinuityService._PROCESS_FOCUS_KIND: return [element.dataset.session === target.session, element.dataset.pid === target.pid,
         element.dataset.started === target.started, element.dataset.processView === target.view].every(Boolean);
-      case ViewContinuityService._AGENT_FOCUS_KIND: return element.dataset.agentFocus === target.control;
+      case ViewContinuityService._SESSION_FOCUS_KIND: return element.dataset.sessionFocus === target.control;
       default: return [element.dataset.group === target.group, element.dataset.zoom === target.action].every(Boolean);
     }
   }
@@ -793,14 +793,14 @@ export default class ViewContinuityService {
 
   /** @param {HTMLElement | null} tab @returns {string} */
   #focusedIdentifier(tab) {
-    return tab?.dataset.agentTab ?? ViewContinuityService._EMPTY_IDENTIFIER;
+    return tab?.dataset.sessionTab ?? ViewContinuityService._EMPTY_IDENTIFIER;
   }
 
   /** @returns {void} */
   #restoreTabFocus() {
     const lost = this.#focusIsLost();
     const tab = this.#elements(ViewContinuityService._TAB_SELECTOR).find(
-      /** @param {HTMLElement} element @returns {boolean} */ element => element.dataset.agentTab === this.#focusedTab
+      /** @param {HTMLElement} element @returns {boolean} */ element => element.dataset.sessionTab === this.#focusedTab
     );
     this.#focusWhenLost(tab, [lost, tab !== undefined].every(Boolean));
   }

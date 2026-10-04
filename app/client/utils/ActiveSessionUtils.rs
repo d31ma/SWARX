@@ -41,15 +41,8 @@ impl ActiveSessionUtils {
         Self::harness_name(family)
     }
 
-    pub fn agent_row(agent: &NativeLogicalAgentView) -> NativeAgentRowView {
-        Self::row(agent, &[])
-    }
-
-    pub fn agent_title(agent: &NativeLogicalAgentView) -> String {
-        SessionViewUtils::sessions(std::slice::from_ref(agent))
-            .first()
-            .map(Self::title)
-            .unwrap_or_default()
+    pub fn session_title(group: &NativeSessionView) -> String {
+        Self::title(group)
     }
 
     fn session_views(

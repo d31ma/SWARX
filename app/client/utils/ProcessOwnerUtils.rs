@@ -40,6 +40,7 @@ impl ProcessOwnerUtils {
         let process: &NativeProcessMetrics = command.observation.metrics.as_ref()?;
         let owner: NativeProcessOwner = Self::owner(agent, command);
         let mut group: NativeGroup = Self::root(agent, command, process, owner.clone());
+        group.tree_history = command.observation.tree_history.clone();
         Self::append_children(&mut group, command.observation.descendants.clone());
         Self::descendants(std::slice::from_mut(&mut group), command, &owner);
         Some(group)

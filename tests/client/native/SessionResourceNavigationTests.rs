@@ -90,9 +90,9 @@ impl SessionResourceNavigationTests {
             "selected": Self::SHARED_ID,
             "query": query,
             "pid": null,
-            "selectedSession": session,
-            "sessionPid": pid,
-            "sessionStarted": started,
+            "selected_session": session,
+            "session_pid": pid,
+            "session_started": started,
         }))
         .unwrap()
     }
@@ -402,9 +402,10 @@ fn old_selection_wire_defaults_new_identity_fields() -> () {
         serde_json::from_value(serde_json::json!({"selected":"old-runtime","query":"","pid":null}))
             .unwrap();
     let wire: serde_json::Value = serde_json::to_value(selection).unwrap();
-    assert_eq!(wire["selectedSession"], "");
-    assert!(wire["sessionPid"].is_null());
-    assert!(wire["sessionStarted"].is_null());
+    assert_eq!(wire["selected_session"], "");
+    assert!(wire["session_pid"].is_null());
+    assert!(wire["session_started"].is_null());
+    assert!(wire.get("selectedSession").is_none());
 }
 
 #[test]

@@ -9,6 +9,6 @@ export type BrowserFocusTarget = {
   group: string;
   action: string;
 } | {
-  kind: 'agent';
+  kind: 'session';
   control: string;
 };

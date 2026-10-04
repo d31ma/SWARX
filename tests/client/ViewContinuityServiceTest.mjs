@@ -115,7 +115,7 @@ class GraphTab extends ScrollElement {
   /** @param {string} identifier */
   constructor(identifier) {
     super();
-    this.dataset.agentTab = identifier;
+    this.dataset.sessionTab = identifier;
     /** @type {boolean} */
     this.focused = false;
     /** @type {FocusOptions | null} */
@@ -124,9 +124,9 @@ class GraphTab extends ScrollElement {
     this.scrollOptions = null;
   }
   /** @param {string} selector @returns {GraphTab | null} */
-  closest(selector) { return selector === '[data-agent-tab]' ? this : null; }
+  closest(selector) { return selector === '[data-session-tab]' ? this : null; }
   /** @param {string} selector @returns {boolean} */
-  matches(selector) { return selector === '[data-agent-tab]'; }
+  matches(selector) { return selector === '[data-session-tab]'; }
   /** @param {FocusOptions} options @returns {void} */
   focus(options) { this.focused = true; this.focusOptions = options; }
   /** @param {ScrollIntoViewOptions} options @returns {void} */
@@ -167,8 +167,8 @@ class FocusControl extends ScrollElement {
     return new FocusControl('.session-process-pick', {session, pid: '11', started, processView: view});
   }
   /** @param {string} control @returns {FocusControl} */
-  static agent(control) {
-    return new FocusControl('[data-agent-focus]', {agentFocus: control});
+  static session(control) {
+    return new FocusControl('[data-session-focus]', {sessionFocus: control});
   }
   /** @param {string} [group] @param {string} [action] @returns {FocusControl} */
   static zoom(group = 'Codex:exact-session', action = 'in') {
@@ -210,8 +210,8 @@ class TestView {
   querySelector(selector) { return selector === '.logical-scroll' ? this.panel : null; }
   /** @param {string} selector @returns {ScrollElement[]} */
   querySelectorAll(selector) {
-    if (selector === '[data-agent-tab]') { return this.tabs; }
-    if (['.session-process-pick', '[data-zoom]', '[data-agent-focus]', '.agent-row', '.agent-drawer'].includes(selector)) {
+    if (selector === '[data-session-tab]') { return this.tabs; }
+    if (['.session-process-pick', '[data-zoom]', '[data-session-focus]', '.session-card-open', '.session-panel'].includes(selector)) {
       return this.controls.filter(/** @param {FocusControl} element @returns {boolean} */ element => element.matches(selector));
     }
     return this.details.filter(/** @param {CommandDetails} element @returns {boolean} */ element => element.matches(selector));
@@ -305,7 +305,7 @@ test('bind registers the live view and dispose removes every listener and observ
   assert.equal(TestResizeObserver.instances[0].disconnected, 1);
 });
 
-test('Home selects and focuses the first agent tab without scrolling focus', /** @returns {void} */ () => {
+test('Home selects and focuses the first session tab without scrolling focus', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   const event = ViewContinuityServiceTest.press(values, 'Home', values.last);
   assert.deepEqual(values.selected, ['resources']);
@@ -317,7 +317,7 @@ test('Home selects and focuses the first agent tab without scrolling focus', /**
   values.watcher.dispose();
 });
 
-test('End selects and focuses the last agent tab', /** @returns {void} */ () => {
+test('End selects and focuses the last session tab', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   ViewContinuityServiceTest.press(values, 'End', values.first);
   assert.deepEqual(values.selected, ['activity']);
@@ -325,7 +325,7 @@ test('End selects and focuses the last agent tab', /** @returns {void} */ () => 
   values.watcher.dispose();
 });
 
-test('ArrowLeft wraps the first agent tab to the last', /** @returns {void} */ () => {
+test('ArrowLeft wraps the first session tab to the last', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   ViewContinuityServiceTest.press(values, 'ArrowLeft', values.first);
   assert.deepEqual(values.selected, ['activity']);
@@ -333,7 +333,7 @@ test('ArrowLeft wraps the first agent tab to the last', /** @returns {void} */ (
   values.watcher.dispose();
 });
 
-test('ArrowRight wraps the last agent tab to the first', /** @returns {void} */ () => {
+test('ArrowRight wraps the last session tab to the first', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   ViewContinuityServiceTest.press(values, 'ArrowRight', values.last);
   assert.deepEqual(values.selected, ['resources']);
@@ -350,7 +350,7 @@ test('an unrelated key retains browser keyboard behavior and tab selection', /**
   values.watcher.dispose();
 });
 
-test('navigation outside an agent tab retains selection', /** @returns {void} */ () => {
+test('navigation outside an session tab retains selection', /** @returns {void} */ () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   const event = ViewContinuityServiceTest.press(values, 'Home', values.view.panel);
   assert.deepEqual(values.selected, []);
@@ -358,7 +358,7 @@ test('navigation outside an agent tab retains selection', /** @returns {void} */
   values.watcher.dispose();
 });
 
-test('poll replacement restores a lost agent tab focus by its identifier', /** @returns {Promise<void>} */ async () => {
+test('poll replacement restores a lost session tab focus by its identifier', /** @returns {Promise<void>} */ async () => {
   const values = ViewContinuityServiceTest.keyboardFixture();
   const focus = values.view.listeners.get('focusin');
   assert.ok(focus);
@@ -824,7 +824,7 @@ test("clicking details content is not disclosure intent", /** @returns {Promise<
   watcher.dispose();
 });
 
-test('Escape asks the selection to close the agent details', /** @returns {void} */ () => {
+test('Escape asks the selection to close the session details', /** @returns {void} */ () => {
   const values = fixture();
   /** @type {string[]} */
   const closed = [];
@@ -840,24 +840,24 @@ test('Escape asks the selection to close the agent details', /** @returns {void}
   values.watcher.dispose();
 });
 
-test('focusAgent focuses only the element for the exact agent without scrolling', /** @returns {void} */ () => {
+test('focusSession focuses only the control for the exact session key without scrolling', /** @returns {void} */ () => {
   const {view, watcher} = fixture();
-  const other = new FocusControl('.agent-row', {agent: 'session:helper-1'});
-  const target = new FocusControl('.agent-row', {agent: 'session:helper'});
+  const other = new FocusControl('.session-card-open', {session: 'Claude:session-1'});
+  const target = new FocusControl('.session-card-open', {session: 'Claude:session'});
   view.controls = [other, target];
-  watcher.focusAgent('session:helper', '.agent-row');
+  watcher.focusSession('Claude:session', '.session-card-open');
   assert.equal(target.focused, true);
   assert.equal(target.focusOptions?.preventScroll, true);
   assert.equal(other.focused, false);
-  watcher.focusAgent('missing-agent', '.agent-drawer');
+  watcher.focusSession('Claude:missing', '.session-panel');
   watcher.dispose();
 });
 
-test('focus continuity restores a replaced agent row by its focus key', /** @returns {Promise<void>} */ async () => {
+test('focus continuity restores a replaced session card by its focus key', /** @returns {Promise<void>} */ async () => {
   const {view, watcher} = fixture();
-  ViewContinuityServiceTest.focus(view, FocusControl.agent('row:session:helper'));
-  const replacement = FocusControl.agent('row:session:helper');
-  const neighbour = FocusControl.agent('row:session');
+  ViewContinuityServiceTest.focus(view, FocusControl.session('card:Claude:session-1'));
+  const replacement = FocusControl.session('card:Claude:session-1');
+  const neighbour = FocusControl.session('card:Claude:session');
   view.controls = [neighbour, replacement];
   ViewContinuityServiceTest.loseFocus();
   await restorePoll();
