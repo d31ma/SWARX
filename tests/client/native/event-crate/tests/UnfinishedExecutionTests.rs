@@ -351,3 +351,27 @@ fn a_restart_keeps_finished_calls_finished_and_retires_calls_left_running() -> (
     ));
     second.stop();
 }
+
+#[test]
+fn a_session_end_during_a_call_retires_the_call_and_ends_the_agent() -> () {
+    let mut state: LogicalStateService = LogicalStateService::default();
+    let prompt: &str = UnfinishedExecutionTests::FIRST_PROMPT;
+    let submit: Value = UnfinishedExecutionTests::turn("UserPromptSubmit", prompt);
+    UnfinishedExecutionTests::deliver_all(&mut state, &submit, 100.0);
+    let cancelled: Value = UnfinishedExecutionTests::call(
+        "PreToolUse",
+        prompt,
+        UnfinishedExecutionTests::SLEEP,
+        false,
+    );
+    UnfinishedExecutionTests::deliver_all(&mut state, &cancelled, 101.0);
+    let end: Value = UnfinishedExecutionTests::turn("SessionEnd", prompt);
+    UnfinishedExecutionTests::deliver_all(&mut state, &end, 102.0);
+    let row: NativeLogicalAgent =
+        UnfinishedExecutionTests::row(&state, ClaudeHookFixture::SESSION, 103.0);
+    assert_eq!(row.status, "completed");
+    UnfinishedExecutionTests::require_no_finish(UnfinishedExecutionTests::execution(
+        &row,
+        UnfinishedExecutionTests::SLEEP,
+    ));
+}
