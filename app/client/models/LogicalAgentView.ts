@@ -10,6 +10,7 @@ export interface LogicalAgentView extends LogicalAgent {
   currentAction: string | null;
   actionLabel: string;
   actionDetail: string | null;
+  subAgent: boolean;
   actionTiming: string | null;
   command_resources: CommandResourceView[];
 }

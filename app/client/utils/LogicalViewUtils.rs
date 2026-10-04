@@ -7,6 +7,7 @@ use crate::utils::{MetricFormatUtils, TimeFormatUtils};
 pub struct LogicalViewUtils;
 
 impl LogicalViewUtils {
+    const SUB_AGENT_SEPARATOR: char = ':';
     const SNAPSHOT: &'static str = "snapshot";
     const SNAPSHOT_SOURCE: &'static str = "Codex app-server thread/read snapshot";
     const RUNNING: &'static str = "running";
@@ -38,6 +39,21 @@ impl LogicalViewUtils {
         view
     }
 
+    // Hooks build a sub-agent's identity as <session id>:<agent_id>, and only from an agent_id
+    // that Claude/Codex send inside a delegated sub-agent call; every other row is an Agent.
+    fn delegated(agent: &NativeLogicalAgent) -> bool {
+        agent
+            .session
+            .as_ref()
+            .and_then(
+                |session: &crate::models::NativeSessionLink| -> Option<&str> {
+                    agent.id.strip_prefix(session.id.as_str())
+                },
+            )
+            .and_then(|rest: &str| -> Option<&str> { rest.strip_prefix(Self::SUB_AGENT_SEPARATOR) })
+            .is_some_and(|child: &str| -> bool { !child.is_empty() })
+    }
+
     fn source_view(agent: &NativeLogicalAgent) -> NativeLogicalAgentView {
         NativeLogicalAgentView {
             id: agent.id.clone(),
@@ -59,6 +75,7 @@ impl LogicalViewUtils {
             feed_label: Self::feed(&agent.feed_mode),
             task_label: Self::task_title(agent),
             task_reference: Self::task_reference(agent),
+            sub_agent: Self::delegated(agent),
             task_state: Self::task_status(agent.task.as_ref()),
             captured_label: TimeFormatUtils::local_time(agent.captured_at),
             age_label: Self::age(agent),

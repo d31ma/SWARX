@@ -871,3 +871,28 @@ fn live_agent_title_requires_the_same_provider_family() -> () {
     let named = SessionViewUtils::named_agents(vec![agent], &[harness]);
     assert_eq!(named[0].session.as_ref().unwrap().name, session);
 }
+
+#[test]
+fn only_hook_delegated_identities_are_sub_agents() -> () {
+    let session: &str = SessionIdentityTests::CLAUDE_SESSION;
+    let link = SessionIdentityTests::link(session, session, SessionIdentityTests::SOURCE);
+    let main = SessionIdentityTests::agent(session, "Claude", Some(link.clone()), 10.0);
+    let delegated = SessionIdentityTests::agent(
+        &format!("{session}:ab46ed1e45b8a1b4a"),
+        "Claude",
+        Some(link.clone()),
+        10.0,
+    );
+    let coordinator =
+        SessionIdentityTests::agent("roster-worker", "Codex", Some(link.clone()), 10.0);
+    let empty_child =
+        SessionIdentityTests::agent(&format!("{session}:"), "Claude", Some(link), 10.0);
+    let unlinked = SessionIdentityTests::agent(&format!("{session}:ab46"), "Claude", None, 10.0);
+    assert!(!main.sub_agent);
+    assert!(delegated.sub_agent);
+    assert!(!coordinator.sub_agent);
+    assert!(!empty_child.sub_agent);
+    assert!(!unlinked.sub_agent);
+    let wire: serde_json::Value = serde_json::to_value(&delegated).unwrap();
+    assert_eq!(wire["subAgent"], serde_json::json!(true));
+}

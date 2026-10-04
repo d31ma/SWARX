@@ -1,4 +1,6 @@
-use crate::models::{NativeCommandResourceView, NativeExecutionView, NativeSessionLink, NativeTaskRecord};
+use crate::models::{
+    NativeCommandResourceView, NativeExecutionView, NativeSessionLink, NativeTaskRecord,
+};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NativeLogicalAgentView {
@@ -40,4 +42,6 @@ pub struct NativeLogicalAgentView {
     pub action_detail: Option<String>,
     #[serde(rename = "actionTiming")]
     pub action_timing: Option<String>,
+    #[serde(default, rename = "subAgent")]
+    pub sub_agent: bool,
 }
