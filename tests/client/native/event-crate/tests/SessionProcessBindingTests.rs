@@ -1,3 +1,6 @@
+// Claude session roots are recognised only from macOS and Linux paths so far.
+#![cfg(unix)]
+
 #[path = "../../CommandBindingClock.rs"]
 mod clock;
 #[path = "../../CommandBindingTestFixture.rs"]

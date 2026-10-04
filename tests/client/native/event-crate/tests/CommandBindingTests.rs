@@ -91,7 +91,11 @@ fn observed_user_mismatch_is_denied_without_retained_binding() -> () {
 fn reported_executable_mismatch_is_denied_without_retained_binding() -> () {
     let mut fixture = Fixture::new();
     let mut event = Fixture::event();
-    event.identity.as_mut().unwrap().executable = "/usr/bin/false".to_owned();
+    #[cfg(unix)]
+    let other: &str = "/usr/bin/false";
+    #[cfg(windows)]
+    let other: &str = r"C:\Windows\System32\hostname.exe";
+    event.identity.as_mut().unwrap().executable = other.to_owned();
     assert_eq!(
         fixture.rejection(&event, &Fixture::context()),
         (

@@ -70,8 +70,8 @@ impl LogicalEventFixture {
 
     #[cfg(windows)]
     pub fn raw(&self, data: &[u8]) -> NativeLogicalReceipt {
-        let name: String = event_slice::services::LogicalPipeService::name(&self.endpoint).unwrap();
-        let stream: fs::File = fs::OpenOptions::new().read(true).write(true).open(name).unwrap();
+        let stream: fs::File =
+            event_slice::services::LogicalPipeService::connect(&self.endpoint).unwrap();
         Self::exchange_raw(stream, data)
     }
 

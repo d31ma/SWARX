@@ -1,6 +1,7 @@
 use event_slice::EventSource;
 use event_slice::models::{NativeLogicalEvent, NativeLogicalReceipt};
 use event_slice::services::{LogicalEventService, LogicalStateService};
+#[cfg(unix)]
 use std::fs;
 use std::io::Write;
 #[cfg(unix)]
@@ -253,6 +254,7 @@ fn second_source_is_rejected_without_disrupting_first() -> () {
             .send(r#"{"type":"logical.register","agent":"worker"}"#)
             .accepted
     );
+    #[cfg(unix)]
     assert!(fs::symlink_metadata(fixture.endpoint.clone()).is_ok());
 }
 

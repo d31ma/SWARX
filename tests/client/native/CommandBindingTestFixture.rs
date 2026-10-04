@@ -18,6 +18,10 @@ pub struct CommandBindingTestFixture {
 impl CommandBindingTestFixture {
     pub const SESSION: &'static str = "00000000-0000-0000-0000-000000000001";
     pub const RECEIVER_AGENT: &'static str = "/root/offline_binding";
+    #[cfg(unix)]
+    const EXECUTABLE: &'static str = "/usr/bin/true";
+    #[cfg(windows)]
+    const EXECUTABLE: &'static str = r"C:\Windows\System32\whoami.exe";
 
     pub fn new() -> Self {
         let clock = Arc::new(CommandBindingClock::new());
@@ -67,7 +71,7 @@ impl CommandBindingTestFixture {
             pid: 41,
             started: "100:7".to_owned(),
             user: NativeCommandEventService::user(),
-            executable: "/usr/bin/true".to_owned(),
+            executable: Self::EXECUTABLE.to_owned(),
         }
     }
 
