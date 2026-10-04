@@ -571,7 +571,7 @@ class NativePreviewReport {
   /** @param {{section: string, mode: string, width: number, height: number, check: string}} input @param {number} before @returns {boolean} */
   static #ready(input, before) {
     const section = this.#text(document.querySelector(this.#SELECTED_NAV_SELECTOR));
-    const mode = this.#class(document.querySelector(this.#TABLE_CARD_SELECTOR));
+    const mode = /** @type {HTMLElement | null} */ (document.querySelector('.session-process-list'))?.dataset.processView ?? this.#EMPTY_TEXT;
     return [section.includes(input.section), this.#modeReady(input.mode, mode),
       this.#viewportReady(input),
       this.#conditionReady(input.check, before)].every(Boolean);
@@ -587,7 +587,7 @@ class NativePreviewReport {
   /** @param {string} expected @param {string} actual @returns {boolean} */
   static #modeReady(expected, actual) {
     if (expected === this.#EMPTY_TEXT) return true;
-    return actual.includes('mode-' + expected);
+    return actual === expected;
   }
 
   /** @param {Element | null} element @returns {string} */

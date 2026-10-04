@@ -431,8 +431,12 @@ final class NativePreviewVerifier {
         return context
     }
 
+    // The host calls begin after every page load; section steps load pages, so only the first load starts a run.
+    private static var started: Bool = false
+
     private static func startPreview(_ context: (WKWebView, NSWindow, URL)?) -> Void {
-        guard let context: (WKWebView, NSWindow, URL) = context else { return }
+        guard let context: (WKWebView, NSWindow, URL) = context, !started else { return }
+        started = true
         NativePreviewVerifier(context: context).start()
     }
 }

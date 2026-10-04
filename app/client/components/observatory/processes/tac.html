@@ -1,16 +1,16 @@
 <div class="panel-heading"><h2>Session processes</h2><p>Only verified command links assign local processes to a session. Edges show current OS parent relationships.</p></div>
 <div class="process-toolbar"><div class="view-tabs" role="group" aria-label="Process view"><w-btn :variant="observatory.processView === 'table' ? 'tonal' : 'text'" size="sm" on:click="observatory.setProcessView('table')">Table</w-btn><w-btn :variant="observatory.processView === 'tree' ? 'tonal' : 'text'" size="sm" on:click="observatory.setProcessView('tree')">Tree</w-btn></div><label class="search-field"><span>⌕</span><input aria-label="Filter sessions or processes by provider, title, exact ID, name or PID" placeholder="Provider, session title or ID, process or PID" :value="observatory.query" on:input="observatory.query = $event.target.value" on:keyup="observatory.search()" /></label></div>
-<div class="session-list session-process-list" role="group" aria-label="Verified session processes">
+<div class="session-list session-process-list" :data-process-view="observatory.processView" role="group" aria-label="Verified session processes">
+  <logic :if="observatory.processView === 'table'">
   <div class="session-process-grid">
     <loop :for="session of observatory.model.resourceSessions">
       <logic :if="session.harnessHeader"><h3 class="provider-heading harness-heading">{session.family || 'Harness not reported'}</h3></logic>
-      <w-card variant="outlined" :class="'session-process-card graph-group mode-' + observatory.processView" :data-group="session.key" :data-session="session.key">
+      <w-card variant="outlined" class="session-process-card" :data-group="session.key" :data-session="session.key">
         <h3 class="session-resource-title">{session.name}</h3><p class="session-resource-provider">{session.family} · {session.processCount} currently linked processes</p>
         <logic :if="session.id"><p class="session-native-id">Session ID · {session.id}</p></logic>
         <logic :if="!session.id"><p class="session-native-id">Session ID unavailable · explicit binding required</p></logic>
         <p class="session-label-source">Reported label source · {session.source}</p>
         <logic :if="session.model"><p class="session-label-source session-model">Model {session.model}<logic :if="session.provider"> · provider {session.provider}</logic> · reported by {session.family} (configuration, not measured usage)</p></logic>
-        <logic :if="observatory.processView === 'tree' && session.graph.nodes.length === 0"><p class="session-tree-empty">No verified process tree for this session. Shared runtime trees are under Shared / unassigned local context.</p></logic>
         <logic :if="session.tree.length"><div class="session-process-table">
           <table><thead><tr><th scope="col">Individual process</th><th scope="col">CPU</th><th scope="col">RSS</th></tr></thead><tbody>
             <loop :for="process of session.tree">
@@ -18,7 +18,29 @@
             </loop>
           </tbody></table>
         </div></logic>
-        <logic :if="session.graph.nodes.length"><div class="session-process-tree">
+        <p class="session-resource-note">{session.resourceNotice}</p>
+      </w-card>
+    </loop>
+  </div>
+  <logic :if="observatory.model.resourceSessions.length === 0"><div class="empty">No matching reported sessions.<p>No session resource link is inferred from a shared runtime.</p></div></logic>
+  <details class="shared-resource-context" open="open">
+    <summary>Shared / unassigned local context</summary><p>These groups are not session allocations. Inclusive context may overlap linked command processes.</p>
+    <div class="context-resource-grid">
+      <loop :for="runtime of observatory.model.sharedResources">
+        <w-card variant="outlined" class="context-resource-card session-process-card" :data-group="'context:' + runtime.id">
+          <h3>{runtime.name}</h3><p>{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel}</p><p>Inclusive group · CPU {runtime.cpu} · RSS {runtime.memory}</p>
+          <div class="session-process-table"><details class="command-descendants" :data-binding="runtime.id"><summary>{runtime.processCount} individual processes</summary><loop :for="process of runtime.tree"><p><strong>{process.name} · PID {process.pid} · parent {process.parent}</strong><br />CPU {process.cpu} · RSS {process.memory}<br />{process.networkLabel} · {process.diskLabel}<br />Birth · {process.started}</p></loop></details></div>
+          <p class="session-resource-note">Individual node metrics stay separate from inclusive group totals. No session owner is inferred.</p>
+        </w-card>
+      </loop>
+    </div>
+  </details>
+  </logic>
+  <logic :if="observatory.processView === 'tree'"><div class="process-tree-view">
+    <loop :for="session of observatory.model.resourceSessions"><logic :if="session.graph.nodes.length">
+      <section class="process-tree-panel session-process-card graph-group" :data-group="session.key" :data-session="session.key" :aria-label="session.name + ' process tree'">
+        <header class="process-tree-heading"><h3>{session.name}</h3><p>{session.family} · {session.processCount} currently linked processes<logic :if="session.id"> · Session ID {session.id}</logic></p></header>
+        <div class="session-process-tree">
           <div class="graph-group-tools" role="group" :aria-label="session.name + ' tree zoom'"><button :data-group="session.key" data-zoom="out" aria-label="Zoom this tree out">−</button><span class="graph-zoom-value">100%</span><button :data-group="session.key" data-zoom="in" aria-label="Zoom this tree in">+</button><button :data-group="session.key" data-zoom="fit">Fit this tree</button></div>
           <div class="group-graph-scroll" :data-group="session.key" tabindex="0" role="region" :aria-label="session.name + ' process tree; scroll to pan'">
             <svg class="graph-canvas" role="group">
@@ -28,32 +50,24 @@
               </loop>
             </svg>
           </div>
-        </div></logic>
-        <p class="session-resource-note">{session.resourceNotice}</p>
-      </w-card>
-    </loop>
-  </div>
-  <logic :if="observatory.model.resourceSessions.length === 0"><div class="empty">No matching reported sessions.<p>No session resource link is inferred from a shared runtime.</p></div></logic>
+        </div>
+      </section>
+    </logic></loop>
+    <loop :for="runtime of observatory.model.sharedResources"><logic :if="runtime.graph.nodes.length">
+      <section class="process-tree-panel session-process-card graph-group" :data-group="'context:' + runtime.id" :aria-label="runtime.name + ' shared process tree'">
+        <header class="process-tree-heading"><h3>{runtime.name}</h3><p>{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel} · inclusive CPU {runtime.cpu} · RSS {runtime.memory}. Shared or unassigned context; no session owner is inferred.</p></header>
+        <div class="session-process-tree">
+          <div class="graph-group-tools" role="group" :aria-label="runtime.name + ' context tree zoom'"><button :data-group="'context:' + runtime.id" data-zoom="out" aria-label="Zoom this tree out">−</button><span class="graph-zoom-value">100%</span><button :data-group="'context:' + runtime.id" data-zoom="in" aria-label="Zoom this tree in">+</button><button :data-group="'context:' + runtime.id" data-zoom="fit">Fit this tree</button></div>
+          <div class="group-graph-scroll" :data-group="'context:' + runtime.id" tabindex="0" role="region" :aria-label="runtime.name + ' shared process tree; scroll to pan'">
+            <svg class="graph-canvas" role="group">
+              <g class="graph-edges" aria-hidden="true"><loop :for="node of runtime.graph.nodes"><path class="shared-trunk" :data-parent-identity="node.identity"></path><loop :for="child of node.childIdentities"><path class="child-branch" :data-parent-identity="node.identity" :data-child-identity="child"></path></loop></loop></g>
+              <loop :for="node of runtime.graph.nodes"><foreignObject class="graph-node-frame"><article class="graph-node" :data-pid="node.pid" :data-started="node.started" :data-identity="node.identity" :data-depth="node.graphDepth"><strong class="graph-name">{node.name}</strong><span class="graph-identity">PID {node.pid} · parent {node.parent}</span><span class="graph-measurement">CPU {node.cpu} · RSS {node.memory}</span><span class="graph-measurement">{node.networkLabel}</span><span class="graph-measurement">{node.diskLabel}</span><small>{node.edgeLabel}</small></article></foreignObject></loop>
+            </svg>
+          </div>
+        </div>
+      </section>
+    </logic></loop>
+    <p class="process-tree-note">Session trees need a verified command link. Shared runtime trees are local context, not session allocations.</p>
+  </div></logic>
   <logic :if="observatory.model.selectedSessionProcess"><aside class="session-selected-process" aria-label="Selected session process"><h3>Selected process · {observatory.model.selectedSessionProcess.name}</h3><p>Session key · {observatory.model.selectedSession}<br />PID {observatory.model.selectedSessionProcess.pid} · birth {observatory.model.selectedSessionProcess.started}<br />CPU {observatory.model.selectedSessionProcess.cpu} · RSS {observatory.model.selectedSessionProcess.memory}<br />{observatory.model.selectedSessionProcess.networkLabel}<br />{observatory.model.selectedSessionProcess.diskLabel}</p></aside></logic>
-  <details class="shared-resource-context" open="open">
-    <summary>Shared / unassigned local context</summary><p>These groups are not session allocations. Inclusive context may overlap linked command processes.</p>
-    <div class="context-resource-grid">
-      <loop :for="runtime of observatory.model.sharedResources">
-        <w-card variant="outlined" :class="'context-resource-card session-process-card graph-group mode-' + observatory.processView" :data-group="'context:' + runtime.id">
-          <h3>{runtime.name}</h3><p>{runtime.family} · PID {runtime.pid} · {runtime.scopeLabel}</p><p>Inclusive group · CPU {runtime.cpu} · RSS {runtime.memory}</p>
-          <div class="session-process-table"><details class="command-descendants" :data-binding="runtime.id"><summary>{runtime.processCount} individual processes</summary><loop :for="process of runtime.tree"><p><strong>{process.name} · PID {process.pid} · parent {process.parent}</strong><br />CPU {process.cpu} · RSS {process.memory}<br />{process.networkLabel} · {process.diskLabel}<br />Birth · {process.started}</p></loop></details></div>
-          <logic :if="runtime.graph.nodes.length"><div class="session-process-tree">
-            <div class="graph-group-tools" role="group" :aria-label="runtime.name + ' context tree zoom'"><button :data-group="'context:' + runtime.id" data-zoom="out" aria-label="Zoom this tree out">−</button><span class="graph-zoom-value">100%</span><button :data-group="'context:' + runtime.id" data-zoom="in" aria-label="Zoom this tree in">+</button><button :data-group="'context:' + runtime.id" data-zoom="fit">Fit this tree</button></div>
-            <div class="group-graph-scroll" :data-group="'context:' + runtime.id" tabindex="0" role="region" :aria-label="runtime.name + ' shared process tree; scroll to pan'">
-              <svg class="graph-canvas" role="group">
-                <g class="graph-edges" aria-hidden="true"><loop :for="node of runtime.graph.nodes"><path class="shared-trunk" :data-parent-identity="node.identity"></path><loop :for="child of node.childIdentities"><path class="child-branch" :data-parent-identity="node.identity" :data-child-identity="child"></path></loop></loop></g>
-                <loop :for="node of runtime.graph.nodes"><foreignObject class="graph-node-frame"><article class="graph-node" :data-pid="node.pid" :data-started="node.started" :data-identity="node.identity" :data-depth="node.graphDepth"><strong class="graph-name">{node.name}</strong><span class="graph-identity">PID {node.pid} · parent {node.parent}</span><span class="graph-measurement">CPU {node.cpu} · RSS {node.memory}</span><span class="graph-measurement">{node.networkLabel}</span><span class="graph-measurement">{node.diskLabel}</span><small>{node.edgeLabel}</small></article></foreignObject></loop>
-              </svg>
-            </div>
-          </div></logic>
-          <p class="session-resource-note">Individual node metrics stay separate from inclusive group totals. No session owner is inferred.</p>
-        </w-card>
-      </loop>
-    </div>
-  </details>
 </div>

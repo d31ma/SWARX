@@ -174,7 +174,8 @@ function environment(options={}) {
       if(selector==='.nav-item.selected')return new QaElement(state.section);
       if(selector==='.logical-panel')return new QaElement(options.logicalText??'');
       if(selector==='.activity-overview')return new QaElement(options.activityText??'');
-      if(selector==='.session-process-card'){table.className='session-process-card mode-'+state.mode;return table;}
+      if(selector==='.session-process-list'){const list=new QaElement('');list.dataset.processView=state.mode;return list;}
+      if(selector==='.session-process-card'){return table;}
       if(selector==='.session-process-grid'||selector==='.context-resource-grid')return table;
       if(selector==='.session-history-grid'||selector==='.context-history-grid')return history;
       if(selector==='.activity-grid')return history;
