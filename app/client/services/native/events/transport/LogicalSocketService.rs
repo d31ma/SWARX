@@ -1,9 +1,8 @@
 use crate::models::NativeSocketIdentity;
 use std::fs::File;
-use std::os::unix::net::UnixListener;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 
 #[Service]
@@ -18,6 +17,9 @@ pub struct LogicalSocketService {
 }
 
 impl LogicalSocketService {
+    const FOLDER_NAME: &'static str = "agent-observatory";
+    const THREAD_NAME: &'static str = "observatory-events";
+
     pub fn new(endpoint: String) -> Self {
         Self {
             endpoint,
@@ -37,6 +39,21 @@ impl LogicalSocketService {
         self.lock.take();
     }
 
+    pub fn start(&mut self, receiver: Arc<LogicalEventReceiverService>) -> Result<(), String> {
+        self.require_stopped()?;
+        self.stopping.store(false, Ordering::Release);
+        self.failure = None;
+        let result: Result<(), String> = self.open(receiver);
+        self.start_result(result)
+    }
+
+    fn start_result(&mut self, result: Result<(), String>) -> Result<(), String> {
+        if result.is_err() {
+            self.stop();
+        }
+        result
+    }
+
     fn require_stopped(&self) -> Result<(), String> {
         if self.worker.is_some() {
             return Err("The event source is already started.".to_string());
@@ -53,11 +70,27 @@ impl LogicalSocketService {
     fn thread_failure(_failure: Box<dyn std::any::Any + Send>) -> String {
         "The private event worker stopped unexpectedly.".to_string()
     }
+
+    fn new_worker(&self, receiver: Arc<LogicalEventReceiverService>) -> LogicalSocketWorkerService {
+        LogicalSocketWorkerService::new(receiver, Arc::clone(&self.stopping))
+    }
+
+    fn spawn(&mut self, work: impl FnOnce() -> () + Send + 'static) -> Result<(), String> {
+        let handle: JoinHandle<()> = thread::Builder::new()
+            .name(Self::THREAD_NAME.to_string())
+            .spawn(work)
+            .map_err(Self::socket_error)?;
+        self.worker = Some(handle);
+        Ok(())
+    }
+
+    fn socket_error(_failure: std::io::Error) -> String {
+        "Private event socket or worker is unavailable.".to_string()
+    }
 }
 
 #[cfg(unix)]
 impl LogicalSocketService {
-    const FOLDER_NAME: &'static str = "agent-observatory";
     const SOCKET_NAME: &'static str = "hooks-native.sock";
 
     // macOS: /tmp/agent-observatory-<uid>/. Linux prefers a private
@@ -75,37 +108,15 @@ impl LogicalSocketService {
         PathBuf::from(format!("/tmp/{}-{user}", Self::FOLDER_NAME))
     }
 
-    pub fn start(&mut self, receiver: Arc<LogicalEventReceiverService>) -> Result<(), String> {
-        self.require_stopped()?;
-        self.stopping.store(false, Ordering::Release);
-        self.failure = None;
-        let result: Result<(), String> = self.open(receiver);
-        self.start_result(result)
-    }
-
     fn open(&mut self, receiver: Arc<LogicalEventReceiverService>) -> Result<(), String> {
         self.lock = Some(self.paths.prepare(&self.endpoint)?);
         receiver.restore();
-        let listener: UnixListener =
-            UnixListener::bind(&self.endpoint).map_err(Self::socket_error)?;
+        let listener: std::os::unix::net::UnixListener =
+            std::os::unix::net::UnixListener::bind(&self.endpoint).map_err(Self::socket_error)?;
         self.identity = Some(self.paths.secure_socket(&self.endpoint)?);
         listener.set_nonblocking(true).map_err(Self::socket_error)?;
-        let stopping: Arc<AtomicBool> = Arc::clone(&self.stopping);
-        let worker: LogicalSocketWorkerService =
-            LogicalSocketWorkerService::new(receiver, stopping);
-        let handle: JoinHandle<()> = thread::Builder::new()
-            .name("observatory-events".to_string())
-            .spawn(move || -> () { worker.run(listener) })
-            .map_err(Self::socket_error)?;
-        self.worker = Some(handle);
-        Ok(())
-    }
-
-    fn start_result(&mut self, result: Result<(), String>) -> Result<(), String> {
-        if result.is_err() {
-            self.stop();
-        }
-        result
+        let worker: LogicalSocketWorkerService = self.new_worker(receiver);
+        self.spawn(move || -> () { worker.run(listener) })
     }
 
     fn cleanup_owned(&mut self) -> () {
@@ -116,10 +127,6 @@ impl LogicalSocketService {
                 .err()
                 .or(self.failure.take());
         }
-    }
-
-    fn socket_error(_failure: std::io::Error) -> String {
-        "Private event socket or worker is unavailable.".to_string()
     }
 }
 
@@ -142,7 +149,8 @@ impl LogicalSocketService {
                 root.is_absolute(),
                 value.is_dir(),
                 std::os::unix::fs::MetadataExt::uid(&value) == unsafe { libc::getuid() },
-                std::os::unix::fs::MetadataExt::mode(&value) & Self::PERMISSION_MASK == Self::PRIVATE_MODE,
+                std::os::unix::fs::MetadataExt::mode(&value) & Self::PERMISSION_MASK
+                    == Self::PRIVATE_MODE,
             ]
             .into_iter()
             .all(std::convert::identity)
@@ -157,13 +165,40 @@ impl LogicalSocketService {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
+impl LogicalSocketService {
+    const ENDPOINT_NAME: &'static str = "hooks-native.pipe";
+    const DATA_VARIABLE: &'static str = "LOCALAPPDATA";
+
+    pub fn current_endpoint() -> String {
+        let root: PathBuf =
+            PathBuf::from(std::env::var_os(Self::DATA_VARIABLE).unwrap_or_default());
+        root.join(Self::FOLDER_NAME)
+            .join(Self::ENDPOINT_NAME)
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn open(&mut self, receiver: Arc<LogicalEventReceiverService>) -> Result<(), String> {
+        self.lock = Some(self.paths.prepare(&self.endpoint)?);
+        receiver.restore();
+        let pipe: File = LogicalPipeService::create(&self.endpoint)?;
+        let worker: LogicalSocketWorkerService = self.new_worker(receiver);
+        self.spawn(move || -> () { worker.run(pipe) })
+    }
+
+    fn cleanup_owned(&mut self) -> () {
+        self.identity.take();
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
 impl LogicalSocketService {
     pub fn current_endpoint() -> String {
         String::new()
     }
 
-    pub fn start(&mut self, _receiver: Arc<LogicalEventReceiverService>) -> Result<(), String> {
+    fn open(&mut self, _receiver: Arc<LogicalEventReceiverService>) -> Result<(), String> {
         Err("Private event transport is not implemented on this platform.".to_string())
     }
 

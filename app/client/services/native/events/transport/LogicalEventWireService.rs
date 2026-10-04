@@ -1,7 +1,5 @@
 use crate::models::{NativeCommandBindingReceipt, NativeLogicalEvent, NativeLogicalReceipt};
 use std::io::{Read, Write};
-use std::os::fd::AsRawFd;
-use std::os::unix::net::UnixStream;
 use std::time::{Duration, Instant};
 
 #[derive(Default)]
@@ -9,12 +7,12 @@ use std::time::{Duration, Instant};
 pub struct LogicalEventWireService {}
 
 impl LogicalEventWireService {
-    const SUCCESS_CODE: i32 = 0;
     const END_OF_STREAM: usize = 0;
     pub const LIMIT: usize = 32 * 1024;
     const BLOCK_SIZE: usize = 1024;
     const TIMEOUT_SECONDS: u64 = 3;
-    const PEER_UNVERIFIED: &'static str = "Cannot verify the local event peer.";
+    const ENDED: &'static str = "Event request ended before a newline.";
+    const NEWLINE: u8 = b'\n';
 
     pub fn decode(&self, data: &[u8]) -> Result<NativeLogicalEvent, String> {
         self.require_size(data.len())?;
@@ -23,7 +21,7 @@ impl LogicalEventWireService {
 
     fn encode(&self, receipt: &NativeLogicalReceipt) -> Result<Vec<u8>, String> {
         let mut data: Vec<u8> = serde_json::to_vec(receipt).map_err(Self::decode_error)?;
-        data.push(b'\n');
+        data.push(Self::NEWLINE);
         Ok(data)
     }
 
@@ -65,11 +63,68 @@ impl LogicalEventWireService {
     fn decode_error(_failure: serde_json::Error) -> String {
         "Invalid logical event or receipt.".to_string()
     }
+
+    fn require_bytes(&self, count: usize) -> Result<(), String> {
+        if count == Self::END_OF_STREAM {
+            return Err(Self::ENDED.to_string());
+        }
+        Ok(())
+    }
+
+    fn read_line(
+        &self,
+        mut read_block: impl FnMut(&mut Vec<u8>, Instant) -> Result<(), String>,
+    ) -> Result<Vec<u8>, String> {
+        let deadline: Instant = Instant::now() + Duration::from_secs(Self::TIMEOUT_SECONDS);
+        let mut data: Vec<u8> = Vec::new();
+        while !data.contains(&Self::NEWLINE) {
+            read_block(&mut data, deadline)?;
+        }
+        self.single_line(data)
+    }
+
+    fn send_line(stream: &mut impl Write, data: &[u8]) -> Result<(), String> {
+        stream.write_all(data).map_err(Self::connection_error)?;
+        stream
+            .write_all(&[Self::NEWLINE])
+            .map_err(Self::connection_error)
+    }
+
+    fn single_line(&self, mut data: Vec<u8>) -> Result<Vec<u8>, String> {
+        let position: usize = data
+            .iter()
+            .position(|value: &u8| -> bool { *value == Self::NEWLINE })
+            .ok_or_else(|| -> String { "Event requires a newline.".to_string() })?;
+        self.require_one_line(position, data.len())?;
+        data.pop();
+        Ok(data)
+    }
+
+    fn require_one_line(&self, position: usize, length: usize) -> Result<(), String> {
+        if position + 1 != length {
+            return Err("Send exactly one event per connection.".to_string());
+        }
+        Ok(())
+    }
+
+    fn require_time(&self, remaining: Duration) -> Result<(), String> {
+        if remaining.is_zero() {
+            return Err("Private event request timed out.".to_string());
+        }
+        Ok(())
+    }
+
+    fn connection_error(_failure: std::io::Error) -> String {
+        "Private event connection is unavailable, closed or timed out.".to_string()
+    }
 }
 
 #[cfg(unix)]
 impl LogicalEventWireService {
-    pub fn receive(&self, stream: &mut UnixStream) -> Result<Vec<u8>, String> {
+    const SUCCESS_CODE: i32 = 0;
+    const PEER_UNVERIFIED: &'static str = "Cannot verify the local event peer.";
+
+    pub fn receive(&self, stream: &mut std::os::unix::net::UnixStream) -> Result<Vec<u8>, String> {
         stream
             .set_nonblocking(false)
             .map_err(Self::connection_error)?;
@@ -80,19 +135,27 @@ impl LogicalEventWireService {
             .set_write_timeout(Some(Duration::from_secs(Self::TIMEOUT_SECONDS)))
             .map_err(Self::connection_error)?;
         self.require_peer(stream)?;
-        self.read_line(stream)
+        self.read_line(
+            |data: &mut Vec<u8>, deadline: Instant| -> Result<(), String> {
+                self.read_block(stream, data, deadline)
+            },
+        )
     }
 
     pub fn respond(
         &self,
-        stream: &mut UnixStream,
+        stream: &mut std::os::unix::net::UnixStream,
         receipt: &NativeLogicalReceipt,
     ) -> Result<(), String> {
         let data: Vec<u8> = self.encode(receipt)?;
         stream.write_all(&data).map_err(Self::connection_error)
     }
 
-    pub fn exchange(&self, stream: &mut UnixStream, data: &[u8]) -> Result<Vec<u8>, String> {
+    pub fn exchange(
+        &self,
+        stream: &mut std::os::unix::net::UnixStream,
+        data: &[u8],
+    ) -> Result<Vec<u8>, String> {
         self.require_size(data.len())?;
         stream
             .set_read_timeout(Some(Duration::from_secs(Self::TIMEOUT_SECONDS)))
@@ -101,23 +164,32 @@ impl LogicalEventWireService {
             .set_write_timeout(Some(Duration::from_secs(Self::TIMEOUT_SECONDS)))
             .map_err(Self::connection_error)?;
         self.require_peer(stream)?;
-        stream.write_all(data).map_err(Self::connection_error)?;
-        stream.write_all(b"\n").map_err(Self::connection_error)?;
-        self.read_line(stream)
+        Self::send_line(stream, data)?;
+        self.read_line(
+            |data: &mut Vec<u8>, deadline: Instant| -> Result<(), String> {
+                self.read_block(stream, data, deadline)
+            },
+        )
     }
 
     #[cfg(target_os = "macos")]
-    fn require_peer(&self, stream: &UnixStream) -> Result<(), String> {
+    fn require_peer(&self, stream: &std::os::unix::net::UnixStream) -> Result<(), String> {
         let mut user: libc::uid_t = 0;
         let mut group: libc::gid_t = 0;
-        let result: i32 = unsafe { libc::getpeereid(stream.as_raw_fd(), &mut user, &mut group) };
+        let result: i32 = unsafe {
+            libc::getpeereid(
+                std::os::fd::AsRawFd::as_raw_fd(stream),
+                &mut user,
+                &mut group,
+            )
+        };
         self.require_peer_result(result)?;
         self.require_peer_owner(user)
     }
 
     // Linux has no getpeereid; SO_PEERCRED reports the connecting process uid.
     #[cfg(target_os = "linux")]
-    fn require_peer(&self, stream: &UnixStream) -> Result<(), String> {
+    fn require_peer(&self, stream: &std::os::unix::net::UnixStream) -> Result<(), String> {
         let mut credentials: libc::ucred = libc::ucred {
             pid: 0,
             uid: libc::uid_t::MAX,
@@ -127,7 +199,7 @@ impl LogicalEventWireService {
         let mut length: libc::socklen_t = expected as libc::socklen_t;
         let result: i32 = unsafe {
             libc::getsockopt(
-                stream.as_raw_fd(),
+                std::os::fd::AsRawFd::as_raw_fd(stream),
                 libc::SOL_SOCKET,
                 libc::SO_PEERCRED,
                 (&mut credentials as *mut libc::ucred).cast(),
@@ -161,18 +233,9 @@ impl LogicalEventWireService {
         Ok(())
     }
 
-    fn read_line(&self, stream: &mut UnixStream) -> Result<Vec<u8>, String> {
-        let deadline: Instant = Instant::now() + Duration::from_secs(Self::TIMEOUT_SECONDS);
-        let mut data: Vec<u8> = Vec::new();
-        while !data.contains(&b'\n') {
-            self.read_block(stream, &mut data, deadline)?;
-        }
-        self.single_line(data)
-    }
-
     fn read_block(
         &self,
-        stream: &mut UnixStream,
+        stream: &mut std::os::unix::net::UnixStream,
         data: &mut Vec<u8>,
         deadline: Instant,
     ) -> Result<(), String> {
@@ -188,43 +251,85 @@ impl LogicalEventWireService {
         self.require_size(data.len())
     }
 
-    fn require_bytes(&self, count: usize) -> Result<(), String> {
-        if count == Self::END_OF_STREAM {
-            return Err("Event request ended before a newline.".to_string());
-        }
-        Ok(())
-    }
-
-    fn single_line(&self, mut data: Vec<u8>) -> Result<Vec<u8>, String> {
-        let position: usize = data
-            .iter()
-            .position(|value: &u8| -> bool { *value == b'\n' })
-            .ok_or_else(|| -> String { "Event requires a newline.".to_string() })?;
-        self.require_one_line(position, data.len())?;
-        data.pop();
-        Ok(data)
-    }
-
-    fn require_one_line(&self, position: usize, length: usize) -> Result<(), String> {
-        if position + 1 != length {
-            return Err("Send exactly one event per connection.".to_string());
-        }
-        Ok(())
-    }
-
     #[cfg(not(any(target_os = "macos", target_os = "linux")))]
-    fn require_peer(&self, _stream: &UnixStream) -> Result<(), String> {
+    fn require_peer(&self, _stream: &std::os::unix::net::UnixStream) -> Result<(), String> {
         Err("Local peer verification is not implemented on this platform.".to_string())
     }
+}
 
-    fn require_time(&self, remaining: Duration) -> Result<(), String> {
-        if remaining.is_zero() {
-            return Err("Private event request timed out.".to_string());
-        }
-        Ok(())
+#[cfg(windows)]
+impl LogicalEventWireService {
+    const POLL_MILLISECONDS: u64 = 5;
+    const NOTHING_WAITING: usize = 0;
+
+    pub fn receive(&self, stream: &mut std::fs::File) -> Result<Vec<u8>, String> {
+        LogicalPipeService::require_client(stream)?;
+        self.read_line(
+            |data: &mut Vec<u8>, deadline: Instant| -> Result<(), String> {
+                self.read_block(stream, data, deadline)
+            },
+        )
     }
 
-    fn connection_error(_failure: std::io::Error) -> String {
-        "Private event connection is unavailable, closed or timed out.".to_string()
+    pub fn respond(
+        &self,
+        stream: &mut std::fs::File,
+        receipt: &NativeLogicalReceipt,
+    ) -> Result<(), String> {
+        let data: Vec<u8> = self.encode(receipt)?;
+        stream.write_all(&data).map_err(Self::connection_error)
+    }
+
+    pub fn exchange(&self, stream: &mut std::fs::File, data: &[u8]) -> Result<Vec<u8>, String> {
+        self.require_size(data.len())?;
+        LogicalPipeService::require_server(stream)?;
+        Self::send_line(stream, data)?;
+        self.read_line(
+            |data: &mut Vec<u8>, deadline: Instant| -> Result<(), String> {
+                self.read_block(stream, data, deadline)
+            },
+        )
+    }
+
+    fn read_block(
+        &self,
+        stream: &mut std::fs::File,
+        data: &mut Vec<u8>,
+        deadline: Instant,
+    ) -> Result<(), String> {
+        let remaining: Duration = deadline.saturating_duration_since(Instant::now());
+        self.require_time(remaining)?;
+        let waiting: Option<usize> = LogicalPipeService::waiting(stream)?;
+        let count: usize = waiting.ok_or_else(|| -> String { Self::ENDED.to_string() })?;
+        self.read_waiting(stream, data, count)
+    }
+
+    fn read_waiting(
+        &self,
+        stream: &mut std::fs::File,
+        data: &mut Vec<u8>,
+        waiting: usize,
+    ) -> Result<(), String> {
+        if waiting == Self::NOTHING_WAITING {
+            std::thread::sleep(Duration::from_millis(Self::POLL_MILLISECONDS));
+            return Ok(());
+        }
+        self.read_available(stream, data, waiting)
+    }
+
+    fn read_available(
+        &self,
+        stream: &mut std::fs::File,
+        data: &mut Vec<u8>,
+        waiting: usize,
+    ) -> Result<(), String> {
+        let size: usize = waiting.min(Self::BLOCK_SIZE);
+        let mut block: [u8; Self::BLOCK_SIZE] = [0; Self::BLOCK_SIZE];
+        let count: usize = stream
+            .read(&mut block[..size])
+            .map_err(Self::connection_error)?;
+        self.require_bytes(count)?;
+        data.extend_from_slice(&block[..count]);
+        self.require_size(data.len())
     }
 }

@@ -263,6 +263,7 @@ fn only_jsonl_files_inside_session_folders_are_read() -> () {
     assert_eq!(ids(&read(&fixture)), vec!["kept-id".to_owned()]);
 }
 
+#[cfg(unix)]
 #[test]
 fn symbolic_links_are_not_followed() -> () {
     let fixture: SessionFolderFixture = SessionFolderFixture::new("pi-links");

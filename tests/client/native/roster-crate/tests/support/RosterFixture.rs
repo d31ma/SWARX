@@ -3,6 +3,8 @@ use observatory_roster_tests::models::{
 };
 use observatory_roster_tests::services::LogicalRosterStoreService;
 use std::fs;
+use std::hash::BuildHasher;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 
@@ -13,17 +15,13 @@ pub struct RosterFixture {
 
 impl RosterFixture {
     pub fn new() -> Self {
-        let mut bytes: [u8; 4] = [0; 4];
-        assert_eq!(
-            unsafe { libc::getentropy(bytes.as_mut_ptr().cast(), bytes.len()) },
-            0
-        );
-        let nonce: u32 = u32::from_ne_bytes(bytes);
+        let nonce: u32 = std::collections::hash_map::RandomState::new().hash_one(0_u8) as u32;
         let directory: PathBuf = std::env::temp_dir().join(format!(
             "observatory-roster-test-{}-{nonce}",
             std::process::id()
         ));
         fs::create_dir(&directory).unwrap();
+        #[cfg(unix)]
         fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
         let endpoint: String = directory
             .join("hooks-test.sock")
@@ -39,6 +37,7 @@ impl RosterFixture {
 
     pub fn write(&self, bytes: &[u8]) -> () {
         fs::write(self.file(), bytes).unwrap();
+        #[cfg(unix)]
         fs::set_permissions(self.file(), fs::Permissions::from_mode(0o600)).unwrap();
     }
 

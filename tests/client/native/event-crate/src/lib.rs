@@ -135,15 +135,31 @@ pub mod services {
         include!(concat!(env!("OUT_DIR"), "/LogicalStateService.rs"));
     }
     pub use logical_state_service::LogicalStateService;
+    pub mod logical_account_service {
+        include!(concat!(env!("OUT_DIR"), "/LogicalAccountService.rs"));
+    }
+    pub use logical_account_service::LogicalAccountService;
+    pub mod logical_pipe_service {
+        #[cfg_attr(not(windows), allow(unused_imports))]
+        use super::LogicalAccountService;
+        include!(concat!(env!("OUT_DIR"), "/LogicalPipeService.rs"));
+    }
+    pub use logical_pipe_service::LogicalPipeService;
     pub mod logical_socket_path_service {
+        #[cfg_attr(not(windows), allow(unused_imports))]
+        use super::LogicalAccountService;
         include!(concat!(env!("OUT_DIR"), "/LogicalSocketPathService.rs"));
     }
     pub use logical_socket_path_service::LogicalSocketPathService;
     pub mod logical_event_wire_service {
+        #[cfg_attr(not(windows), allow(unused_imports))]
+        use super::LogicalPipeService;
         include!(concat!(env!("OUT_DIR"), "/LogicalEventWireService.rs"));
     }
     pub use logical_event_wire_service::LogicalEventWireService;
     pub mod logical_roster_file_service {
+        #[cfg_attr(not(windows), allow(unused_imports))]
+        use super::LogicalAccountService;
         include!(concat!(env!("OUT_DIR"), "/LogicalRosterFileService.rs"));
     }
     pub use logical_roster_file_service::LogicalRosterFileService;
@@ -180,11 +196,15 @@ pub mod services {
     }
     pub use logical_event_receiver_service::LogicalEventReceiverService;
     pub mod logical_socket_worker_service {
+        #[cfg_attr(not(windows), allow(unused_imports))]
+        use super::LogicalPipeService;
         use super::{LogicalEventReceiverService, LogicalEventWireService};
         include!(concat!(env!("OUT_DIR"), "/LogicalSocketWorkerService.rs"));
     }
     pub use logical_socket_worker_service::LogicalSocketWorkerService;
     pub mod logical_socket_service {
+        #[cfg_attr(not(windows), allow(unused_imports))]
+        use super::LogicalPipeService;
         use super::{
             LogicalEventReceiverService, LogicalSocketPathService, LogicalSocketWorkerService,
         };
@@ -200,6 +220,8 @@ pub mod services {
     }
     pub use logical_event_service::LogicalEventService;
     pub mod logical_event_client_service {
+        #[cfg_attr(not(windows), allow(unused_imports))]
+        use super::LogicalPipeService;
         use super::LogicalEventWireService;
         include!(concat!(env!("OUT_DIR"), "/LogicalEventClientService.rs"));
     }

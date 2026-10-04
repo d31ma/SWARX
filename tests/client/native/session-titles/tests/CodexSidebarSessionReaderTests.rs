@@ -248,6 +248,7 @@ fn file_exactly_at_the_size_limit_is_read() -> () {
     assert_eq!(ids(&read(&fixture)), vec!["limit".to_owned()]);
 }
 
+#[cfg(unix)]
 #[test]
 fn symbolic_link_file_is_refused_but_a_linked_codex_folder_is_resolved() -> () {
     let fixture: SessionFolderFixture = SessionFolderFixture::new("codex-links");

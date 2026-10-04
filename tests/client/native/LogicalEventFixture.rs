@@ -4,10 +4,8 @@ use event_slice::services::{LogicalEventClientService, LogicalEventService};
 use event_slice::EventSource;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
 
 pub struct LogicalEventFixture {
     pub source: LogicalEventService,
@@ -20,10 +18,8 @@ pub struct LogicalEventFixture {
 impl LogicalEventFixture {
     pub fn new(name: &str) -> Result<Self, String> {
         let clock: Arc<TestClock> = Arc::new(TestClock::new());
-        let directory: PathBuf = PathBuf::from(format!(
-            "/tmp/observatory-event-test-{}-{name}",
-            std::process::id()
-        ));
+        let directory: PathBuf =
+            Self::root().join(format!("observatory-event-test-{}-{name}", std::process::id()));
         fs::create_dir(&directory)
             .map_err(|failure: std::io::Error| -> String { failure.to_string() })?;
         let endpoint: String = directory
@@ -51,11 +47,35 @@ impl LogicalEventFixture {
             .expect("Controlled test event must receive a receipt")
     }
 
+    // Unix keeps short /tmp socket paths; Windows uses the private per-user temporary folder.
+    #[cfg(unix)]
+    fn root() -> PathBuf {
+        PathBuf::from("/tmp")
+    }
+
+    #[cfg(windows)]
+    fn root() -> PathBuf {
+        std::env::temp_dir()
+    }
+
+    #[cfg(unix)]
     pub fn raw(&self, data: &[u8]) -> NativeLogicalReceipt {
-        let mut stream: UnixStream = UnixStream::connect(&self.endpoint).unwrap();
+        let stream: std::os::unix::net::UnixStream =
+            std::os::unix::net::UnixStream::connect(&self.endpoint).unwrap();
         stream
-            .set_read_timeout(Some(Duration::from_secs(5)))
+            .set_read_timeout(Some(std::time::Duration::from_secs(5)))
             .unwrap();
+        Self::exchange_raw(stream, data)
+    }
+
+    #[cfg(windows)]
+    pub fn raw(&self, data: &[u8]) -> NativeLogicalReceipt {
+        let name: String = event_slice::services::LogicalPipeService::name(&self.endpoint).unwrap();
+        let stream: fs::File = fs::OpenOptions::new().read(true).write(true).open(name).unwrap();
+        Self::exchange_raw(stream, data)
+    }
+
+    fn exchange_raw<Stream: std::io::Read + Write>(mut stream: Stream, data: &[u8]) -> NativeLogicalReceipt {
         let _written_or_closed: Result<(), std::io::Error> = stream.write_all(data);
         // One receipt line; Linux may report a reset after it when the peer
         // closed with unread request bytes, so do not read to end of stream.

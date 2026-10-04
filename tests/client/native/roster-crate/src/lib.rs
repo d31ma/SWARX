@@ -13,6 +13,8 @@ pub use event_slice::RosterStorage;
 
 pub mod services {
     pub mod roster_file {
+        #[cfg_attr(not(windows), allow(unused_imports))]
+        use event_slice::services::LogicalAccountService;
         include!(concat!(env!("OUT_DIR"), "/LogicalRosterFileService.rs"));
     }
     pub use roster_file::LogicalRosterFileService;

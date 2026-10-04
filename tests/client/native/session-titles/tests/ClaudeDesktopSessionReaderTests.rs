@@ -216,6 +216,7 @@ fn only_session_files_at_the_session_depth_are_read() -> () {
     assert_eq!(ids(&read(&fixture)), vec!["kept-id".to_owned()]);
 }
 
+#[cfg(unix)]
 #[test]
 fn symbolic_links_are_not_followed() -> () {
     let fixture: SessionFolderFixture = SessionFolderFixture::new("links");

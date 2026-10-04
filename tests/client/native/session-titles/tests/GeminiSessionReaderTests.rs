@@ -353,6 +353,7 @@ fn credential_and_antigravity_files_are_not_read() -> () {
     assert!(!format!("{sessions:?}").contains(PRIVATE_MARKER));
 }
 
+#[cfg(unix)]
 #[test]
 fn symbolic_links_are_not_followed() -> () {
     let fixture: SessionFolderFixture = SessionFolderFixture::new("gemini-links");

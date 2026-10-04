@@ -16,6 +16,7 @@ use event_slice::utils::NativeCommandContextUtils;
 use event_slice::{ClaudeHookAdapter, ClaudeHookEventFactory, ClaudeHookMapper};
 use identity_reader::CommandBindingIdentityReader;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -38,14 +39,25 @@ impl SessionBindingRestoreTests {
     const FILE: &'static str = "session-bindings-native.json";
 
     fn directory(name: &str) -> PathBuf {
-        let directory: PathBuf = PathBuf::from(format!(
-            "/tmp/observatory-binding-restore-{}-{name}",
+        let directory: PathBuf = Self::root().join(format!(
+            "observatory-binding-restore-{}-{name}",
             std::process::id()
         ));
         let _ = fs::remove_dir_all(&directory);
         fs::create_dir(&directory).unwrap();
+        #[cfg(unix)]
         fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
         directory
+    }
+
+    #[cfg(unix)]
+    fn root() -> PathBuf {
+        PathBuf::from("/tmp")
+    }
+
+    #[cfg(windows)]
+    fn root() -> PathBuf {
+        std::env::temp_dir()
     }
 
     fn identity() -> NativeCommandIdentity {
@@ -203,6 +215,7 @@ impl SessionBindingRestoreTests {
     fn rewrite(directory: &PathBuf, value: &serde_json::Value) -> () {
         let path: PathBuf = directory.join(Self::FILE);
         fs::write(&path, serde_json::to_vec(value).unwrap()).unwrap();
+        #[cfg(unix)]
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
     }
 
@@ -234,8 +247,9 @@ fn a_saved_session_link_is_private_and_holds_only_owner_family_and_identity() ->
     let directory: PathBuf = SessionBindingRestoreTests::directory("saved");
     SessionBindingRestoreTests::first_run(&directory);
     let path: PathBuf = directory.join(SessionBindingRestoreTests::FILE);
-    let mode: u32 = fs::metadata(&path).unwrap().permissions().mode() & 0o7777;
-    assert_eq!(mode, 0o600);
+    #[cfg(unix)]
+    assert_eq!(fs::metadata(&path).unwrap().permissions().mode() & 0o7777, 0o600);
+    assert!(fs::metadata(&path).unwrap().is_file());
     let saved: serde_json::Value = SessionBindingRestoreTests::saved(&directory);
     assert_eq!(saved["contract_version"], 1);
     let record: &serde_json::Value = &saved["bindings"][0];

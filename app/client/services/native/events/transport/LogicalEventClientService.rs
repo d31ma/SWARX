@@ -1,5 +1,4 @@
 use crate::models::{NativeLogicalEvent, NativeLogicalReceipt};
-use std::os::unix::net::UnixStream;
 
 #[Service]
 pub struct LogicalEventClientService {
@@ -23,23 +22,33 @@ impl LogicalEventClientService {
     fn encode_error(_failure: serde_json::Error) -> String {
         "Cannot encode the logical event.".to_string()
     }
-}
-
-#[cfg(unix)]
-impl LogicalEventClientService {
-    pub fn send_bytes(&self, data: &[u8]) -> Result<NativeLogicalReceipt, String> {
-        let mut stream: UnixStream =
-            UnixStream::connect(&self.endpoint).map_err(Self::connect_error)?;
-        let receipt: Vec<u8> = self.wire.exchange(&mut stream, data)?;
-        serde_json::from_slice(&receipt).map_err(Self::encode_error)
-    }
 
     fn connect_error(_failure: std::io::Error) -> String {
         "The private event source is unavailable; open the app first.".to_string()
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(unix)]
+impl LogicalEventClientService {
+    pub fn send_bytes(&self, data: &[u8]) -> Result<NativeLogicalReceipt, String> {
+        let mut stream: std::os::unix::net::UnixStream =
+            std::os::unix::net::UnixStream::connect(&self.endpoint).map_err(Self::connect_error)?;
+        let receipt: Vec<u8> = self.wire.exchange(&mut stream, data)?;
+        serde_json::from_slice(&receipt).map_err(Self::encode_error)
+    }
+}
+
+#[cfg(windows)]
+impl LogicalEventClientService {
+    pub fn send_bytes(&self, data: &[u8]) -> Result<NativeLogicalReceipt, String> {
+        let mut stream: std::fs::File =
+            LogicalPipeService::connect(&self.endpoint).map_err(Self::connect_error)?;
+        let receipt: Vec<u8> = self.wire.exchange(&mut stream, data)?;
+        serde_json::from_slice(&receipt).map_err(Self::encode_error)
+    }
+}
+
+#[cfg(not(any(unix, windows)))]
 impl LogicalEventClientService {
     pub fn send_bytes(&self, _data: &[u8]) -> Result<NativeLogicalReceipt, String> {
         Err("Local event emission is not implemented on this platform.".to_string())

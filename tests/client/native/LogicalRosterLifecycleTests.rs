@@ -1,6 +1,7 @@
 use event_slice::EventSource;
 use event_slice::services::LogicalEventService;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
 #[path = "TestClock.rs"]
 mod test_clock;
@@ -111,6 +112,7 @@ fn recovered_id_needs_real_registration_and_fresh_exact_id_replaces_only_it() ->
     reopened.stop();
 }
 
+#[cfg(unix)]
 #[test]
 fn unsafe_cache_write_stays_accepted_and_exposes_error_without_following_symlink() -> () {
     let fixture = LogicalEventFixture::new("roster-write-error").unwrap();
@@ -143,6 +145,7 @@ fn invalid_cache_does_not_disable_endpoint_or_claim_live_restore() -> () {
     fixture.source.stop();
     let cache = fixture.directory.join("roster-native.json");
     fs::write(&cache, b"not-json").unwrap();
+    #[cfg(unix)]
     fs::set_permissions(&cache, fs::Permissions::from_mode(0o600)).unwrap();
     let mut reopened = LogicalEventService::with_commands(
         fixture.clock.clone(),
@@ -166,6 +169,7 @@ fn invalid_cache_does_not_disable_endpoint_or_claim_live_restore() -> () {
     reopened.stop();
 }
 
+#[cfg(unix)]
 #[test]
 fn unavailable_cache_keeps_endpoint_usable_and_preserves_live_state() -> () {
     let mut fixture = LogicalEventFixture::new("roster-unsafe").unwrap();

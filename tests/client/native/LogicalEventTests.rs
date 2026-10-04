@@ -3,10 +3,14 @@ use event_slice::models::{NativeLogicalEvent, NativeLogicalReceipt};
 use event_slice::services::{LogicalEventService, LogicalStateService};
 use std::fs;
 use std::io::Write;
+#[cfg(unix)]
 use std::os::unix::fs::{PermissionsExt, symlink};
+#[cfg(unix)]
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::process::{Command, Stdio};
+#[cfg(unix)]
 use std::sync::Arc;
+#[cfg(unix)]
 use std::time::Instant;
 #[path = "TestClock.rs"]
 mod test_clock;
@@ -170,6 +174,7 @@ fn oversized_raw_frame_is_rejected_and_source_remains_usable() -> () {
     );
 }
 
+#[cfg(unix)]
 #[test]
 fn socket_and_directory_are_private_and_no_tcp_listener_is_created() -> () {
     let fixture = LogicalEventFixture::new("private").unwrap();
@@ -251,6 +256,7 @@ fn second_source_is_rejected_without_disrupting_first() -> () {
     assert!(fs::symlink_metadata(fixture.endpoint.clone()).is_ok());
 }
 
+#[cfg(unix)]
 #[test]
 fn live_unowned_listener_is_not_unlinked() -> () {
     let directory = format!("/tmp/observatory-event-test-{}-foreign", std::process::id());
@@ -268,6 +274,7 @@ fn live_unowned_listener_is_not_unlinked() -> () {
     fs::remove_dir_all(directory).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
 fn refused_owned_stale_socket_is_recovered() -> () {
     let directory = format!(
@@ -288,6 +295,7 @@ fn refused_owned_stale_socket_is_recovered() -> () {
     fs::remove_dir_all(directory).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
 fn symlink_endpoint_is_rejected_and_target_preserved() -> () {
     let directory = format!("/tmp/observatory-event-test-{}-symlink", std::process::id());
@@ -310,6 +318,7 @@ fn symlink_endpoint_is_rejected_and_target_preserved() -> () {
     fs::remove_dir_all(directory).unwrap();
 }
 
+#[cfg(unix)]
 #[test]
 fn shutdown_is_bounded_with_an_incomplete_client_and_removes_owned_socket() -> () {
     let mut fixture = LogicalEventFixture::new("shutdown").unwrap();

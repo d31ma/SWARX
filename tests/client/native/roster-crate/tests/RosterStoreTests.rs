@@ -5,6 +5,7 @@ use observatory_roster_tests::services::LogicalRosterStoreService;
 use observatory_roster_tests::RosterStorage;
 use roster_fixture::RosterFixture as Fixture;
 use std::fs;
+#[cfg(unix)]
 use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 
 #[test]
@@ -25,6 +26,7 @@ fn constructor_allows_missing_directory_but_operations_wait_for_preparation() ->
     assert!(store.save(&[Fixture::row()]).is_err());
     assert!(!directory.exists());
     fs::create_dir(&directory).unwrap();
+    #[cfg(unix)]
     fs::set_permissions(&directory, fs::Permissions::from_mode(0o700)).unwrap();
     assert!(store.load(1001.0).unwrap().is_empty());
     store.save(&[Fixture::row()]).unwrap();
@@ -94,9 +96,10 @@ fn persisted_bytes_are_private_sanitized_and_not_live() -> () {
         "Tool execution"
     );
     assert!(value["agents"][0]["metrics"].is_null());
-    let metadata = fs::metadata(fixture.file()).unwrap();
-    assert_eq!(metadata.mode() & 0o7777, 0o600);
-    assert_eq!(metadata.uid(), unsafe { libc::geteuid() });
+    #[cfg(unix)]
+    assert_eq!(fs::metadata(fixture.file()).unwrap().mode() & 0o7777, 0o600);
+    #[cfg(unix)]
+    assert_eq!(fs::metadata(fixture.file()).unwrap().uid(), unsafe { libc::geteuid() });
     assert_eq!(fs::read_dir(&fixture.directory).unwrap().count(), 1);
 }
 
@@ -104,10 +107,12 @@ fn persisted_bytes_are_private_sanitized_and_not_live() -> () {
 fn atomic_replacement_leaves_only_final_file() -> () {
     let fixture = Fixture::new();
     fixture.store.save(&[Fixture::row()]).unwrap();
+    #[cfg(unix)]
     let before = fs::metadata(fixture.file()).unwrap().ino();
     let mut row = Fixture::row();
     row.status = "completed".to_string();
     fixture.store.save(&[row]).unwrap();
+    #[cfg(unix)]
     assert_ne!(before, fs::metadata(fixture.file()).unwrap().ino());
     assert_eq!(
         fixture.store.load(1010.0).unwrap()[0]
@@ -129,6 +134,7 @@ fn rejected_payload_preserves_previous_file() -> () {
     assert_eq!(before, fs::read(fixture.file()).unwrap());
 }
 
+#[cfg(unix)]
 #[test]
 fn symlink_file_is_rejected_without_touching_target() -> () {
     let fixture = Fixture::new();
@@ -140,6 +146,7 @@ fn symlink_file_is_rejected_without_touching_target() -> () {
     assert_eq!(fs::read(&target).unwrap(), b"unchanged");
 }
 
+#[cfg(unix)]
 #[test]
 fn symlink_directory_is_rejected() -> () {
     let fixture = Fixture::new();
@@ -151,6 +158,7 @@ fn symlink_directory_is_rejected() -> () {
     assert!(!fixture.file().exists());
 }
 
+#[cfg(unix)]
 #[test]
 fn directory_and_file_modes_are_rejected_without_repair() -> () {
     let fixture = Fixture::new();

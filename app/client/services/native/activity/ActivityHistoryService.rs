@@ -11,8 +11,6 @@ pub struct ActivityHistoryService;
 
 impl ActivityHistoryService {
     const MINIMUM_DURATION: f64 = 0.0;
-    const TIMESTAMP_FORMAT: &'static [u8] = b"%Y-%m-%d %H:%M:%S UTC\0";
-    const TIMESTAMP_BYTES: usize = 64;
     const LAST_TIMESTAMP: f64 = 253_402_300_799.0;
     const FIRST_TIMESTAMP: f64 = 0.0;
     const REPORTED_DURATION: &'static str = "reported";
@@ -447,25 +445,6 @@ impl ActivityHistoryService {
         conditions.into_iter().all(|valid: bool| -> bool { valid })
     }
 
-    fn format_time(value: f64) -> Option<String> {
-        let seconds: libc::time_t = value as libc::time_t;
-        let mut calendar: libc::tm = unsafe { std::mem::zeroed() };
-        let pointer: *mut libc::tm = unsafe { libc::gmtime_r(&seconds, &mut calendar) };
-        if pointer.is_null() {
-            return None;
-        }
-        let mut bytes: [u8; Self::TIMESTAMP_BYTES] = [0; Self::TIMESTAMP_BYTES];
-        let length: usize = unsafe {
-            libc::strftime(
-                bytes.as_mut_ptr().cast(),
-                bytes.len(),
-                Self::TIMESTAMP_FORMAT.as_ptr().cast(),
-                &calendar,
-            )
-        };
-        String::from_utf8(bytes[..length].to_vec()).ok()
-    }
-
     fn duration(value: Option<f64>) -> Option<String> {
         value
             .filter(Self::valid_duration)
@@ -538,5 +517,57 @@ impl ActivityHistoryService {
 
     fn running_record(record: &NativeActivityRecord) -> bool {
         record.running
+    }
+}
+
+#[cfg(unix)]
+impl ActivityHistoryService {
+    const TIMESTAMP_FORMAT: &'static [u8] = b"%Y-%m-%d %H:%M:%S UTC\0";
+    const TIMESTAMP_BYTES: usize = 64;
+
+    fn format_time(value: f64) -> Option<String> {
+        let seconds: libc::time_t = value as libc::time_t;
+        let mut calendar: libc::tm = unsafe { std::mem::zeroed() };
+        let pointer: *mut libc::tm = unsafe { libc::gmtime_r(&seconds, &mut calendar) };
+        if pointer.is_null() {
+            return None;
+        }
+        let mut bytes: [u8; Self::TIMESTAMP_BYTES] = [0; Self::TIMESTAMP_BYTES];
+        let length: usize = unsafe {
+            libc::strftime(
+                bytes.as_mut_ptr().cast(),
+                bytes.len(),
+                Self::TIMESTAMP_FORMAT.as_ptr().cast(),
+                &calendar,
+            )
+        };
+        String::from_utf8(bytes[..length].to_vec()).ok()
+    }
+}
+
+// The C runtime has gmtime_s but no strftime binding here; the fields give the same UTC text.
+#[cfg(windows)]
+impl ActivityHistoryService {
+    const SUCCESS_CODE: i32 = 0;
+    const FIRST_CALENDAR_YEAR: i32 = 1900;
+    const FIRST_MONTH: i32 = 1;
+
+    fn format_time(value: f64) -> Option<String> {
+        let seconds: libc::time_t = value as libc::time_t;
+        let mut calendar: libc::tm = unsafe { std::mem::zeroed() };
+        let result: i32 = unsafe { libc::gmtime_s(&mut calendar, &seconds) };
+        (result == Self::SUCCESS_CODE).then(|| -> String { Self::calendar_text(&calendar) })
+    }
+
+    fn calendar_text(calendar: &libc::tm) -> String {
+        format!(
+            "{:04}-{:02}-{:02} {:02}:{:02}:{:02} UTC",
+            calendar.tm_year + Self::FIRST_CALENDAR_YEAR,
+            calendar.tm_mon + Self::FIRST_MONTH,
+            calendar.tm_mday,
+            calendar.tm_hour,
+            calendar.tm_min,
+            calendar.tm_sec
+        )
     }
 }

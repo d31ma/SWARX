@@ -106,6 +106,15 @@ impl LogicalPresentationTests {
         format!("{hour}:{:02}:{:02} {period}", time.tm_min, time.tm_sec)
     }
 
+    #[cfg(windows)]
+    fn expected_local_time(seconds: i64) -> String {
+        let mut time: libc::tm = unsafe { std::mem::zeroed() };
+        assert_eq!(unsafe { libc::localtime_s(&mut time, &seconds) }, 0);
+        let hour: i32 = Self::hour(time.tm_hour);
+        let period: &str = Self::period(time.tm_hour);
+        format!("{hour}:{:02}:{:02} {period}", time.tm_min, time.tm_sec)
+    }
+
     fn hour(hour: i32) -> i32 {
         let clock_hour: i32 = hour.rem_euclid(12);
         if clock_hour == 0 {
@@ -642,7 +651,7 @@ fn empty_sessions_have_zero_linked_and_harness_counts() -> () {
     assert_eq!(SessionViewUtils::harness_count(&sessions), 0);
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 #[test]
 fn local_capture_clock_matches_mac_fields_and_ignores_subsecond_fraction() -> () {
     let expected = LogicalPresentationTests::expected_local_time(1_700_000_000);
