@@ -38,6 +38,7 @@ impl SessionIdentityTests {
             age_seconds: 0.0,
             stale: false,
             reported_status: None,
+            model: None,
         };
         LogicalViewUtils::agent(&agent, captured_at)
     }
@@ -753,5 +754,63 @@ fn no_reported_model_or_other_family_leaves_model_unknown() -> () {
         .collect();
     assert_eq!(unattributed.len(), 1);
     assert_eq!(unattributed[0].model, None);
-    assert!(!serde_json::to_string(&sessions[0]).unwrap().contains("openai"));
+    assert!(!serde_json::to_string(&sessions[0])
+        .unwrap()
+        .contains("openai"));
+}
+
+#[test]
+fn hook_reported_model_fills_the_exact_session_only_when_the_reader_has_none() -> () {
+    let mut report: NativeLogicalAgentView = SessionIdentityTests::report(
+        SessionIdentityTests::CLAUDE_SESSION,
+        "Claude",
+        "Reported label",
+        10.0,
+    );
+    report.model = Some("claude-sonnet-4-6".to_owned());
+    let other: NativeLogicalAgentView =
+        SessionIdentityTests::report("other-session", "Claude", "Reported label", 20.0);
+    let silent: NativeHarnessSession =
+        SessionIdentityTests::harness(SessionIdentityTests::CLAUDE_SESSION, None, None);
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report.clone(), other]),
+        &[silent.clone()],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(sessions[0].model.as_deref(), Some("claude-sonnet-4-6"));
+    assert_eq!(sessions[1].id.as_deref(), Some("other-session"));
+    assert_eq!(sessions[1].model, None);
+    let mut reader: NativeHarnessSession = silent;
+    reader.model = Some("claude-opus-4-6".to_owned());
+    let named: Vec<NativeSessionView> = SessionViewUtils::named(
+        SessionViewUtils::sessions(&[report]),
+        &[reader],
+        SessionIdentityTests::NOW,
+    );
+    assert_eq!(named[0].model.as_deref(), Some("claude-opus-4-6"));
+}
+
+#[test]
+fn latest_hook_reported_model_wins_within_one_session() -> () {
+    let link = || -> Option<NativeSessionLink> {
+        Some(SessionIdentityTests::link("one", "Project", "Source one"))
+    };
+    let mut older: NativeLogicalAgentView =
+        SessionIdentityTests::agent("main", "Codex", link(), 10.0);
+    older.model = Some("gpt-5.1-codex".to_owned());
+    let mut newer: NativeLogicalAgentView =
+        SessionIdentityTests::agent("one:sub", "Codex", link(), 20.0);
+    newer.model = Some("gpt-5.1-codex-mini".to_owned());
+    let silent: NativeLogicalAgentView =
+        SessionIdentityTests::agent("one:quiet", "Codex", link(), 30.0);
+    for agents in [
+        vec![older.clone(), newer.clone(), silent.clone()],
+        vec![silent.clone(), newer.clone(), older.clone()],
+    ] {
+        let sessions: Vec<NativeSessionView> = SessionViewUtils::sessions(&agents);
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].model.as_deref(), Some("gpt-5.1-codex-mini"));
+    }
+    let sessions: Vec<NativeSessionView> = SessionViewUtils::sessions(&[silent, older]);
+    assert_eq!(sessions[0].model.as_deref(), Some("gpt-5.1-codex"));
 }

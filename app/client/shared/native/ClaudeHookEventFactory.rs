@@ -17,12 +17,14 @@ impl ClaudeHookEventFactory {
         event.name = Some(Self::name(payload));
         event.family = Some(payload.family.clone());
         event.session_id = payload.session_id.clone();
+        event.model = payload.model.clone();
         Some(event)
     }
 
     pub fn status(payload: &NativeClaudeHookPayload, status: &str) -> Option<NativeLogicalEvent> {
         let mut event: NativeLogicalEvent = Self::event(Self::STATUS, payload)?;
         event.status = Some(Self::reported(status)?);
+        event.model = payload.model.clone();
         Some(event)
     }
 
@@ -68,6 +70,7 @@ impl ClaudeHookEventFactory {
             session_id: None,
             session_name: None,
             depends_on: None,
+            model: None,
         })
     }
 

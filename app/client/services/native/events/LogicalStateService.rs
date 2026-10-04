@@ -111,6 +111,7 @@ impl LogicalStateService {
             age_seconds: 0.0,
             stale: false,
             reported_status: None,
+            model: self.text.model(event.model.as_deref()),
         };
         self.agents.insert(event.agent.clone(), agent);
         Ok(())
@@ -327,6 +328,7 @@ impl LogicalStateService {
         let finishing: bool = self.finishes_running(&status, running);
         self.require_finished(finishing)?;
         agent.status = status;
+        agent.model = self.text.model(event.model.as_deref()).or(agent.model);
         self.save_agent(agent, now)
     }
 

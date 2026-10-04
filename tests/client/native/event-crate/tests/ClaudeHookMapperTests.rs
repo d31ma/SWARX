@@ -115,6 +115,32 @@ impl ClaudeHookMapperTests {
         )
     }
 
+    fn models(events: &[NativeLogicalEvent]) -> Vec<String> {
+        events
+            .iter()
+            .map(|event: &NativeLogicalEvent| -> String {
+                format!(
+                    "{}={}",
+                    event.event_type,
+                    event.model.as_deref().unwrap_or(Self::EMPTY)
+                )
+            })
+            .collect()
+    }
+
+    fn reported(name: &str) -> String {
+        format!("{name}={}", ClaudeHookFixture::REPORTED_MODEL)
+    }
+
+    fn require_no_model(events: Vec<NativeLogicalEvent>) -> () {
+        assert!(!events.is_empty());
+        for event in events {
+            assert!(event.model.is_none());
+            let text: String = serde_json::to_string(&event).unwrap();
+            assert!(!text.contains("\"model\""));
+        }
+    }
+
     fn require_private_events(events: Vec<NativeLogicalEvent>) -> () {
         assert!(!events.is_empty());
         for event in events {
@@ -507,6 +533,69 @@ fn an_allowlisted_field_with_structured_content_is_rejected_not_flattened() -> (
 }
 
 #[test]
+fn a_structured_model_value_is_rejected_like_every_allowlisted_field() -> () {
+    let mut payload: Value = ClaudeHookFixture::payload("SessionStart");
+    payload["model"] = json!({"id": ClaudeHookFixture::REPORTED_MODEL});
+    assert!(ClaudeHookFixture::events(&payload).is_empty());
+}
+
+#[test]
+fn a_reported_model_rides_only_on_registration_and_agent_status() -> () {
+    let start: Value = ClaudeHookFixture::with_model(
+        ClaudeHookFixture::payload("SessionStart"),
+        ClaudeHookFixture::REPORTED_MODEL,
+    );
+    assert_eq!(
+        ClaudeHookMapperTests::models(&ClaudeHookFixture::events(&start)),
+        vec![
+            ClaudeHookMapperTests::reported("logical.register"),
+            ClaudeHookMapperTests::reported("logical.status"),
+            "logical.task=-".to_owned(),
+        ]
+    );
+    let tool: Value = ClaudeHookFixture::with_model(
+        ClaudeHookFixture::codex_payload("PreToolUse"),
+        ClaudeHookFixture::REPORTED_MODEL,
+    );
+    assert_eq!(
+        ClaudeHookMapperTests::models(&ClaudeHookFixture::codex_events(&tool)),
+        vec![
+            ClaudeHookMapperTests::reported("logical.register"),
+            "logical.task=-".to_owned(),
+            "logical.execution.start=-".to_owned(),
+        ]
+    );
+}
+
+#[test]
+fn unsafe_model_values_are_dropped_and_the_hook_still_reports() -> () {
+    let long: String = "m".repeat(129);
+    for model in [
+        "claude sonnet",
+        "claude-sonnet\n4-6",
+        "claude-sonnet\t4-6",
+        long.as_str(),
+        "sk-ant-api03-ModelSecretMarker",
+        "https://models.example/claude",
+        "",
+    ] {
+        let payload: Value =
+            ClaudeHookFixture::with_model(ClaudeHookFixture::payload("SessionStart"), model);
+        ClaudeHookMapperTests::require_no_model(ClaudeHookFixture::events(&payload));
+        ClaudeHookMapperTests::require_no_model(ClaudeHookFixture::codex_events(&payload));
+    }
+}
+
+#[test]
+fn dialects_without_a_documented_model_ignore_the_key() -> () {
+    let payload: Value = ClaudeHookFixture::with_model(
+        ClaudeHookFixture::payload("SessionStart"),
+        ClaudeHookFixture::REPORTED_MODEL,
+    );
+    ClaudeHookMapperTests::require_no_model(ClaudeHookFixture::qwen_events(&payload));
+}
+
+#[test]
 fn an_oversized_payload_reports_nothing() -> () {
     let mut payload: Value = ClaudeHookFixture::payload("SessionStart");
     let size: usize = ClaudeHookAdapter::MAXIMUM_PAYLOAD_BYTES as usize;
@@ -525,6 +614,18 @@ fn a_large_payload_within_the_limit_still_reports_events() -> () {
 #[test]
 fn emitted_event_bytes_exclude_prompts_commands_file_contents_and_secrets() -> () {
     for event in ClaudeHookFixture::MAIN_HOOKS {
+        let valid: Value = ClaudeHookFixture::with_model(
+            ClaudeHookFixture::codex_payload(event),
+            ClaudeHookFixture::REPORTED_MODEL,
+        );
+        let events: Vec<NativeLogicalEvent> = ClaudeHookFixture::codex_events(&valid);
+        assert!(events.iter().all(|item: &NativeLogicalEvent| -> bool {
+            item.model
+                .as_deref()
+                .unwrap_or(ClaudeHookFixture::REPORTED_MODEL)
+                == ClaudeHookFixture::REPORTED_MODEL
+        }));
+        ClaudeHookMapperTests::require_private_events(events);
         ClaudeHookMapperTests::require_private_events(ClaudeHookFixture::events(
             &ClaudeHookFixture::payload(event),
         ));

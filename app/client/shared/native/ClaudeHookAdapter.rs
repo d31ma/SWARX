@@ -1,6 +1,7 @@
 use crate::models::{
     NativeClaudeHookPayload, NativeHookDialect, NativeLogicalEvent, NativeLogicalReceipt,
 };
+use crate::utils::HarnessFileUtils;
 use crate::ClaudeHookMapper;
 use std::io::Read;
 
@@ -39,6 +40,7 @@ impl ClaudeHookAdapter {
     const TOOL_USE_KEY: &'static str = "tool_use_id";
     const HARNESS_KEY: &'static str = "harness";
     const ORIGIN_KEY: &'static str = "cursor_version";
+    const MODEL_KEY: &'static str = "model";
     const SHARED_FIELDS: &'static [(&'static str, &'static str)] = &[
         (Self::EVENT_KEY, Self::EVENT_KEY),
         (Self::SESSION_KEY, Self::SESSION_KEY),
@@ -79,16 +81,16 @@ impl ClaudeHookAdapter {
         (ClaudeHookMapper::SESSION_END, ClaudeHookMapper::SESSION_END),
     ];
     const OPENCODE_FAMILIES: &'static [&'static str] = &[Self::OPENCODE_FAMILY, Self::KILO_FAMILY];
-    pub const CLAUDE: NativeHookDialect = Self::fixed(
+    pub const CLAUDE: NativeHookDialect = Self::reporting_model(Self::fixed(
         Self::CLAUDE_FAMILY,
         Self::CLAUDE_AGENT_NAME,
         Self::SHARED_FIELDS,
-    );
-    pub const CODEX: NativeHookDialect = Self::fixed(
+    ));
+    pub const CODEX: NativeHookDialect = Self::reporting_model(Self::fixed(
         Self::CODEX_FAMILY,
         Self::CODEX_AGENT_NAME,
         Self::SHARED_FIELDS,
-    );
+    ));
     pub const QWEN: NativeHookDialect = Self::fixed(
         Self::QWEN_FAMILY,
         Self::QWEN_AGENT_NAME,
@@ -113,6 +115,7 @@ impl ClaudeHookAdapter {
         family: None,
         default_agent_name: None,
         fields: Self::OPENCODE_FIELDS,
+        model_key: None,
         event_names: None,
         reported_families: Self::OPENCODE_FAMILIES,
     };
@@ -146,8 +149,16 @@ impl ClaudeHookAdapter {
             family: Some(family),
             default_agent_name: Some(default_agent_name),
             fields,
+            model_key: None,
             event_names: None,
             reported_families: &[],
+        }
+    }
+
+    const fn reporting_model(dialect: NativeHookDialect) -> NativeHookDialect {
+        NativeHookDialect {
+            model_key: Some(Self::MODEL_KEY),
+            ..dialect
         }
     }
 
@@ -156,6 +167,7 @@ impl ClaudeHookAdapter {
         payload.hook_event_name = self.hook_name(payload.hook_event_name.take());
         payload.family = self.family(payload.harness.take())?;
         payload.default_agent_name = self.agent_name(&payload.family);
+        payload.model = HarnessFileUtils::reported_identifier(payload.model.as_deref());
         Some(payload)
     }
 
@@ -175,7 +187,8 @@ impl ClaudeHookAdapter {
     ) -> Result<NativeClaudeHookPayload, Fields::Error> {
         let mut payload: NativeClaudeHookPayload = NativeClaudeHookPayload::default();
         while let Some(key) = fields.next_key::<String>()? {
-            let shared: Option<&str> = Self::lookup(self.dialect.fields, &key);
+            let shared: Option<&str> = Self::lookup(self.dialect.fields, &key)
+                .or_else(|| -> Option<&str> { self.model_field(&key) });
             Self::read_value(&mut payload, shared, &mut fields)?;
         }
         Ok(payload)
@@ -197,6 +210,7 @@ impl ClaudeHookAdapter {
             Some(Self::TOOL_USE_KEY) => payload.tool_use_id = fields.next_value()?,
             Some(Self::HARNESS_KEY) => payload.harness = fields.next_value()?,
             Some(Self::ORIGIN_KEY) => payload.origin_version = fields.next_value()?,
+            Some(Self::MODEL_KEY) => payload.model = fields.next_value()?,
             _ => fields.next_value::<serde::de::IgnoredAny>().map(drop)?,
         }
         Ok(())
@@ -207,6 +221,10 @@ impl ClaudeHookAdapter {
             .iter()
             .find(|(source, _): &&(&str, &str)| -> bool { *source == key })
             .map(|(_, shared): &(&'static str, &'static str)| -> &'static str { *shared })
+    }
+
+    fn model_field(&self, key: &str) -> Option<&'static str> {
+        (self.dialect.model_key == Some(key)).then_some(Self::MODEL_KEY)
     }
 
     fn hook_name(&self, name: Option<String>) -> Option<String> {

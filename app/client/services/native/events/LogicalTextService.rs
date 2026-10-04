@@ -1,3 +1,4 @@
+use crate::utils::HarnessFileUtils;
 use regex::Regex;
 
 #[Service]
@@ -42,6 +43,10 @@ impl LogicalTextService {
         let text: &str = value.unwrap_or_default();
         let safe: String = self.redacted(text)?;
         Ok(self.name_value(safe, fallback))
+    }
+
+    pub fn model(&self, value: Option<&str>) -> Option<String> {
+        HarnessFileUtils::reported_identifier(value)
     }
 
     pub fn tool(&self, value: Option<&str>) -> String {

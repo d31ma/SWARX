@@ -47,6 +47,7 @@ impl LogicalViewUtils {
             age_seconds: agent.age_seconds,
             stale: agent.stale,
             reported_status: agent.reported_status.clone(),
+            model: agent.model.clone(),
             feed_label: Self::feed(&agent.feed_mode),
             task_label: Self::task_name(agent.task.as_ref()),
             task_state: Self::task_status(agent.task.as_ref()),

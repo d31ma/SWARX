@@ -49,6 +49,7 @@ impl SessionActivityIdentityTests {
             age_seconds: 0.0,
             stale: false,
             reported_status: None,
+            model: None,
         }
     }
 

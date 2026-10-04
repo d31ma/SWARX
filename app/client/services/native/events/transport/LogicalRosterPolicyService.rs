@@ -100,6 +100,7 @@ impl LogicalRosterPolicyService {
             age_seconds: 0.0,
             stale: true,
             reported_status: None,
+            model: self.text.model(row.model.as_deref()),
         })
     }
 

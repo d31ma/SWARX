@@ -74,6 +74,7 @@ impl SessionViewUtils {
         let identifier: String = Self::identifier(agent);
         let key: String = Self::session_key(&Self::key_component(&agent.family), &identifier);
         let position: usize = Self::position(&key, agent, (state.0, state.1));
+        Self::report_model(&mut state.0[position], agent);
         Self::update_metadata(&mut state.0[position], agent);
         state.0[position].agents.push(agent.clone());
     }
@@ -165,6 +166,13 @@ impl SessionViewUtils {
         Self::replace_metadata(session, agent, captured_at);
     }
 
+    fn report_model(session: &mut NativeSessionView, agent: &NativeLogicalAgentView) -> () {
+        let newer: bool = Self::newer(Self::capture(agent.captured_at), session.captured_at);
+        if agent.model.is_some() && (newer || session.model.is_none()) {
+            session.model = agent.model.clone();
+        }
+    }
+
     fn newer(timestamp: Option<f64>, previous: Option<f64>) -> bool {
         timestamp.is_some_and(|captured_at: f64| -> bool {
             captured_at > previous.unwrap_or(Self::NO_CAPTURE)
@@ -253,7 +261,7 @@ impl SessionViewUtils {
         let reported: Option<&NativeHarnessSession> =
             Self::find_harness(harness, &session.family, session.id.as_deref());
         if let Some(candidate) = reported {
-            session.model = candidate.model.clone();
+            session.model = candidate.model.clone().or(session.model.take());
             session.provider = candidate.provider.clone();
         }
         session

@@ -8,6 +8,7 @@ pub struct NativeClaudeHookPayload {
     pub agent_type: Option<String>,
     pub tool_name: Option<String>,
     pub tool_use_id: Option<String>,
+    pub model: Option<String>,
     pub harness: Option<String>,
     pub origin_version: Option<serde::de::IgnoredAny>,
     pub family: String,

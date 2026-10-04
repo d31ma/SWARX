@@ -35,7 +35,8 @@ impl ClaudeHookFixture {
     pub const SESSION_TITLE: &'static str = "PRIVATE-SESSION-TITLE-MARKER";
     pub const AGENT_TRANSCRIPT: &'static str =
         "/Users/fixture/.codex/sessions/agent-transcript-marker.jsonl";
-    pub const MODEL: &'static str = "PRIVATE-MODEL-MARKER";
+    pub const MODEL: &'static str = "PRIVATE-MODEL-MARKER with spaces";
+    pub const REPORTED_MODEL: &'static str = "claude-sonnet-4-6[1m]";
     pub const TRIGGER: &'static str = "PRIVATE-TRIGGER-MARKER";
     pub const MARKERS: [&'static str; 21] = [
         Self::PROMPT_TEXT,
@@ -100,6 +101,7 @@ impl ClaudeHookFixture {
             "last_assistant_message": Self::ASSISTANT_MESSAGE,
             "message": Self::NOTIFICATION,
             "session_title": Self::SESSION_TITLE,
+            "model": Self::MODEL,
             "scratchpad_dir": Self::WORKING_DIRECTORY,
             "source": "startup",
             "reason": "prompt_input_exit",
@@ -143,6 +145,11 @@ impl ClaudeHookFixture {
         payload["generation_id"] = json!(Self::PROMPT);
         payload["user_email"] = json!("PRIVATE-USER-EMAIL-MARKER@example.com");
         payload["workspace_roots"] = json!([Self::WORKING_DIRECTORY]);
+        payload
+    }
+
+    pub fn with_model(mut payload: Value, model: &str) -> Value {
+        payload["model"] = json!(model);
         payload
     }
 

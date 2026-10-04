@@ -19,6 +19,7 @@ impl LogicalTimeGuideBoundaryTests {
             session_id: None,
             session_name: None,
             depends_on: None,
+            model: None,
         }
     }
 

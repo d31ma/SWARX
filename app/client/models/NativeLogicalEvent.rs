@@ -14,4 +14,6 @@ pub struct NativeLogicalEvent {
     pub session_id: Option<String>,
     pub session_name: Option<String>,
     pub depends_on: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }

@@ -18,6 +18,8 @@ pub struct NativeLogicalAgentView {
     pub age_seconds: f64,
     pub stale: bool,
     pub reported_status: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     #[serde(rename = "feedLabel")]
     pub feed_label: String,
     #[serde(rename = "taskLabel")]

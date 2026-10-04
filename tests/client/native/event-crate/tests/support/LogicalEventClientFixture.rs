@@ -75,6 +75,7 @@ impl LogicalEventClientFixture {
             session_id: Some(Self::SESSION.to_owned()),
             session_name: Some(Self::SESSION_NAME.to_owned()),
             depends_on: None,
+            model: None,
         }
     }
 
@@ -85,6 +86,7 @@ impl LogicalEventClientFixture {
             task: Some(Self::TASK.to_owned()),
             status: Some(Self::TASK_STATUS.to_owned()),
             depends_on: Some(vec![Self::DEPENDENCY.to_owned()]),
+            model: None,
             ..Self::registration()
         }
     }

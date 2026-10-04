@@ -54,6 +54,7 @@ impl LogicalPresentationTests {
             age_seconds: 3600.0,
             stale: false,
             reported_status: None,
+            model: None,
         }
     }
 
