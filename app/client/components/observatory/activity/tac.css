@@ -269,6 +269,12 @@
   color: #e1bd87;
 }
 
+.state-no-finish {
+  border-style: dashed;
+  border-color: #5a6684;
+  color: #9caecc;
+}
+
 .empty {
   padding: 24px 15px;
   color: #c1cadc;
