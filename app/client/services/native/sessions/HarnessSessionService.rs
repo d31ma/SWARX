@@ -53,7 +53,10 @@ impl HarnessSessionService {
         let latest: Arc<Mutex<(Vec<NativeHarnessSession>, Option<f64>)>> = Arc::clone(&self.latest);
         let stopping: Arc<AtomicBool> = Arc::clone(&self.stopping);
         *refresh = Some(thread::spawn(move || -> () {
-            Self::refresh_loop(&sources, &latest, &stopping, clock.as_ref(), interval)
+            while !stopping.load(Ordering::Acquire) {
+                Self::refresh_once(&sources, &latest, clock.as_ref());
+                thread::park_timeout(interval);
+            }
         }));
     }
 
@@ -66,18 +69,14 @@ impl HarnessSessionService {
         handle.map(Self::finish);
     }
 
-    fn refresh_loop(
+    // The lock is taken only to publish a finished result, never while a source is read.
+    fn refresh_once(
         sources: &[Box<dyn HarnessSessionSource>],
         latest: &Mutex<(Vec<NativeHarnessSession>, Option<f64>)>,
-        stopping: &AtomicBool,
         clock: &dyn ObservationClock,
-        interval: Duration,
     ) -> () {
-        while !stopping.load(Ordering::Acquire) {
-            let sessions: Vec<NativeHarnessSession> = Self::merged(sources);
-            *Self::guard(latest) = (sessions, Some(clock.now().0));
-            thread::park_timeout(interval);
-        }
+        let sessions: Vec<NativeHarnessSession> = Self::merged(sources);
+        *Self::guard(latest) = (sessions, Some(clock.now().0));
     }
 
     fn finish(handle: thread::JoinHandle<()>) -> () {

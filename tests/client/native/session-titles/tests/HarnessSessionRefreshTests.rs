@@ -62,9 +62,12 @@ fn gated_service() -> (
 
 #[test]
 fn latest_is_empty_and_uncaptured_before_any_discovery() -> () {
-    let (service, gate, _calls) = gated_service();
-    assert_eq!(service.latest(), (Vec::new(), None));
-    GatedHarnessSessionSource::open(&gate);
+    let (service, _gate, _calls) = gated_service();
+    let shared: Arc<HarnessSessionService> = Arc::new(service);
+    let reader: Arc<HarnessSessionService> = Arc::clone(&shared);
+    let latest: Option<(Vec<NativeHarnessSession>, Option<f64>)> =
+        within(move || -> (Vec<NativeHarnessSession>, Option<f64>) { reader.latest() });
+    assert_eq!(latest, Some((Vec::new(), None)));
 }
 
 #[test]
