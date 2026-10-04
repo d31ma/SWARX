@@ -99,13 +99,18 @@ final class NativePreviewVerifier {
         ("native-stability-tree", "tree", "Process tree", "tree", normalSize, "tree"),
         ("native-stability-tree-small", "tree", "Process tree", "tree", smallSize, "tree")
     ]
+    private static let drawerSteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
+        ("native-drawer-open", "open-first-agent", "What's running", "", normalSize, ""),
+        ("native-drawer-settled", "polls", "What's running", "", normalSize, "")
+    ]
     private static let focusedSelections: [String: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)]] = [
         "connectors": connectorSteps,
         "resources": resourceSteps,
         "descendants": descendantSteps,
         "current-work": currentWorkSteps,
         "active-task": activeTaskSteps,
-        "stability": stabilitySteps
+        "stability": stabilitySteps,
+        "drawer": drawerSteps
     ]
     private let view: WKWebView
     private let window: NSWindow

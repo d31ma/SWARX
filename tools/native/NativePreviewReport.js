@@ -197,6 +197,7 @@ class NativePreviewReport {
       case 'runtimes': throw this.#removed(action);
       case this.#POLLS: return;
       case 'settle': return;
+      case 'open-first-agent': /** @type {HTMLElement | null} */ (document.querySelector('.agent-row'))?.click(); return;
       case this.#HOLD: throw new Error('Unsupported native QA action: ' + action);
       default: throw new Error('Unknown native QA action: ' + action);
     }
@@ -763,7 +764,7 @@ class NativePreviewReport {
       summaryBounds: this.#summaryBounds(), logicalRecords: this.#logicalRecords(), logicalRows: document.querySelectorAll(this.#AGENT_ROW_SELECTOR).length, appIconLoaded: iconLoaded, diagnostics: this.#diagnostics()};
   }
 
-  /** @returns {{path: string, elements: number, document: Record<string, string | undefined>, failures: {tag: string, native: string | undefined, chart: string | undefined, mount: string | null}[], timing: {paint: [string, number][], marks: [string, number][], slow: [string, number, number][]}}} */
+  /** @returns {{path: string, elements: number, document: Record<string, string | undefined>, failures: {tag: string, native: string | undefined, chart: string | undefined, mount: string | null}[], timing: {paint: [string, number][], marks: [string, number][], slow: [string, number, number][]}, drawer: {view: string | undefined, agent: string | undefined, html: string | undefined}}} */
   static #diagnostics() {
     const failures = Array.from(document.querySelectorAll('[data-native-failure],[data-chart-failure],[data-tachyon-mount-error]'),
       /** @param {Element} element @returns {{tag: string, native: string | undefined, chart: string | undefined, mount: string | null}} */ element => ({tag: element.tagName.toLowerCase(),
@@ -773,7 +774,9 @@ class NativePreviewReport {
       marks: entries('mark').map(/** @param {PerformanceEntry} entry @returns {[string, number]} */ entry => [entry.name, Math.round(entry.startTime)]),
       slow: entries('resource').filter(/** @param {PerformanceEntry} entry @returns {boolean} */ entry => entry.duration > 200).map(
         /** @param {PerformanceEntry} entry @returns {[string, number, number]} */ entry => [String(entry.name).split('/').pop() ?? '', Math.round(entry.startTime), Math.round(entry.duration)])};
-    return {path: globalThis.location?.pathname ?? '', elements: document.getElementsByTagName?.('*').length ?? 0, document: {...document.documentElement?.dataset}, failures, timing};
+    const drawer = /** @type {HTMLElement | null} */ (document.querySelector?.('#agent-drawer') ?? null);
+    const drawerState = {view: drawer?.dataset.agentView, agent: drawer?.dataset.agent, html: drawer?.innerHTML.slice(0, 2500)};
+    return {path: globalThis.location?.pathname ?? '', elements: document.getElementsByTagName?.('*').length ?? 0, document: {...document.documentElement?.dataset}, failures, timing, drawer: drawerState};
   }
 
   /** @returns {{id: string, height: number, textTop: number, textBottom: number, top: number, bottom: number, lineHeight: string, appearance: string}[]} */
