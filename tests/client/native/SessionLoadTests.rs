@@ -44,7 +44,7 @@ impl SessionLoadTests {
     }
 
     fn flagged(histories: &[Vec<Vec<Option<f64>>>], now: f64) -> Vec<Vec<String>> {
-        SessionLoadUtils::loads(histories, now)
+        SessionLoadTests::loads(histories, now)
             .iter()
             .map(|loads: &Vec<NativeSessionLoadView>| -> Vec<String> {
                 Self::keys(loads).into_iter().map(str::to_owned).collect()
@@ -72,8 +72,36 @@ impl SessionLoadTests {
     }
 
     fn resource(key: &str, cpu: f64) -> NativeSessionResourceView {
+        Self::from_rows(key, &Self::steady(cpu))
+    }
+
+    // Loads through the public entry: one linked card and one single-process resource per
+    // history, in order, so SessionUsageUtils::history gives back exactly these rows.
+    fn loads(histories: &[Vec<Vec<Option<f64>>>], now: f64) -> Vec<Vec<NativeSessionLoadView>> {
+        let keys: Vec<String> = (0..histories.len())
+            .map(|index: usize| -> String { format!("Claude:{index}") })
+            .collect();
+        let mut cards: Vec<NativeActiveSessionView> = keys
+            .iter()
+            .map(|key: &String| -> NativeActiveSessionView { Self::card(key, true) })
+            .collect();
+        let resources: Vec<NativeSessionResourceView> = keys
+            .iter()
+            .zip(histories)
+            .map(|(key, rows): (&String, &Vec<Vec<Option<f64>>>)| -> NativeSessionResourceView {
+                Self::from_rows(key, rows)
+            })
+            .collect();
+        SessionLoadUtils::mark(&mut cards, &resources, now);
+        cards
+            .into_iter()
+            .map(|card: NativeActiveSessionView| -> Vec<NativeSessionLoadView> { card.loads })
+            .collect()
+    }
+
+    fn from_rows(key: &str, rows: &[Vec<Option<f64>>]) -> NativeSessionResourceView {
         let mut command: NativeRuntimeView = NativeRuntimeView::default();
-        command.group.tree_history = Self::steady(cpu)
+        command.group.tree_history = rows
             .iter()
             .map(|row: &Vec<Option<f64>>| -> NativeProcessTreeSample {
                 NativeProcessTreeSample {
@@ -81,7 +109,12 @@ impl SessionLoadTests {
                     processes: vec![NativeProcessMetrics {
                         pid: 40,
                         started: "10:40".to_owned(),
-                        cpu_percent: Some(cpu),
+                        cpu_percent: row[1],
+                        resident_bytes: row[2].map(|bytes: f64| -> i64 { bytes as i64 }),
+                        received_per_second: row[3],
+                        sent_per_second: row[4],
+                        disk_read_per_second: row[5],
+                        disk_write_per_second: row[6],
                         ..NativeProcessMetrics::default()
                     }],
                 }
@@ -111,7 +144,7 @@ impl SessionLoadTests {
 
 #[test]
 fn a_session_well_above_the_other_gets_one_amber_cpu_hint_with_its_baseline() -> () {
-    let loads = SessionLoadUtils::loads(
+    let loads = SessionLoadTests::loads(
         &[
             SessionLoadTests::steady(200.0),
             SessionLoadTests::steady(20.0),
@@ -129,7 +162,7 @@ fn a_session_well_above_the_other_gets_one_amber_cpu_hint_with_its_baseline() ->
 
 #[test]
 fn one_session_alone_has_no_relative_hint() -> () {
-    let loads = SessionLoadUtils::loads(&[SessionLoadTests::steady(400.0)], SessionLoadTests::NOW);
+    let loads = SessionLoadTests::loads(&[SessionLoadTests::steady(400.0)], SessionLoadTests::NOW);
     assert!(loads[0].is_empty());
 }
 
@@ -297,7 +330,7 @@ fn network_sums_receive_and_send() -> () {
         SessionLoadTests::steady(20.0),
         (Some(1024.0), Some(1024.0)),
     );
-    let loads = SessionLoadUtils::loads(&[busy, idle], SessionLoadTests::NOW);
+    let loads = SessionLoadTests::loads(&[busy, idle], SessionLoadTests::NOW);
     assert_eq!(SessionLoadTests::keys(&loads[0]), ["network"]);
     assert_eq!(loads[0][0].label, "Net ↑");
     assert!(loads[0][0]

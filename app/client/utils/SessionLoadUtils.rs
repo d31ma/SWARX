@@ -81,7 +81,7 @@ impl SessionLoadUtils {
     }
 
     // One SessionUsageUtils::history per compared session; the loads come back in that order.
-    pub fn loads(histories: &[Vec<Vec<Option<f64>>>], now: f64) -> Vec<Vec<NativeSessionLoadView>> {
+    fn loads(histories: &[Vec<Vec<Option<f64>>>], now: f64) -> Vec<Vec<NativeSessionLoadView>> {
         Self::compare(histories, now)
     }
 
