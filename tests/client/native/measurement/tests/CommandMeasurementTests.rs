@@ -155,7 +155,7 @@ fn reused_pid_with_different_birth_cannot_publish_command_measurements() -> () {
 fn different_executable_cannot_publish_command_measurements() -> () {
     let mut fixture: CommandMeasurementFixture = CommandMeasurementFixture::new();
     let process: NativeProcess = NativeProcess {
-        executable: "/usr/bin/another-command".to_owned(),
+        executable: CommandMeasurementFixture::OTHER_EXECUTABLE.to_owned(),
         ..CommandMeasurementFixture::process()
     };
     assert!(fixture.sample(process, 1.0).is_empty());

@@ -19,6 +19,14 @@ pub struct CommandMeasurementFixture {
 }
 
 impl CommandMeasurementFixture {
+    #[cfg(unix)]
+    pub const EXECUTABLE: &'static str = "/usr/bin/measurement-command";
+    #[cfg(windows)]
+    pub const EXECUTABLE: &'static str = r"C:\tools\measurement-command.exe";
+    #[cfg(unix)]
+    pub const OTHER_EXECUTABLE: &'static str = "/usr/bin/another-command";
+    #[cfg(windows)]
+    pub const OTHER_EXECUTABLE: &'static str = r"C:\tools\another-command.exe";
     pub fn new() -> Self {
         let clock: Arc<CommandMeasurementClock> = Arc::new(CommandMeasurementClock::new());
         let registry_clock: Arc<dyn ObservationClock> = clock.clone();
@@ -54,7 +62,7 @@ impl CommandMeasurementFixture {
             parent: 1,
             user: 501,
             started: "100:7".to_owned(),
-            executable: "/usr/bin/measurement-command".to_owned(),
+            executable: Self::EXECUTABLE.to_owned(),
             cpu_seconds: Some(10.0),
             resident_bytes: Some(4096),
             disk_read_bytes: Some(1000),

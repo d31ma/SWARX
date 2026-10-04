@@ -1,3 +1,6 @@
+// Claude session roots are recognised only from macOS and Linux paths so far.
+#![cfg(unix)]
+
 #[path = "support/CommandMeasurementClock.rs"]
 mod command_measurement_clock;
 #[path = "support/CommandMeasurementIdentityReader.rs"]
