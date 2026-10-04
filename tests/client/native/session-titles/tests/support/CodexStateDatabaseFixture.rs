@@ -1,6 +1,19 @@
-use std::io::Write;
+use std::ffi::{CStr, CString, c_char, c_int, c_void};
 use std::path::Path;
-use std::process::{Child, Command, Output, Stdio};
+
+#[link(name = "sqlite3")]
+unsafe extern "C" {
+    fn sqlite3_open(file: *const c_char, database: *mut *mut c_void) -> c_int;
+    fn sqlite3_exec(
+        database: *mut c_void,
+        script: *const c_char,
+        callback: *const c_void,
+        argument: *mut c_void,
+        error: *mut *mut c_char,
+    ) -> c_int;
+    fn sqlite3_errmsg(database: *mut c_void) -> *const c_char;
+    fn sqlite3_close(database: *mut c_void) -> c_int;
+}
 
 pub struct CodexStateDatabaseFixture;
 
@@ -22,30 +35,28 @@ impl CodexStateDatabaseFixture {
         name TEXT,
         creator_account_id TEXT DEFAULT 'PRIVATE-ACCOUNT-ID'
     );";
-    const SQLITE: &'static str = "/usr/bin/sqlite3";
-
+    // Runs the script through the linked libsqlite3 (stops at the first error, like
+    // sqlite3 -bail), so Linux hosts without the sqlite3 command line tool work too.
     pub fn create(path: &Path, statements: &str) -> () {
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let mut child: Child = Command::new(Self::SQLITE)
-            .arg("-bail")
-            .arg(path)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .unwrap();
-        child
-            .stdin
-            .take()
-            .unwrap()
-            .write_all(statements.as_bytes())
-            .unwrap();
-        let output: Output = child.wait_with_output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        let file: CString = CString::new(path.to_str().unwrap()).unwrap();
+        let script: CString = CString::new(statements).unwrap();
+        let mut database: *mut c_void = std::ptr::null_mut();
+        assert_eq!(unsafe { sqlite3_open(file.as_ptr(), &mut database) }, 0);
+        let status: c_int = unsafe {
+            sqlite3_exec(
+                database,
+                script.as_ptr(),
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            )
+        };
+        let message: String = unsafe { CStr::from_ptr(sqlite3_errmsg(database)) }
+            .to_string_lossy()
+            .into_owned();
+        unsafe { sqlite3_close(database) };
+        assert_eq!(status, 0, "{message}");
     }
 
     pub fn threads(path: &Path, rows: &[String]) -> () {

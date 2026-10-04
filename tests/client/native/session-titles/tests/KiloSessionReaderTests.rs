@@ -1,4 +1,4 @@
-#![cfg(target_os = "macos")]
+#![cfg(any(target_os = "macos", target_os = "linux"))]
 
 #[path = "support/CodexStateDatabaseFixture.rs"]
 mod codex_state_database_fixture;
