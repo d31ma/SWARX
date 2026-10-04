@@ -1,8 +1,11 @@
+#[path = "support/DiscoveredSessions.rs"]
+mod discovered_sessions;
 #[path = "support/FixedHarnessSessionSource.rs"]
 mod fixed_harness_session_source;
 #[path = "support/SessionFolderFixture.rs"]
 mod session_folder_fixture;
 
+use discovered_sessions::discovered;
 use fixed_harness_session_source::FixedHarnessSessionSource;
 use observatory_session_title_tests::models::NativeHarnessSession;
 use observatory_session_title_tests::{
@@ -58,7 +61,7 @@ fn sessions_from_all_sources_are_ordered_by_family_then_id() -> () {
     let second: Box<dyn HarnessSessionSource> = source(vec![session("Claude", "a", "First", None)]);
     let service: HarnessSessionService = HarnessSessionService::new(vec![first, second]);
     assert_eq!(
-        keys(&service.discover()),
+        keys(&discovered(&service)),
         vec![
             key("Claude", "a", "First"),
             key("Claude", "c", "Third"),
@@ -78,7 +81,7 @@ fn source_order_does_not_change_the_result() -> () {
         HarnessSessionService::new(vec![source(left.clone()), source(right.clone())]);
     let backward: HarnessSessionService =
         HarnessSessionService::new(vec![source(right), source(left)]);
-    assert_eq!(forward.discover(), backward.discover());
+    assert_eq!(discovered(&forward), discovered(&backward));
 }
 
 #[test]
@@ -88,7 +91,7 @@ fn one_provider_id_reported_twice_keeps_the_most_recent_record() -> () {
         session("Claude", "x", "Unknown time", None),
         session("Claude", "x", "New", Some(20.0)),
     ])]);
-    assert_eq!(keys(&service.discover()), vec![key("Claude", "x", "New")]);
+    assert_eq!(keys(&discovered(&service)), vec![key("Claude", "x", "New")]);
 }
 
 #[test]
@@ -98,7 +101,7 @@ fn equal_ids_under_different_families_stay_separate() -> () {
         session("Claude", "same", "Claude session", Some(1.0)),
     ])]);
     assert_eq!(
-        keys(&service.discover()),
+        keys(&discovered(&service)),
         vec![
             key("Claude", "same", "Claude session"),
             key("Codex", "same", "Codex thread"),
@@ -113,7 +116,7 @@ fn equal_titles_with_different_ids_stay_separate() -> () {
         session("Claude", "one", "Implement", Some(1.0)),
     ])]);
     assert_eq!(
-        keys(&service.discover()),
+        keys(&discovered(&service)),
         vec![
             key("Claude", "one", "Implement"),
             key("Claude", "two", "Implement")
@@ -124,7 +127,7 @@ fn equal_titles_with_different_ids_stay_separate() -> () {
 #[test]
 fn no_sources_return_no_sessions() -> () {
     let service: HarnessSessionService = HarnessSessionService::new(Vec::new());
-    assert_eq!(service.discover(), Vec::<NativeHarnessSession>::new());
+    assert_eq!(discovered(&service), Vec::<NativeHarnessSession>::new());
 }
 
 #[test]
@@ -143,7 +146,7 @@ fn synced_conflicted_copy_of_a_desktop_session_is_merged_by_provider_id() -> () 
         Box::new(ClaudeDesktopSessionReaderService::new(fixture.root.clone()));
     let service: HarnessSessionService = HarnessSessionService::new(vec![reader]);
     assert_eq!(
-        keys(&service.discover()),
+        keys(&discovered(&service)),
         vec![key("Claude", "cli-id", "Implement")]
     );
 }

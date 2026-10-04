@@ -1,6 +1,9 @@
+#[path = "support/DiscoveredSessions.rs"]
+mod discovered_sessions;
 #[path = "support/SessionFolderFixture.rs"]
 mod session_folder_fixture;
 
+use discovered_sessions::discovered;
 use observatory_session_title_tests::models::NativeHarnessSession;
 use observatory_session_title_tests::{
     ClaudeDesktopSessionReaderService, CodexSidebarSessionReaderService, HarnessSessionService,
@@ -281,7 +284,7 @@ fn equal_ids_from_claude_and_codex_stay_separate_sessions() -> () {
         fixture.root.join(STATE_FILE),
     ));
     let sessions: Vec<NativeHarnessSession> =
-        HarnessSessionService::new(vec![codex, claude]).discover();
+        discovered(&HarnessSessionService::new(vec![codex, claude]));
     let families: Vec<String> = sessions
         .iter()
         .map(|session: &NativeHarnessSession| -> String { session.family.clone() })

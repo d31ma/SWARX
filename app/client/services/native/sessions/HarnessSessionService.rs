@@ -36,11 +36,6 @@ impl HarnessSessionService {
         Self::guard(&self.latest).clone()
     }
 
-    // Reads every source on the caller's thread; only the refresh thread and tests call this.
-    pub fn discover(&self) -> Vec<NativeHarnessSession> {
-        Self::merged(&self.sources)
-    }
-
     // Starts the single refresh thread: one discovery at a time, then a pause of `interval`.
     // A discovery that hangs holds only this thread, so no second one starts beside it.
     pub fn start(&self, clock: Arc<dyn ObservationClock>, interval: Duration) -> () {

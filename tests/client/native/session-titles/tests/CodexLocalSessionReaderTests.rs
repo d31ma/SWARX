@@ -1,10 +1,13 @@
 #![cfg(any(target_os = "macos", target_os = "linux"))]
+#[path = "support/DiscoveredSessions.rs"]
+mod discovered_sessions;
 
 #[path = "support/CodexStateDatabaseFixture.rs"]
 mod codex_state_database_fixture;
 #[path = "support/SessionFolderFixture.rs"]
 mod session_folder_fixture;
 
+use discovered_sessions::discovered;
 use codex_state_database_fixture::CodexStateDatabaseFixture as Database;
 use observatory_session_title_tests::models::NativeHarnessSession;
 use observatory_session_title_tests::{
@@ -327,7 +330,7 @@ fn duplicate_id_from_the_sidebar_cache_keeps_the_newest_record() -> () {
     let local: Box<dyn HarnessSessionSource> =
         Box::new(CodexLocalSessionReaderService::for_home(&fixture.root));
     let sessions: Vec<NativeHarnessSession> =
-        HarnessSessionService::new(vec![first, local, second]).discover();
+        discovered(&HarnessSessionService::new(vec![first, local, second]));
     assert_eq!(
         ids(&sessions),
         vec!["newer-local".to_owned(), "older-local".to_owned()]
