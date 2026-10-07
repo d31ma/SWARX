@@ -227,9 +227,9 @@ pub mod services {
     }
     pub use logical_event_service::LogicalEventService;
     pub mod logical_event_client_service {
+        use super::LogicalEventWireService;
         #[cfg_attr(not(windows), allow(unused_imports))]
         use super::LogicalPipeService;
-        use super::LogicalEventWireService;
         include!(concat!(env!("OUT_DIR"), "/LogicalEventClientService.rs"));
     }
     pub use logical_event_client_service::LogicalEventClientService;
@@ -309,4 +309,4 @@ pub mod services {
     }
     pub use native_platform_composition_service::*;
 }
-pub use services::NativeCommandBindingRegistryService;
+pub use services::{LogicalEventClientService, NativeCommandBindingRegistryService};

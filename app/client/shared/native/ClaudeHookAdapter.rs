@@ -5,12 +5,12 @@ use crate::models::{
 use crate::utils::{ActionPreviewUtils, HarnessFileUtils};
 use crate::{
     ClaudeHookEventFactory, ClaudeHookMapper, ClaudeHookToolInputReader, HarnessProcessRootReader,
-    ProcessIdentityReader,
+    LogicalEventClientService, ProcessIdentityReader,
 };
 use std::io::Read;
 
 pub struct ClaudeHookAdapter {
-    client: crate::services::LogicalEventClientService,
+    client: LogicalEventClientService,
     dialect: NativeHookDialect,
     root: Option<HarnessProcessRootReader>,
 }
@@ -132,7 +132,7 @@ impl ClaudeHookAdapter {
 
     pub fn new(endpoint: String, dialect: NativeHookDialect) -> Self {
         Self {
-            client: crate::services::LogicalEventClientService::new(endpoint),
+            client: LogicalEventClientService::new(endpoint),
             dialect,
             root: None,
         }

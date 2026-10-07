@@ -73,7 +73,7 @@ export class NativeRustPackager {
   }
 
   boundaryExports(): string {
-    const names: string = [...NativeRustPackager.TRAITS, ...NativeRustPackager.SDK_TYPES, ...NativeRustPackager.HOOK_TYPES].join(', ');
+    const names: string = [...NativeRustPackager.TRAITS, ...NativeRustPackager.SDK_TYPES, ...NativeRustPackager.HOOK_TYPES, ...NativeRustPackager.EMITTER_SERVICES].join(', ');
     return `\npub use crate::TachyonRustServices::models;\npub use crate::TachyonRustServices::{${names}};\n`
       + `\n#[cfg(any(test, feature = "${NativeRustPackager.FIXTURE_FEATURE}"))]\npub mod fixture_utils {\n`
       + 'pub use crate::TachyonRustServices::{ChartDataUtils, CommandResourceViewUtils, OverviewViewUtils, LogicalViewUtils, ProcessGraphUtils, ProcessOwnerUtils, ProcessTreeUtils, RuntimeViewUtils, SessionViewUtils};\n}\n'
