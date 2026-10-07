@@ -16,6 +16,8 @@ export class NativeRustPackager {
   private static readonly HOOK_TYPES: readonly string[] = [NativeRustPackager.HOOK_ADAPTER, 'ClaudeHookMapper', 'ClaudeHookEventFactory'];
   private static readonly EMITTER_TYPES: readonly string[] = ['ProcessIdentityReader', NativeRustPackager.HOOK_ADAPTER];
   private static readonly MARKER: string = '\npub mod services {\n';
+  private static readonly FRAMEWORK_EXPORTS: string = 'pub use crate::TachyonRustServices::*;';
+  private static readonly EMITTER_SERVICES: readonly string[] = ['LogicalEventClientService', 'LogicalEventWireService', 'LogicalSocketService', 'NativePlatformCompositionService'];
   private static readonly LIBRARY_NAME: string = 'libobservatory_native.a';
   private static readonly EMITTER_NAME: string = 'observatory-event';
   private static readonly FIXTURE_NAME: string = 'overview-fixture';
@@ -99,7 +101,8 @@ export class NativeRustPackager {
 
   private writeEmitter(): void {
     const source: string = path.join(this.root, NativeRustPackager.CLIENT_PATH, 'shared/native/EventEmitterMain.rs');
-    const body: string = `use observatory_native::{models, services, ${NativeRustPackager.EMITTER_TYPES.join(', ')}};\n`
+    const body: string = `use observatory_native::{models, ${NativeRustPackager.EMITTER_TYPES.join(', ')}};\n`
+      + `use observatory_native::services::{${NativeRustPackager.EMITTER_SERVICES.join(', ')}};\n`
       + `mod entry {include!(${JSON.stringify(source)});\n${this.emitterTests()}\n}\n`
       + 'fn main() {std::process::exit(entry::EventEmitterMain::run());}\n';
     fs.writeFileSync(path.join(this.cache, 'emitter.rs'), body);
@@ -164,7 +167,7 @@ export class NativeRustPackager {
   }
 
   private static requireFresh(source: string): void {
-    if (source.includes(NativeRustPackager.MARKER)) throw new Error('Stage a fresh Tachyon native companion before compiling the core.');
+    if ([NativeRustPackager.MARKER, NativeRustPackager.FRAMEWORK_EXPORTS].some((marker: string): boolean => source.includes(marker))) throw new Error('Stage a fresh Tachyon native companion before compiling the core.');
   }
 }
 

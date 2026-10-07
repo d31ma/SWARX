@@ -1,4 +1,8 @@
-use event_slice::{ClaudeHookAdapter, ProcessIdentityReader, models, services};
+use event_slice::services::{
+    LogicalEventClientService, LogicalEventWireService, LogicalSocketService,
+    NativePlatformCompositionService,
+};
+use event_slice::{ClaudeHookAdapter, ProcessIdentityReader, models};
 mod entry {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),

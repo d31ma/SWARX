@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import { spawnSync } from 'node:child_process';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 
 export class NativePackagerFixture {
   readonly root: string;
@@ -32,6 +32,23 @@ export class NativePackagerFixture {
 
   rust(): string {
     return this.write('app/dist/macos/project/companion.rs', 'pub mod TachyonRustServices {}\n');
+  }
+
+  buildScript(target: string): SpawnSyncReturns<string> {
+    const directory: string = path.join(this.artifacts, 'commands');
+    fs.mkdirSync(directory);
+    const script: string = this.write('build.sh', fs.readFileSync(path.resolve('build.sh'), 'utf8'));
+    this.write('tools/utils/ToolPathUtils.ts', fs.readFileSync(path.resolve('tools/utils/ToolPathUtils.ts'), 'utf8'));
+    const compiler: string = path.join(directory, 'ty');
+    this.writeAbsolute(compiler, '#!/bin/sh\nprintf "%s\\n" "$@" > "$OBSERVATORY_TEST_COMMANDS/compiler.txt"\n');
+    this.writeAbsolute(path.join(directory, 'tsc'), '#!/bin/sh\nprintf "Version 7.0.2\\n"\n');
+    this.writeAbsolute(path.join(directory, 'node'), '#!/bin/sh\ncase "$2" in tools/*.ts) printf "%s\\n" "$2" >> "$OBSERVATORY_TEST_COMMANDS/post.txt" ;; *) exec "$OBSERVATORY_TEST_NODE" "$@" ;; esac\n');
+    for (const name of ['ty', 'tsc', 'node']) fs.chmodSync(path.join(directory, name), 0o755);
+    return spawnSync('/bin/zsh', [script, '--target', target], {encoding: 'utf8', env: {
+      ...process.env, PATH: directory + path.delimiter + process.env.PATH,
+      TACHYON_COMPILER: compiler, OBSERVATORY_SWIFT_CACHE_PATH: this.artifacts + '-swift', OBSERVATORY_RUST_CACHE_PATH: this.artifacts + '-rust', OBSERVATORY_ROLLBACK_ROOT: this.artifacts + '-rollback',
+      OBSERVATORY_TEST_COMMANDS: directory, OBSERVATORY_TEST_NODE: process.execPath,
+    }});
   }
 
   host(): string {

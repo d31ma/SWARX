@@ -1,8 +1,8 @@
+use crate::ClaudeHookAdapter;
+use crate::ProcessIdentityReader;
 use crate::models::{
     NativeCommandIdentity, NativeHookDialect, NativeLogicalReceipt, NativeProcess,
 };
-use crate::ClaudeHookAdapter;
-use crate::ProcessIdentityReader;
 use std::io::{Read, Write};
 
 pub struct EventEmitterMain {}
@@ -21,8 +21,7 @@ impl EventEmitterMain {
     ];
     const USAGE: &'static str = "Usage: observatory-event [--socket /absolute/private/path] < event.json; or observatory-event --claude-hook|--codex-hook|--qwen-hook|--pi-hook|--goose-hook|--gemini-hook|--opencode-hook [--socket /absolute/private/path] < hook.json; or observatory-event --identity <positive-decimal-pid>";
     const INVALID_PID: &'static str = "Identity query requires a positive decimal PID.";
-    const UNSUPPORTED: &'static str =
-        "Process identity query unavailable: this target is not supported; macOS, Linux or Windows is required.";
+    const UNSUPPORTED: &'static str = "Process identity query unavailable: this target is not supported; macOS, Linux or Windows is required.";
     const IDENTITY_UNAVAILABLE: &'static str = "Process identity unavailable or changed.";
     const SUCCESS_CODE: i32 = 0;
 
@@ -73,10 +72,10 @@ impl EventEmitterMain {
 
     #[cfg(any(target_os = "macos", target_os = "linux", windows))]
     fn hook_adapter(adapter: ClaudeHookAdapter) -> ClaudeHookAdapter {
-        let user: i64 = crate::services::NativePlatformCompositionService::current_user();
-        let origin: i32 = crate::services::NativePlatformCompositionService::parent_process();
+        let user: i64 = crate::NativePlatformCompositionService::current_user();
+        let origin: i32 = crate::NativePlatformCompositionService::parent_process();
         let reader: Box<dyn ProcessIdentityReader> =
-            crate::services::NativePlatformCompositionService::identity_reader();
+            crate::NativePlatformCompositionService::identity_reader();
         adapter.with_process_root(reader, user, origin)
     }
 
@@ -92,7 +91,7 @@ impl EventEmitterMain {
     fn send(arguments: Vec<String>) -> Result<NativeLogicalReceipt, String> {
         let endpoint: String = Self::selected_endpoint(arguments)?;
         let data: Vec<u8> = Self::input()?;
-        crate::services::LogicalEventClientService::new(endpoint).send_bytes(&data)
+        crate::LogicalEventClientService::new(endpoint).send_bytes(&data)
     }
 
     fn identity_result(arguments: Vec<String>) -> i32 {
@@ -149,7 +148,7 @@ impl EventEmitterMain {
     fn platform_identity(pid: i32) -> Result<NativeCommandIdentity, String> {
         Self::require_platform(true)?;
         let mut reader: Box<dyn ProcessIdentityReader> =
-            crate::services::NativePlatformCompositionService::identity_reader();
+            crate::NativePlatformCompositionService::identity_reader();
         Self::read_identity(reader.as_mut(), pid)
     }
 
@@ -200,7 +199,7 @@ impl EventEmitterMain {
 
     fn selected_endpoint(arguments: Vec<String>) -> Result<String, String> {
         match arguments.as_slice() {
-            [] => Ok(crate::services::LogicalSocketService::current_endpoint()),
+            [] => Ok(crate::LogicalSocketService::current_endpoint()),
             [flag, endpoint] if flag == "--socket" => Ok(endpoint.clone()),
             _ => Err(Self::USAGE.to_owned()),
         }
@@ -209,7 +208,7 @@ impl EventEmitterMain {
     fn input() -> Result<Vec<u8>, String> {
         let mut data: Vec<u8> = Vec::new();
         std::io::stdin()
-            .take((crate::services::LogicalEventWireService::LIMIT + 1) as u64)
+            .take((crate::LogicalEventWireService::LIMIT + 1) as u64)
             .read_to_end(&mut data)
             .map_err(Self::io_error)?;
         Self::require_size(data.len())?;
@@ -224,7 +223,7 @@ impl EventEmitterMain {
     }
 
     fn require_size(length: usize) -> Result<(), String> {
-        if length > crate::services::LogicalEventWireService::LIMIT {
+        if length > crate::LogicalEventWireService::LIMIT {
             return Err("Event exceeds the 32 KiB limit.".to_string());
         }
         Ok(())

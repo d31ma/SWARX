@@ -27,7 +27,7 @@ test('Rust packaging appends current exports, builds offline and copies library/
   assert.ok(manifest.includes('crate-type = ["staticlib", "rlib"]'));
   assert.ok(manifest.includes('libc = "=0.2.189"'));
   assert.ok(fs.readFileSync(path.join(fixture.rustCache, 'emitter.rs'), 'utf8').includes('EventEmitterMain::run()'));
-  assert.ok(fs.readFileSync(path.join(fixture.rustCache, 'emitter.rs'), 'utf8').includes('use observatory_native::{models, services, ProcessIdentityReader, ClaudeHookAdapter};'));
+  assert.ok(fs.readFileSync(path.join(fixture.rustCache, 'emitter.rs'), 'utf8').includes('use observatory_native::{models, ProcessIdentityReader, ClaudeHookAdapter};\nuse observatory_native::services::{LogicalEventClientService, LogicalEventWireService, LogicalSocketService, NativePlatformCompositionService};'));
   assert.equal(fs.readFileSync(path.join(fixture.artifacts, 'macos/project/libtachyoncompanion.a'), 'utf8'), 'fixture static library');
   const emitter = path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/MacOS/observatory-event');
   assert.equal(fs.statSync(emitter).mode & 0o777, 0o755);
@@ -250,4 +250,37 @@ test('An explicitly blank Cargo target is rejected instead of selecting a fallba
   process.env.CARGO_TARGET_DIR = ' \t';
   assert.throws((): string => ToolPathUtils.cargoTarget(fixture.root, fixture.rustCache), /CARGO_TARGET_DIR requires an explicitly supplied value/);
   assert.equal(fs.existsSync(fixture.rustCache), false);
+});
+
+for (const target of ['macos', 'linux', 'windows']) {
+  test(`Production build routes ${target} through one framework native build`, (context: TestContext): void => {
+    const fixture: NativePackagerFixture = new NativePackagerFixture();
+    context.after((): void => fixture.close());
+    const result = fixture.buildScript(target);
+    assert.equal(result.status, 0, result.stderr);
+    const directory: string = path.join(fixture.artifacts, 'commands');
+    assert.deepEqual(fs.readFileSync(path.join(directory, 'compiler.txt'), 'utf8').trim().split('\n'),
+      ['bundle', 'app', '--out-dir', fixture.artifacts, '--target', target, '--native']);
+    const post: string = path.join(directory, 'post.txt');
+    const commands: string[] = fs.existsSync(post) ? fs.readFileSync(post, 'utf8').trim().split('\n') : [];
+    assert.deepEqual(commands, target === 'macos' ? ['tools/NativeHostCustomizer.ts', 'tools/IconPackager.ts'] : []);
+  });
+}
+
+test('Production build rejects an unsupported target before invoking native tools', (context: TestContext): void => {
+  const fixture: NativePackagerFixture = new NativePackagerFixture();
+  context.after((): void => fixture.close());
+  const result = fixture.buildScript('web');
+  assert.notEqual(result.status, 0);
+  assert.equal(fs.existsSync(path.join(fixture.artifacts, 'commands/compiler.txt')), false);
+});
+
+test('Legacy QA packager refuses an already framework-exported Cargo companion', (context: TestContext): void => {
+  const fixture: NativePackagerFixture = new NativePackagerFixture();
+  context.after((): void => fixture.close());
+  const source: string = fixture.write('app/dist/macos/project/companion.rs', 'pub use crate::TachyonRustServices::*;\n');
+  const packager: NativeRustPackager = new NativeRustPackager(fixture.root, fixture.run);
+  assert.throws((): void => packager.build(), /fresh Tachyon/);
+  assert.equal(fs.readFileSync(source, 'utf8'), 'pub use crate::TachyonRustServices::*;\n');
+  assert.equal(fixture.commands.length, 0);
 });
