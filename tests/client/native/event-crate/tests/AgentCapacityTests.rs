@@ -55,3 +55,25 @@ fn a_quiet_row_with_a_running_call_is_kept() -> () {
     assert!(rows.contains(&"agent-000".to_string()));
     assert!(!rows.contains(&"agent-001".to_string()));
 }
+
+#[test]
+fn a_rejected_registration_keeps_all_quiet_rows_and_the_revision() -> () {
+    let mut state: LogicalStateService = full_table(1000.0);
+    let later: f64 = 1000.0 + LogicalEventPolicyService::STALE_SECONDS + 10.0;
+    let before: Vec<String> = ids(&state, later);
+    let revision: i64 = state.revision();
+    let rejected: NativeLogicalEvent = event(json!({
+        "type": "logical.register",
+        "agent": "codex-thread",
+        "family": "Codex",
+        "session_id": "invalid/session"
+    }));
+    assert!(state.apply(&rejected, later).is_err());
+    assert_eq!(ids(&state, later), before);
+    assert_eq!(state.revision(), revision);
+    assert!(register(&mut state, "codex-thread", later).is_ok());
+    let after: Vec<String> = ids(&state, later);
+    assert_eq!(after.len(), LogicalEventPolicyService::AGENT_LIMIT);
+    assert!(!after.contains(&"agent-000".to_string()));
+    assert!(after.contains(&"agent-001".to_string()));
+}

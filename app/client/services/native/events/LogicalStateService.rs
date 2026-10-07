@@ -91,8 +91,6 @@ impl LogicalStateService {
 
     fn register(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<(), String> {
         self.require_new_agent(&event.agent)?;
-        self.make_room(now);
-        self.require_agent_capacity()?;
         let session: Option<NativeSessionLink> = self.session_binding(event)?;
         let agent: NativeLogicalAgent = NativeLogicalAgent {
             id: event.agent.clone(),
@@ -111,6 +109,8 @@ impl LogicalStateService {
             reported_status: None,
             model: self.text.model(event.model.as_deref()),
         };
+        self.make_room(now);
+        self.require_agent_capacity()?;
         self.agents.insert(event.agent.clone(), agent);
         Ok(())
     }
