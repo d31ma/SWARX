@@ -40,7 +40,7 @@ class ScriptUtilsTest {
         setItem(key, value) { if (failure === 'write') throw new Error('storage full'); writes.push([key, value]); }
       }
     });
-    const url = new URL('../../app/client/utils/ScriptUtils.js', import.meta.url);
+    const url = new URL('../../app/client/shared/utils/ScriptUtils.js', import.meta.url);
     context.assetModuleUrl = url.href;
     const source = readFileSync(url, 'utf8').replace('export ', ' '.repeat('export '.length))
       .replaceAll('import.meta.url', 'assetModuleUrl'.padEnd('import.meta.url'.length));

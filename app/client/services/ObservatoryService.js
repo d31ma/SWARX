@@ -1,4 +1,4 @@
-import { ScriptUtils } from '../utils/ScriptUtils.js';
+import { ScriptUtils } from '../shared/utils/ScriptUtils.js';
 
 @Service
 export default class ObservatoryService {
@@ -233,6 +233,11 @@ export default class ObservatoryService {
     async #renderCharts() {
         const revision = this.#revision;
         await this.#scheduler().render();
+        this.#renderCurrentCharts(revision);
+    }
+
+    /** @param {number} revision @returns {void} */
+    #renderCurrentCharts(revision) {
         if (!this.#currentRevision(revision)) {
             return;
         }

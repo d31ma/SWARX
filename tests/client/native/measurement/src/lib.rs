@@ -98,7 +98,7 @@ mod groups {
 mod counter_utils {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../../../app/client/utils/NativeCounterUtils.rs"
+        "/../../../../app/client/shared/utils/NativeCounterUtils.rs"
     ));
 }
 pub use counter_utils::*;
@@ -142,14 +142,14 @@ pub mod utils {
     mod lineage {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../app/client/utils/ProcessLineageUtils.rs"
+            "/../../../../app/client/shared/utils/ProcessLineageUtils.rs"
         ));
     }
     pub use lineage::*;
     mod context {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../app/client/utils/NativeCommandContextUtils.rs"
+            "/../../../../app/client/shared/utils/NativeCommandContextUtils.rs"
         ));
     }
     pub use context::*;

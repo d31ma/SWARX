@@ -13,7 +13,7 @@ export class BrowserBundleProvenanceUtils {
   /** @type {string[]} */
   static #RETIRED = ['services/SnapshotReaderService.js', 'shared/scripts/ChartRenderer.js', 'shared/scripts/GraphRenderer.js', 'shared/scripts/GraphGroupRenderer.js', 'shared/scripts/ViewContinuity.js', 'utils/PresentationUtils.js', 'utils/DomUtils.js'];
   /** @type {string[]} */
-  static #REQUIRED = ['components/observatory/panel/tac.html', 'components/observatory/panel/tac.css', 'components/observatory/help/tac.html', 'components/observatory/help/tac.css', 'shared/styles/app.css', 'utils/ScriptUtils.js', 'manifest.json'];
+  static #REQUIRED = ['components/observatory/panel/tac.html', 'components/observatory/panel/tac.css', 'components/observatory/help/tac.html', 'components/observatory/help/tac.css', 'shared/styles/app.css', 'shared/utils/ScriptUtils.js', 'manifest.json'];
 
   /** @type {Record<string, {package: string, version: string, license: string, sha256: string}>} */
   static #VENDORS = {
@@ -147,7 +147,7 @@ export class BrowserBundleProvenanceUtils {
   static #emittedHashes(modules, emitted) {
     /** @type {Record<string, string>} */
     const record = {};
-    for (const url of [...Object.values(modules), new URL('index.html', emitted), new URL('tachyon-runtime/tac-client.js', emitted), new URL('utils/ScriptUtils.js', emitted)]) {
+    for (const url of [...Object.values(modules), new URL('index.html', emitted), new URL('tachyon-runtime/tac-client.js', emitted), new URL('shared/utils/ScriptUtils.js', emitted)]) {
       record['emitted:' + decodeURIComponent(url.href.slice(emitted.href.length))] = this.#hash(url);
     }
     return record;
@@ -169,7 +169,7 @@ export class BrowserBundleProvenanceUtils {
 
   /** @param {URL} project @param {URL} emitted @returns {void} */
   static #requireLoader(project, emitted) {
-    assert.ok(readFileSync(new URL('app/client/utils/ScriptUtils.js', project)).equals(readFileSync(new URL('utils/ScriptUtils.js', emitted))), 'Emitted ScriptUtils theme utility is stale.');
+    assert.ok(readFileSync(new URL('app/client/shared/utils/ScriptUtils.js', project)).equals(readFileSync(new URL('shared/utils/ScriptUtils.js', emitted))), 'Emitted ScriptUtils theme utility is stale.');
   }
 
   /** @param {Record<string, string>} record @param {URL} project @param {URL} emitted @param {URL} build @returns {void} */

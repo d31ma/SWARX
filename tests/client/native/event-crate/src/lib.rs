@@ -89,21 +89,21 @@ pub mod utils {
     mod context {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../app/client/utils/NativeCommandContextUtils.rs"
+            "/../../../../app/client/shared/utils/NativeCommandContextUtils.rs"
         ));
     }
     pub use context::*;
     mod harness_file {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../app/client/utils/HarnessFileUtils.rs"
+            "/../../../../app/client/shared/utils/HarnessFileUtils.rs"
         ));
     }
     pub use harness_file::*;
     mod action_preview {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../app/client/utils/ActionPreviewUtils.rs"
+            "/../../../../app/client/shared/utils/ActionPreviewUtils.rs"
         ));
     }
     pub use action_preview::*;

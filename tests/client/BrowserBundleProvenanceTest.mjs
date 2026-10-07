@@ -52,10 +52,10 @@ function fixture(context) {
     put(project, 'app/client/components/observatory/' + component + '/tac.css', ':host {color: blue;}');
   }
   put(project, 'app/client/shared/styles/app.css', 'body {margin: 0;}');
-  put(project, 'app/client/utils/ScriptUtils.js', 'export class ScriptUtils {}');
+  put(project, 'app/client/shared/utils/ScriptUtils.js', 'export class ScriptUtils {}');
   put(project, 'app/client/models/Fixture.ts', 'export interface Fixture {value: string}');
   put(project, 'app/client/manifest.json', JSON.stringify(ProvenanceVendorFixture.manifest()));
-  put(emitted, 'utils/ScriptUtils.js', 'export class ScriptUtils {}');
+  put(emitted, 'shared/utils/ScriptUtils.js', 'export class ScriptUtils {}');
   put(emitted, 'index.html', '<script id="tachyon-view" type="application/json">' + JSON.stringify({services}) + '</script>');
   put(emitted, 'tachyon-runtime/tac-client.js', 'export const runtime = "synthetic fixture";');
   ProvenanceVendorFixture.copy(project, emitted);
@@ -126,7 +126,7 @@ test('source changes after capture are refused', context => {
 
 test('stale live theme utility copy is refused', context => {
   const data = fixture(context);
-  put(data.emitted, 'utils/ScriptUtils.js', 'export class StaleLoader {}');
+  put(data.emitted, 'shared/utils/ScriptUtils.js', 'export class StaleLoader {}');
   assert.throws(() => BrowserBundleProvenanceUtils.inspect(data.project, data.emitted, data.build), /ScriptUtils.*stale/);
 });
 
@@ -180,7 +180,7 @@ test('missing script declaration is refused', /** @param {TestContext} context @
 test('an extra authored script cannot obtain vendor status', /** @param {TestContext} context @returns {void} */ context => {
   const data = fixture(context);
   const manifest = ProvenanceVendorFixture.manifest();
-  manifest.tac.scripts.push('/utils/ScriptUtils.js');
+  manifest.tac.scripts.push('/shared/utils/ScriptUtils.js');
   declare(data, manifest);
   assert.throws(() => BrowserBundleProvenanceUtils.inspect(data.project, data.emitted, data.build), /Only the three pinned vendor scripts/);
 });

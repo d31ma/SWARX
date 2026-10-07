@@ -30,7 +30,7 @@ class ScopedCoverageAudit {
   static #FILE_ENCODING = 'utf8';
   /** @type {string[]} */
   static #FILES = [
-    'app/client/utils/ScriptUtils.js',
+    'app/client/shared/utils/ScriptUtils.js',
     'app/client/services/native/monitoring/SnapshotService.js'
   ];
   /** @type {Set<string>} */

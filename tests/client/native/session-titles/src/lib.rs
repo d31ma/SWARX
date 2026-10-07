@@ -4,7 +4,7 @@ pub mod utils {
     mod harness_file_utils {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../app/client/utils/HarnessFileUtils.rs"
+            "/../../../../app/client/shared/utils/HarnessFileUtils.rs"
         ));
     }
     pub use harness_file_utils::*;
@@ -12,7 +12,7 @@ pub mod utils {
     mod harness_folder_utils {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../app/client/utils/HarnessFolderUtils.rs"
+            "/../../../../app/client/shared/utils/HarnessFolderUtils.rs"
         ));
     }
     pub use harness_folder_utils::*;
@@ -20,7 +20,7 @@ pub mod utils {
     mod harness_database_utils {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../app/client/utils/HarnessDatabaseUtils.rs"
+            "/../../../../app/client/shared/utils/HarnessDatabaseUtils.rs"
         ));
     }
     pub use harness_database_utils::*;

@@ -65,7 +65,7 @@ pub mod utils {
     mod lineage {
         include!(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/../../../../app/client/utils/ProcessLineageUtils.rs"
+            "/../../../../app/client/shared/utils/ProcessLineageUtils.rs"
         ));
     }
     pub use lineage::*;

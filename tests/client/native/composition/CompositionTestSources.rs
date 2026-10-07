@@ -118,7 +118,7 @@ impl CompositionTestSources {
         for name in Self::UTILITIES {
             Self::append_utility(
                 &mut content,
-                &client.join("utils").join(format!("{name}.rs")),
+                &client.join("shared/utils").join(format!("{name}.rs")),
                 name,
             )?;
         }
