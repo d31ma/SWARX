@@ -260,7 +260,7 @@ for (const target of ['macos', 'linux', 'windows']) {
     assert.equal(result.status, 0, result.stderr);
     const directory: string = path.join(fixture.artifacts, 'commands');
     assert.deepEqual(fs.readFileSync(path.join(directory, 'compiler.txt'), 'utf8').trim().split('\n'),
-      ['bundle', 'app', '--out-dir', fixture.artifacts, '--target', target, '--native']);
+      ['bundle', 'app', '--out-dir', fixture.artifacts, '--target', target]);
     const post: string = path.join(directory, 'post.txt');
     const commands: string[] = fs.existsSync(post) ? fs.readFileSync(post, 'utf8').trim().split('\n') : [];
     assert.deepEqual(commands, target === 'macos' ? ['tools/NativeHostCustomizer.ts', 'tools/IconPackager.ts'] : []);

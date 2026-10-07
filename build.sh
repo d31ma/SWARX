@@ -67,7 +67,7 @@ main() {
   export CLANG_MODULE_CACHE_PATH="$cache_path"
   export SWIFT_MODULECACHE_PATH="$cache_path"
   _prepare_target "$target" "$artifact_path" "$backup_root"
-  "$compiler_path" bundle app --out-dir "$artifact_path" --target "$target" --native
+  "$compiler_path" bundle app --out-dir "$artifact_path" --target "$target"
   _finish_target "$target" "$project_root"
 }
 
