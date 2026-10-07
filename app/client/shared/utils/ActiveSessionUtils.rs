@@ -30,6 +30,8 @@ impl ActiveSessionUtils {
     const BACKGROUND_PLURAL: &'static str = "background tasks";
     const RUNNING: &'static str = "running";
     const WAITING: &'static str = "waiting";
+    const COORDINATOR_REPORT: &'static str = "coordinator-report";
+    const AGENT_TASK: &'static str = "agent_task";
 
     // One card per session with an active agent or an active background task; background work
     // is a task item on the card, never an agent role.
@@ -198,9 +200,26 @@ impl ActiveSessionUtils {
                 .clone()
                 .unwrap_or_else(|| -> String { Self::NO_TOOL.to_owned() }),
             action_detail: Self::action_detail(agent),
-            tool_count: agent.executions.len() as i64,
+            tool_count: Self::agent_tool_count(agent),
             started_at: Self::started(agent, sources),
         }
+    }
+
+    fn agent_tool_count(agent: &NativeLogicalAgentView) -> i64 {
+        agent
+            .executions
+            .iter()
+            .filter(|view: &&NativeExecutionView| -> bool {
+                Self::counts_as_tool(&agent.feed_mode, view)
+            })
+            .count() as i64
+    }
+
+    fn counts_as_tool(feed: &str, view: &NativeExecutionView) -> bool {
+        if feed != Self::COORDINATOR_REPORT {
+            return true;
+        }
+        view.execution.name != Self::AGENT_TASK
     }
 
     fn role(sub_agent: bool) -> String {
