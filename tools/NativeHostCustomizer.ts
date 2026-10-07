@@ -25,6 +25,8 @@ export class NativeHostCustomizer {
   private static readonly WINDOW_TITLE_NEW: string = 'window.title = "Swarx Agent Observatory"';
   private static readonly MENU_NAME_OLD: string = 'menus.install(NSApplication.shared, window, "Agent Observatory", menuNavigation)';
   private static readonly MENU_NAME_NEW: string = 'menus.install(NSApplication.shared, window, "Swarx", menuNavigation)';
+  private static readonly MENU_ACTIONS_OLD: string = 'menus.install(NSApplication.shared, window, "Agent Observatory", menuNavigation, menuActions)';
+  private static readonly MENU_ACTIONS_NEW: string = 'menus.install(NSApplication.shared, window, "Swarx", menuNavigation, menuActions)';
   private static readonly ACTIVATION: string = '        NSApplication.shared.activate(ignoringOtherApps: true)';
   private static readonly ACTIVE: string = '        Telemetry.shared.record("controller.active")';
   private static readonly ICON_CALL: string = '        NativeApplicationIcon.applyIcon()\n';
@@ -132,10 +134,12 @@ export class NativeHostCustomizer {
   private static applyBranding(source: string): string {
     const windowPresent: boolean = NativeHostCustomizer.brandingPresent(source, NativeHostCustomizer.WINDOW_TITLE_OLD, NativeHostCustomizer.WINDOW_TITLE_NEW);
     NativeHostCustomizer.requireBranding(windowPresent);
-    const menuPresent: boolean = NativeHostCustomizer.brandingPresent(source, NativeHostCustomizer.MENU_NAME_OLD, NativeHostCustomizer.MENU_NAME_NEW);
+    const menuPresent: boolean = NativeHostCustomizer.brandingPresent(source, NativeHostCustomizer.MENU_NAME_OLD, NativeHostCustomizer.MENU_NAME_NEW)
+      || NativeHostCustomizer.brandingPresent(source, NativeHostCustomizer.MENU_ACTIONS_OLD, NativeHostCustomizer.MENU_ACTIONS_NEW);
     NativeHostCustomizer.requireBranding(menuPresent);
     const window: string = source.replaceAll(NativeHostCustomizer.WINDOW_TITLE_OLD, NativeHostCustomizer.WINDOW_TITLE_NEW);
-    return window.replaceAll(NativeHostCustomizer.MENU_NAME_OLD, NativeHostCustomizer.MENU_NAME_NEW);
+    return window.replaceAll(NativeHostCustomizer.MENU_NAME_OLD, NativeHostCustomizer.MENU_NAME_NEW)
+      .replaceAll(NativeHostCustomizer.MENU_ACTIONS_OLD, NativeHostCustomizer.MENU_ACTIONS_NEW);
   }
 
   private static brandingPresent(source: string, previous: string, current: string): boolean {
