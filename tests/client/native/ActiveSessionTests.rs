@@ -1,6 +1,6 @@
 use crate::models::{
-    NativeActiveSessionView, NativeAgentRowView, NativeBackgroundTaskView, NativeLogicalAgent,
-    NativeLogicalAgentView, NativeOverviewView, NativeSnapshot, NativeViewSelection,
+    NativeActiveSessionView, NativeAgentRowView, NativeBackgroundTaskView, NativeExecutionView,
+    NativeLogicalAgent, NativeLogicalAgentView, NativeOverviewView, NativeSnapshot, NativeViewSelection,
 };
 use crate::utils::ActiveSessionUtils;
 use crate::TachyonRustServices::{LogicalViewUtils, OverviewViewUtils, SessionViewUtils};
@@ -43,6 +43,23 @@ impl ActiveSessionTests {
         agent.executions.clear();
         agent.captured_at = 100.0;
         agent
+    }
+
+    fn worker_actions(feed: &str, names: &[&str]) -> NativeLogicalAgentView {
+        let mut agent: NativeLogicalAgentView =
+            Self::worker("review:worker", "Codex", Some(("review", "Review")), 100.0);
+        agent.feed_mode = feed.to_owned();
+        let execution: NativeExecutionView = agent.executions[0].clone();
+        agent.executions = names
+            .iter()
+            .map(|name: &&str| -> NativeExecutionView {
+                let mut action: NativeExecutionView = execution.clone();
+                action.execution.id = format!("review:worker-{name}");
+                action.execution.name = (*name).to_owned();
+                action
+            })
+            .collect();
+        LogicalViewUtils::running_view(&agent, Self::NOW)
     }
 
     fn view(agents: Vec<NativeLogicalAgentView>, expanded: &[&str]) -> NativeOverviewView {
@@ -212,6 +229,59 @@ fn session_card_counts_and_labels_use_the_member_rows() -> () {
     assert_eq!(review.agents[0].task_label, "Task for review");
     assert_eq!(review.agents[0].session_id, "review");
     assert_eq!(review.agents[0].task_id, "review-task");
+}
+
+#[test]
+fn coordinator_agent_task_stays_visible_without_counting_as_a_tool() -> () {
+    let agent = ActiveSessionTests::worker_actions("coordinator-report", &["agent_task"]);
+    let view = ActiveSessionTests::view(vec![agent], &[]);
+    assert_eq!(view.logical_count, 1);
+    assert_eq!(view.active_summary.agents, 1);
+    assert_eq!(view.active_summary.sub_agents, 1);
+    assert_eq!(view.active_summary.tools, 0);
+    assert_eq!(view.active_summary.cards[2].value, "0");
+    assert_eq!(view.active_sessions[0].agent_total, 1);
+    assert_eq!(view.active_sessions[0].tool_count, 0);
+    assert_eq!(view.active_sessions[0].agents[0].tool_count, 0);
+    assert_eq!(view.active_sessions[0].agents[0].tool_label, "agent_task");
+    assert_eq!(view.active_sessions[0].agents[0].task_label, "Task for review:worker");
+    assert_eq!(view.active_sessions[0].agents[0].task_id, "review:worker-task");
+    assert_eq!(
+        view.active_sessions[0].count_label,
+        "0 Agents \u{b7} 1 Sub-agent \u{b7} 0 tools running"
+    );
+}
+
+#[test]
+fn coordinator_agent_task_does_not_hide_genuine_tools() -> () {
+    let agent = ActiveSessionTests::worker_actions(
+        "coordinator-report",
+        &["agent_task", "exec_command", "Bash", "Read"],
+    );
+    let view = ActiveSessionTests::view(vec![agent], &[]);
+    assert_eq!(view.active_sessions[0].agents[0].tool_count, 3);
+    assert_eq!(view.active_sessions[0].tool_count, 3);
+    assert_eq!(view.active_summary.tools, 3);
+    assert_eq!(view.logical_count, 1);
+    assert_eq!(view.logical[0].executions.len(), 4);
+}
+
+#[test]
+fn other_feeds_keep_agent_task_in_the_tool_count() -> () {
+    let agent = ActiveSessionTests::worker_actions("events", &["agent_task"]);
+    let view = ActiveSessionTests::view(vec![agent], &[]);
+    assert_eq!(view.active_sessions[0].agents[0].tool_count, 1);
+    assert_eq!(view.active_sessions[0].tool_count, 1);
+    assert_eq!(view.active_summary.tools, 1);
+}
+
+#[test]
+fn coordinator_tools_with_similar_names_still_count() -> () {
+    let agent = ActiveSessionTests::worker_actions("coordinator-report", &["agent_task_status"]);
+    let view = ActiveSessionTests::view(vec![agent], &[]);
+    assert_eq!(view.active_sessions[0].agents[0].tool_count, 1);
+    assert_eq!(view.active_sessions[0].tool_count, 1);
+    assert_eq!(view.active_summary.tools, 1);
 }
 
 #[test]
