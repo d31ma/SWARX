@@ -187,7 +187,11 @@ export default class ObservatoryService {
 
     /** @param {string} identifier @param {string} selector @returns {Promise<void>} */
     async #focusRendered(identifier, selector) {
+        const revision = this.#revision;
         await this.#scheduler().render();
+        if (!this.#currentRevision(revision)) {
+            return;
+        }
         this.#presentation().focusSession(identifier, selector);
     }
 
@@ -227,8 +231,17 @@ export default class ObservatoryService {
 
     /** @returns {Promise<void>} */
     async #renderCharts() {
+        const revision = this.#revision;
         await this.#scheduler().render();
+        if (!this.#currentRevision(revision)) {
+            return;
+        }
         this.#presentation().render(this.#element(), this.#selection());
+    }
+
+    /** @param {number} revision @returns {boolean} */
+    #currentRevision(revision) {
+        return [revision === this.#revision, !this.#signal().aborted].every(Boolean);
     }
 
     /** @param {Event} event @param {string} group @param {number} identifier @returns {void} */
