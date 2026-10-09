@@ -12,7 +12,7 @@ pub struct LogicalSocketService {
     worker: Option<JoinHandle<()>>,
     lock: Option<File>,
     identity: Option<NativeSocketIdentity>,
-    qa_directory: Option<NativeSocketIdentity>,
+    candidate_directory: Option<NativeSocketIdentity>,
     paths: LogicalSocketPathService,
     failure: Option<String>,
 }
@@ -28,7 +28,7 @@ impl LogicalSocketService {
             worker: None,
             lock: None,
             identity: None,
-            qa_directory: None,
+            candidate_directory: None,
             paths: LogicalSocketPathService::default(),
             failure: None,
         }
@@ -39,7 +39,7 @@ impl LogicalSocketService {
     }
 
     pub fn directory_identity(&self) -> Option<NativeSocketIdentity> {
-        self.qa_directory.clone()
+        self.candidate_directory.clone()
     }
 
     #[cfg(target_os = "macos")]
@@ -55,9 +55,9 @@ impl LogicalSocketService {
             return Ok(Self::new(Self::current_endpoint()));
         };
         let paths = LogicalSocketPathService::default();
-        let (endpoint, identity) = paths.qa_endpoint(directory, &Self::current_endpoint())?;
+        let (endpoint, identity) = paths.candidate_endpoint(directory, &Self::current_endpoint())?;
         let mut socket = Self::new(endpoint);
-        socket.qa_directory = Some(identity);
+        socket.candidate_directory = Some(identity);
         Ok(socket)
     }
 
@@ -66,10 +66,10 @@ impl LogicalSocketService {
         Ok(Self::new(Self::current_endpoint()))
     }
 
-    fn require_qa_directory(&self) -> Result<(), String> {
+    fn require_candidate_directory(&self) -> Result<(), String> {
         #[cfg(target_os = "macos")]
-        if let Some(expected) = &self.qa_directory {
-            self.paths.revalidate_qa_directory(&self.endpoint, expected)?;
+        if let Some(expected) = &self.candidate_directory {
+            self.paths.revalidate_candidate_directory(&self.endpoint, expected)?;
         }
         Ok(())
     }
@@ -152,19 +152,19 @@ impl LogicalSocketService {
 
     fn open(&mut self, receiver: Arc<LogicalEventReceiverService>) -> Result<(), String> {
         #[cfg(target_os = "macos")]
-        let lock = match &self.qa_directory {
-            Some(expected) => self.paths.prepare_qa(&self.endpoint, expected)?,
+        let lock = match &self.candidate_directory {
+            Some(expected) => self.paths.prepare_candidate(&self.endpoint, expected)?,
             None => self.paths.prepare(&self.endpoint)?,
         };
         #[cfg(not(target_os = "macos"))]
         let lock = self.paths.prepare(&self.endpoint)?;
         self.lock = Some(lock);
-        self.require_qa_directory()?;
+        self.require_candidate_directory()?;
         receiver.restore();
-        self.require_qa_directory()?;
+        self.require_candidate_directory()?;
         let listener: std::os::unix::net::UnixListener =
             std::os::unix::net::UnixListener::bind(&self.endpoint).map_err(Self::socket_error)?;
-        self.require_qa_directory()?;
+        self.require_candidate_directory()?;
         self.identity = Some(self.paths.secure_socket(&self.endpoint)?);
         listener.set_nonblocking(true).map_err(Self::socket_error)?;
         let worker: LogicalSocketWorkerService = self.new_worker(receiver);
@@ -173,7 +173,7 @@ impl LogicalSocketService {
 
     fn cleanup_owned(&mut self) -> () {
         if let Some(identity) = self.identity.take() {
-            self.failure = self.require_qa_directory()
+            self.failure = self.require_candidate_directory()
                 .and_then(|()| self.paths.cleanup(&self.endpoint, &identity))
                 .err()
                 .or(self.failure.take());

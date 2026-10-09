@@ -292,9 +292,10 @@ impl LogicalSocketPathService {
 #[cfg(target_os = "macos")]
 impl LogicalSocketPathService {
     const QA_SOCKET_CAPACITY: usize = 104;
+    const PERMISSION_MASK: u32 = 0o7777;
     const QA_UNSAFE: &'static str = "QA event directory is unavailable or unsafe.";
 
-    pub fn qa_endpoint(
+    pub fn candidate_endpoint(
         &self,
         directory: &std::ffi::OsStr,
         installed_endpoint: &str,
@@ -304,21 +305,21 @@ impl LogicalSocketPathService {
         let path = Path::new(text);
         self.require_absolute(path)?;
         let physical = fs::canonicalize(path).map_err(Self::path_error)?;
-        self.require_qa_route(path, &physical)?;
-        self.require_separate_qa_directory(&physical, installed_endpoint)?;
+        self.require_candidate_route(path, &physical)?;
+        self.require_separate_candidate_directory(&physical, installed_endpoint)?;
         let endpoint = physical.join("hooks-native.sock").into_os_string().into_string()
             .map_err(|_| Self::QA_UNSAFE.to_owned())?;
         if endpoint.len() >= Self::QA_SOCKET_CAPACITY {
             return Err("QA event socket path exceeds the macOS Unix-socket capacity.".to_owned());
         }
         let metadata = fs::symlink_metadata(&physical).map_err(Self::path_error)?;
-        let identity = self.qa_metadata(&metadata, unsafe { libc::getuid() })?;
-        self.require_empty_qa_directory(&physical)?;
+        let identity = self.candidate_metadata(&metadata, unsafe { libc::getuid() })?;
+        self.require_empty_candidate_directory(&physical)?;
         Ok((endpoint, identity))
     }
 
     // /tmp is the system alias; every selected component below it must stay physical.
-    fn require_qa_route(&self, selected: &Path, physical: &Path) -> Result<(), String> {
+    fn require_candidate_route(&self, selected: &Path, physical: &Path) -> Result<(), String> {
         let normalized = match selected.strip_prefix("/tmp") {
             Ok(relative) => Path::new("/private/tmp").join(relative),
             Err(_) => selected.to_path_buf(),
@@ -329,7 +330,7 @@ impl LogicalSocketPathService {
         Ok(())
     }
 
-    fn require_separate_qa_directory(&self, selected: &Path, installed_endpoint: &str) -> Result<(), String> {
+    fn require_separate_candidate_directory(&self, selected: &Path, installed_endpoint: &str) -> Result<(), String> {
         let installed = Self::endpoint_parent(Path::new(installed_endpoint))?;
         let parent = installed.parent().ok_or_else(|| Self::QA_UNSAFE.to_owned())?;
         let name = installed.file_name().ok_or_else(|| Self::QA_UNSAFE.to_owned())?;
@@ -343,21 +344,21 @@ impl LogicalSocketPathService {
         Ok(())
     }
 
-    pub fn qa_metadata(
+    fn candidate_metadata(
         &self,
         metadata: &std::fs::Metadata,
         user: libc::uid_t,
     ) -> Result<crate::models::NativeSocketIdentity, String> {
         use std::os::unix::fs::MetadataExt;
         if !metadata.file_type().is_dir() || metadata.uid() != user
-            || metadata.mode() & 0o7777 != Self::DIRECTORY_MODE
+            || metadata.mode() & Self::PERMISSION_MASK != Self::DIRECTORY_MODE
         {
             return Err(Self::QA_UNSAFE.to_owned());
         }
         self.metadata_identity(metadata)
     }
 
-    fn require_empty_qa_directory(&self, directory: &Path) -> Result<(), String> {
+    fn require_empty_candidate_directory(&self, directory: &Path) -> Result<(), String> {
         let mut entries = fs::read_dir(directory).map_err(Self::path_error)?;
         if entries.next().is_some() {
             return Err("The QA event directory must be pre-created and empty.".to_owned());
@@ -365,28 +366,28 @@ impl LogicalSocketPathService {
         Ok(())
     }
 
-    pub fn revalidate_qa_directory(
+    pub fn revalidate_candidate_directory(
         &self,
         endpoint: &str,
         expected: &crate::models::NativeSocketIdentity,
     ) -> Result<(), String> {
         let parent = Self::endpoint_parent(Path::new(endpoint))?;
         let physical = fs::canonicalize(parent).map_err(Self::path_error)?;
-        self.require_qa_route(parent, &physical)?;
+        self.require_candidate_route(parent, &physical)?;
         let metadata = fs::symlink_metadata(parent).map_err(Self::path_error)?;
-        let actual = self.qa_metadata(&metadata, unsafe { libc::getuid() })?;
+        let actual = self.candidate_metadata(&metadata, unsafe { libc::getuid() })?;
         self.require_same(expected, &actual)
     }
 
-    pub fn prepare_qa(
+    pub fn prepare_candidate(
         &self,
         endpoint: &str,
         expected: &crate::models::NativeSocketIdentity,
     ) -> Result<File, String> {
         use std::os::unix::fs::OpenOptionsExt;
-        self.revalidate_qa_directory(endpoint, expected)?;
+        self.revalidate_candidate_directory(endpoint, expected)?;
         let parent = Self::endpoint_parent(Path::new(endpoint))?;
-        self.require_empty_qa_directory(parent)?;
+        self.require_empty_candidate_directory(parent)?;
         // No existing file is opened or chmodded on this one-shot candidate route.
         let lock = OpenOptions::new().read(true).write(true).create_new(true)
             .mode(Self::FILE_MODE).custom_flags(libc::O_NOFOLLOW)
@@ -394,11 +395,11 @@ impl LogicalSocketPathService {
         let metadata = lock.metadata().map_err(Self::path_error)?;
         self.require_regular(&metadata)?;
         self.require_owner(&metadata)?;
-        if std::os::unix::fs::MetadataExt::mode(&metadata) & 0o7777 != Self::FILE_MODE {
+        if std::os::unix::fs::MetadataExt::mode(&metadata) & Self::PERMISSION_MASK != Self::FILE_MODE {
             return Err(Self::QA_UNSAFE.to_owned());
         }
         self.lock(&lock)?;
-        self.revalidate_qa_directory(endpoint, expected)?;
+        self.revalidate_candidate_directory(endpoint, expected)?;
         Ok(lock)
     }
 }

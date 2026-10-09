@@ -18,7 +18,7 @@ impl LogicalEventService {
         )
     }
 
-    pub fn with_commands(
+    fn with_commands(
         clock: Arc<dyn ObservationClock>,
         endpoint: String,
         commands: NativeCommandEventService,
@@ -34,7 +34,7 @@ impl LogicalEventService {
     }
 
     // Invalid configuration has no receiver, roster writer or fallback socket.
-    pub fn with_socket(
+    fn with_socket(
         clock: Arc<dyn ObservationClock>,
         selected: Result<LogicalSocketService, String>,
         commands: NativeCommandEventService,

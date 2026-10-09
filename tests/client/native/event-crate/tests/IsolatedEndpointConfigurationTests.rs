@@ -161,7 +161,7 @@ fn ownership_policy_rejects_another_uid_without_chown() {
     let wrong_user = unsafe { libc::getuid() }.wrapping_add(1);
     assert!(
         LogicalSocketPathService::default()
-            .qa_metadata(&metadata, wrong_user)
+            .candidate_metadata(&metadata, wrong_user)
             .is_err()
     );
     assert!(Fixture::names(&directory).is_empty());
@@ -203,7 +203,7 @@ fn installed_directory_descendants_and_aliases_are_refused_before_state_access()
         .unwrap();
     let paths = LogicalSocketPathService::default();
     for directory in [&installed, &child, &alias] {
-        assert!(paths.qa_endpoint(directory.as_os_str(), &endpoint).is_err());
+        assert!(paths.candidate_endpoint(directory.as_os_str(), &endpoint).is_err());
     }
     assert_eq!(fs::read(&witness).unwrap(), b"preserve installed witness");
     assert_eq!(Fixture::names(&installed), ["child", "roster-native.json"]);

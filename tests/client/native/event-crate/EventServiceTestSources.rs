@@ -64,9 +64,29 @@ impl EventServiceTestSources {
         let text: String = fs::read_to_string(source)?;
         Self::require_marker(&text)?;
         let lowered: String = text.replacen(Self::MARKER, "", 1);
-        fs::write(output, lowered)?;
+        let adapted: String = Self::test_access(source, &lowered)?;
+        fs::write(output, adapted)?;
         println!("cargo:rerun-if-changed={}", source.display());
         Ok(())
+    }
+
+    // Test copies expose only the exact private seams used by integration tests.
+    // Production source and method bodies are unchanged by this adaptation.
+    fn test_access(source: &Path, text: &str) -> Result<String, Box<dyn Error>> {
+        let declarations: &[&str] = match source.file_name().and_then(|name| name.to_str()) {
+            Some("LogicalEventService.rs") => &["fn with_commands(", "fn with_socket("],
+            Some("LogicalSocketPathService.rs") => &["fn candidate_metadata("],
+            _ => &[],
+        };
+        let mut adapted = text.to_owned();
+        for declaration in declarations {
+            let private = format!("    {declaration}");
+            if adapted.lines().filter(|line| line.starts_with(&private)).count() != 1 {
+                return Err("Expected exactly one private event test declaration.".into());
+            }
+            adapted = adapted.replacen(&private, &format!("    pub {declaration}"), 1);
+        }
+        Ok(adapted)
     }
 
     fn require_marker(source: &str) -> Result<(), Box<dyn Error>> {
