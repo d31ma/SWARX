@@ -148,3 +148,42 @@ Do not send credentials, prompts, transcripts or terminal output. Supported
 redaction is bounded; it does not guarantee removal of every secret format.
 This document changes no storage path, IPC identifier or application-owned
 collector lifecycle.
+
+
+## Private candidate event directory on macOS
+
+For concurrent native candidate verification, the optional process-local
+SWARX_QA_EVENT_DIRECTORY selects a separate event directory. Supply it only in
+the admitted candidate process environment. Do not set a persistent launchctl
+variable or change the installed app's launch profile. An absent setting
+preserves the normal per-user endpoint and state. Other platforms keep their
+existing endpoint rules.
+
+The selected directory must already exist, be empty, absolute, UTF-8, owned by
+the current UID and mode 0700. Prefer a short physical path under /private/tmp.
+The system /tmp alias is accepted; symlink routes below it, other aliases,
+the installed directory and its descendants are rejected. The complete
+hooks-native.sock path must fit the macOS Unix-socket capacity. The resolver
+does not create or chmod a directory to make it acceptable.
+
+The candidate uses hooks-native.sock, native.lock, roster-native.json and
+session-bindings-native.json in that directory. Directory device/inode checks
+cover startup, socket cleanup and descriptor-relative state I/O. Explicit
+invalid configuration refuses event-source startup without a default receiver,
+roster writer or listener. Native lifecycle capability remains unavailable.
+Keep a failed or completed candidate directory as evidence; each configured
+launch requires a fresh empty directory.
+
+The helper default is unchanged. Every candidate delivery, including renewal,
+unbind and finish, must pass --socket with the exact selected private endpoint.
+Global hooks that omit it continue targeting the installed collector and are
+not candidate evidence. Validate receipts and actual candidate listener identity.
+Use independent native artifacts, caches and runtime ownership for the candidate.
+
+These identity checks do not make pathname-based Unix socket binding/chmod
+atomic against same-user directory replacement. Admission must preserve and
+supervise the exact private directory and its physical route throughout the run;
+unknown identity stops acceptance. Transport/state isolation does not isolate
+OS sampling or grant permissions. The candidate bundle/window still needs exact
+PID, birth, executable and window verification before Resources/Process Tree
+actions. Source and regression preparation alone is not live UI qualification.

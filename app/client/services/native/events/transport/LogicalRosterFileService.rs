@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 pub struct LogicalRosterFileService {
     directory: PathBuf,
     file_name: String,
+    directory_identity: Option<crate::models::NativeSocketIdentity>,
 }
 
 impl LogicalRosterFileService {
@@ -30,7 +31,19 @@ impl LogicalRosterFileService {
         Ok(Self {
             directory,
             file_name: file_name.to_owned(),
+            directory_identity: None,
         })
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn in_directory(
+        endpoint: &str,
+        file_name: &'static str,
+        identity: crate::models::NativeSocketIdentity,
+    ) -> Result<Self, String> {
+        let mut file = Self::named(endpoint, file_name)?;
+        file.directory_identity = Some(identity);
+        Ok(file)
     }
 
     fn optional_read(&self, file: Option<File>) -> Result<Option<Vec<u8>>, String> {
@@ -133,7 +146,20 @@ impl LogicalRosterFileService {
         let metadata: Metadata = file.metadata().map_err(Self::io_failure)?;
         let valid: bool = self.private_directory(&metadata);
         Self::require_private(valid)?;
+        self.require_directory_identity(&metadata)?;
         Ok(file)
+    }
+
+    fn require_directory_identity(&self, metadata: &Metadata) -> Result<(), String> {
+        use std::os::unix::fs::MetadataExt;
+        if let Some(expected) = &self.directory_identity {
+            let actual = crate::models::NativeSocketIdentity {
+                device: i64::try_from(metadata.dev()).map_err(|_| Self::unsafe_error())?,
+                inode: i64::try_from(metadata.ino()).map_err(|_| Self::unsafe_error())?,
+            };
+            Self::require_private(actual == *expected)?;
+        }
+        Ok(())
     }
 
     fn private_directory(&self, metadata: &Metadata) -> bool {

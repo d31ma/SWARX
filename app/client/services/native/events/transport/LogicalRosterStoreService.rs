@@ -23,6 +23,18 @@ impl LogicalRosterStoreService {
         })
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn in_directory(
+        endpoint: &str,
+        identity: crate::models::NativeSocketIdentity,
+    ) -> Result<Self, String> {
+        Ok(Self {
+            file: LogicalRosterFileService::in_directory(endpoint, "roster-native.json", identity.clone())?,
+            policy: LogicalRosterPolicyService::default(),
+            bindings: LogicalRosterFileService::in_directory(endpoint, Self::BINDINGS_FILE, identity)?,
+        })
+    }
+
     fn save_rows(&self, rows: &[NativeLogicalAgent]) -> Result<(), String> {
         let safe: Vec<NativeLogicalAgent> = self.policy.sanitized(rows)?;
         let agents: Vec<NativeLogicalAgent> = self.policy.recovered(safe, 0.0);

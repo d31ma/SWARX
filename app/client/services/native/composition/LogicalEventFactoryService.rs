@@ -10,8 +10,7 @@ impl LogicalEventFactoryService {
         clock: Arc<dyn ObservationClock>,
         commands: &NativeCommandCompositionService,
     ) -> Box<dyn EventSource> {
-        let endpoint: String = LogicalSocketService::current_endpoint();
         let events = commands.events();
-        Box::new(LogicalEventService::with_commands(clock, endpoint, events))
+        Box::new(LogicalEventService::configured(clock, events))
     }
 }

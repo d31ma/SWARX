@@ -12,6 +12,7 @@ pub struct LogicalSocketService {
     worker: Option<JoinHandle<()>>,
     lock: Option<File>,
     identity: Option<NativeSocketIdentity>,
+    qa_directory: Option<NativeSocketIdentity>,
     paths: LogicalSocketPathService,
     failure: Option<String>,
 }
@@ -27,9 +28,50 @@ impl LogicalSocketService {
             worker: None,
             lock: None,
             identity: None,
+            qa_directory: None,
             paths: LogicalSocketPathService::default(),
             failure: None,
         }
+    }
+
+    pub fn endpoint(&self) -> &str {
+        &self.endpoint
+    }
+
+    pub fn directory_identity(&self) -> Option<NativeSocketIdentity> {
+        self.qa_directory.clone()
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn configured() -> Result<Self, String> {
+        let directory = std::env::var_os("SWARX_QA_EVENT_DIRECTORY");
+        Self::configured_directory(directory.as_deref())
+    }
+
+    // Injected selection keeps tests independent of process-global environment mutation.
+    #[cfg(target_os = "macos")]
+    pub fn configured_directory(directory: Option<&std::ffi::OsStr>) -> Result<Self, String> {
+        let Some(directory) = directory else {
+            return Ok(Self::new(Self::current_endpoint()));
+        };
+        let paths = LogicalSocketPathService::default();
+        let (endpoint, identity) = paths.qa_endpoint(directory, &Self::current_endpoint())?;
+        let mut socket = Self::new(endpoint);
+        socket.qa_directory = Some(identity);
+        Ok(socket)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn configured() -> Result<Self, String> {
+        Ok(Self::new(Self::current_endpoint()))
+    }
+
+    fn require_qa_directory(&self) -> Result<(), String> {
+        #[cfg(target_os = "macos")]
+        if let Some(expected) = &self.qa_directory {
+            self.paths.revalidate_qa_directory(&self.endpoint, expected)?;
+        }
+        Ok(())
     }
 
     pub fn stop(&mut self) -> () {
@@ -109,10 +151,20 @@ impl LogicalSocketService {
     }
 
     fn open(&mut self, receiver: Arc<LogicalEventReceiverService>) -> Result<(), String> {
-        self.lock = Some(self.paths.prepare(&self.endpoint)?);
+        #[cfg(target_os = "macos")]
+        let lock = match &self.qa_directory {
+            Some(expected) => self.paths.prepare_qa(&self.endpoint, expected)?,
+            None => self.paths.prepare(&self.endpoint)?,
+        };
+        #[cfg(not(target_os = "macos"))]
+        let lock = self.paths.prepare(&self.endpoint)?;
+        self.lock = Some(lock);
+        self.require_qa_directory()?;
         receiver.restore();
+        self.require_qa_directory()?;
         let listener: std::os::unix::net::UnixListener =
             std::os::unix::net::UnixListener::bind(&self.endpoint).map_err(Self::socket_error)?;
+        self.require_qa_directory()?;
         self.identity = Some(self.paths.secure_socket(&self.endpoint)?);
         listener.set_nonblocking(true).map_err(Self::socket_error)?;
         let worker: LogicalSocketWorkerService = self.new_worker(receiver);
@@ -121,9 +173,8 @@ impl LogicalSocketService {
 
     fn cleanup_owned(&mut self) -> () {
         if let Some(identity) = self.identity.take() {
-            self.failure = self
-                .paths
-                .cleanup(&self.endpoint, &identity)
+            self.failure = self.require_qa_directory()
+                .and_then(|()| self.paths.cleanup(&self.endpoint, &identity))
                 .err()
                 .or(self.failure.take());
         }
