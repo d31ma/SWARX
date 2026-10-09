@@ -48,7 +48,7 @@ impl OverviewPresentationTests {
     fn source(id: &str, feed: &str) -> NativeLogicalAgentView {
         let agent: NativeLogicalAgent = serde_json::from_value(serde_json::json!({
             "id": id, "name": id, "family": "Codex", "status": "active",
-            "source": "Explicit fixture", "captured_at": 218.0, "feed_mode": feed,
+            "source": "Explicit fixture", "captured_at": 218.0, "last_activity_at": 218.0, "feed_mode": feed,
             "task": null, "executions": [], "metrics": null, "session": null,
             "age_seconds": 2.0, "stale": false, "reported_status": null
         }))
@@ -373,11 +373,12 @@ fn running_projection_hides_coordinator_heartbeat_without_an_unfinished_command(
 fn running_projection_hides_an_open_turn_after_the_hook_work_window() -> () {
     let mut source: NativeLogicalAgentView =
         OverviewPresentationTests::task_source("active", "events");
-    source.captured_at = OverviewPresentationTests::NOW - 46.0;
+    source.captured_at = OverviewPresentationTests::NOW;
+    source.last_activity_at = Some(OverviewPresentationTests::NOW - 46.0);
     assert!(OverviewPresentationTests::source_view(source.clone())
         .logical
         .is_empty());
-    source.captured_at = OverviewPresentationTests::NOW - 44.0;
+    source.last_activity_at = Some(OverviewPresentationTests::NOW - 44.0);
     OverviewPresentationTests::task_only(source);
 }
 
@@ -386,6 +387,7 @@ fn running_projection_keeps_a_long_running_tool_until_it_finishes_or_goes_stale(
     let mut source: NativeLogicalAgentView =
         OverviewPresentationTests::running_source("worker", "events");
     source.captured_at = OverviewPresentationTests::NOW - 100.0;
+    source.last_activity_at = Some(OverviewPresentationTests::NOW - 100.0);
     assert_eq!(
         OverviewPresentationTests::source_view(source.clone()).logical_count,
         1

@@ -8,11 +8,12 @@ pub use {clock::*, metrics::*, events::*, harness_source::*};
 #[allow(non_snake_case)]
 pub mod TachyonRustServices {
     pub use crate::utils::{ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionViewUtils, TimeFormatUtils, MetricFormatUtils, ProcessGraphUtils, ProcessTreeUtils, RuntimeViewUtils};
-    mod monitor { use super::{ActivityHistoryService, HarnessSessionService}; include!(concat!(env!("OUT_DIR"), "/MonitorService.rs")); }
+    mod monitor { use super::{ActivityHistoryService, HarnessSessionService, SessionCardRetentionService}; include!(concat!(env!("OUT_DIR"), "/MonitorService.rs")); }
     mod transport { include!(concat!(env!("OUT_DIR"), "/NativeSnapshotTransportService.rs")); }
     mod activity { include!(concat!(env!("OUT_DIR"), "/ActivityHistoryService.rs")); }
     mod sessions { include!(concat!(env!("OUT_DIR"), "/HarnessSessionService.rs")); }
-    pub use {monitor::*, transport::*, activity::*, sessions::*};
+    mod retention { include!(concat!(env!("OUT_DIR"), "/SessionCardRetentionService.rs")); }
+    pub use {monitor::*, transport::*, activity::*, sessions::*, retention::*};
 }
 #[cfg(test)]
 mod monitor_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../MonitorTests.rs")); }
@@ -60,6 +61,8 @@ mod session_detail_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../Ses
 mod active_summary_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../ActiveSummaryTests.rs")); }
 #[cfg(test)]
 mod active_session_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../ActiveSessionTests.rs")); }
+#[cfg(test)]
+mod session_card_retention_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../SessionCardRetentionTests.rs")); }
 #[cfg(test)]
 mod background_task_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../BackgroundTaskTests.rs")); }
 #[cfg(test)]

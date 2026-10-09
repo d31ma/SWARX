@@ -31,6 +31,7 @@ impl ActivityGuideBoundaryTests {
             status: "active".to_string(),
             source: "Explicit test lifecycle".to_string(),
             captured_at: 100.0,
+            last_activity_at: None,
             feed_mode: "events".to_string(),
             task: None,
             executions: vec![execution],

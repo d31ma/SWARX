@@ -557,3 +557,36 @@ fn background_process_ids_stay_native() -> () {
     assert!(!wire.contains("pids"));
     assert!(!wire.contains("4242"));
 }
+
+#[test]
+fn retained_idle_card_keeps_exact_selection_and_reports_inactive_detail() {
+    let idle = crate::models::NativeActiveSessionView {
+        key: "Codex:retained".to_owned(), id: Some("retained".to_owned()),
+        title: "Retained session".to_owned(), family: "Codex".to_owned(),
+        harness: "Codex".to_owned(), linked: true, idle: true, count_label: "Idle".to_owned(),
+        ..Default::default()
+    };
+    let cards = crate::utils::ActiveSessionUtils::retained(Vec::new(), &[idle]);
+    let detail = crate::utils::SessionDetailUtils::detail("Codex:retained", (&cards, &[]), &[], &[]).unwrap();
+    assert_eq!(detail.key, "Codex:retained");
+    assert!(!detail.active);
+    assert_eq!(detail.state_label, "Idle");
+    assert_eq!(crate::utils::SessionDetailUtils::view_state("Codex:retained", Some(&detail)), "inactive");
+}
+
+#[test]
+fn resuming_a_retained_session_produces_one_current_card_with_stable_order() {
+    let current = crate::models::NativeActiveSessionView {
+        key: "Codex:same".to_owned(), agent_total: 1, tool_count: 1, started_at: 500.0,
+        ..Default::default()
+    };
+    let idle = crate::models::NativeActiveSessionView {
+        key: "Codex:same".to_owned(), idle: true, started_at: 100.0,
+        ..Default::default()
+    };
+    let cards = crate::utils::ActiveSessionUtils::retained(vec![current], &[idle]);
+    assert_eq!(cards.len(), 1);
+    assert!(!cards[0].idle);
+    assert_eq!((cards[0].agent_total, cards[0].tool_count), (1, 1));
+    assert_eq!(cards[0].started_at, 100.0);
+}

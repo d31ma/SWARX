@@ -1,5 +1,5 @@
 use crate::models::{
-    NativeBackgroundTaskView, NativeCapabilities, NativeCommandBinding, NativeCommandObservation, NativeGroup,
+    NativeActiveSessionView, NativeBackgroundTaskView, NativeCapabilities, NativeCommandBinding, NativeCommandObservation, NativeGroup,
     NativeHarnessSession, NativeLogicalAgent, NativeLogicalAgentView, NativeResourceTotals,
     NativeRuntimeView, NativeSessionActivityView, NativeSessionView, NativeShellEvidence,
 };
@@ -31,6 +31,8 @@ pub struct NativeSnapshot {
     pub harness_sessions_captured_at: Option<f64>,
     #[serde(default)]
     pub session_groups: Vec<NativeSessionView>,
+    #[serde(skip)]
+    pub retained_session_cards: Vec<NativeActiveSessionView>,
     pub linked_session_count: i64,
     pub harness_count: i64,
     #[serde(default)]

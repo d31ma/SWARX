@@ -163,3 +163,14 @@ fn summary_wire_names_are_camel_case() -> () {
     assert_eq!(wire["activeSummary"]["cards"][0]["key"], "agents");
     assert!(wire["activeSummary"].get("sub_agents").is_none());
 }
+
+#[test]
+fn retained_idle_cards_do_not_count_as_active_sessions_or_harnesses() {
+    let idle = crate::models::NativeActiveSessionView {
+        key: "Codex:idle".to_owned(), harness: "Codex".to_owned(), linked: true, idle: true,
+        ..Default::default()
+    };
+    let summary = crate::utils::ActiveSummaryUtils::summary(&[idle], "Live", 100.0);
+    assert_eq!((summary.agents, summary.sessions, summary.tools), (0, 0, 0));
+    assert!(summary.harnesses.is_empty());
+}

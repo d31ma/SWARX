@@ -96,15 +96,21 @@ impl SessionDetailUtils {
             harness: session.harness.clone(),
             family: session.family.clone(),
             linked: session.linked,
-            active: true,
-            state_label: Self::ACTIVE_LABELS[usize::from(session.agent_total > Self::NO_AGENTS)]
-                .to_owned(),
+            active: !session.idle,
+            state_label: Self::card_state(session),
             count_label: session.count_label.clone(),
             agent_count: session.agent_count,
             sub_agent_count: session.sub_agent_count,
             background: session.background.clone(),
             ..NativeSessionDetailView::default()
         }
+    }
+
+    fn card_state(session: &NativeActiveSessionView) -> String {
+        if session.idle {
+            return "Idle".to_owned();
+        }
+        Self::ACTIVE_LABELS[usize::from(session.agent_total > Self::NO_AGENTS)].to_owned()
     }
 
     fn reported_base(session: &NativeSessionView) -> NativeSessionDetailView {

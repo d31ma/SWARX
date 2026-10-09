@@ -8,6 +8,9 @@ pub struct NativeActiveSessionView {
     pub family: String,
     pub harness: String,
     pub linked: bool,
+    // Retained session cards carry no current agents, tools or load ranks.
+    #[serde(default)]
+    pub idle: bool,
     #[serde(rename = "agentCount")]
     pub agent_count: i64,
     #[serde(rename = "subAgentCount")]

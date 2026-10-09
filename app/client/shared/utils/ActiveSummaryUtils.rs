@@ -25,6 +25,8 @@ impl ActiveSummaryUtils {
         live_status: &str,
         sampled_at: f64,
     ) -> NativeActiveSummaryView {
+        let working: Vec<NativeActiveSessionView> = Self::working(sessions);
+        let sessions: &[NativeActiveSessionView] = &working;
         let total: i64 = Self::total(sessions, Self::agent_total);
         let sub_agents: i64 = Self::total(sessions, Self::sub_agent_total);
         let tools: i64 = Self::total(sessions, Self::tool_total);
@@ -71,6 +73,10 @@ impl ActiveSummaryUtils {
             harnesses,
             cards,
         }
+    }
+
+    fn working(sessions: &[NativeActiveSessionView]) -> Vec<NativeActiveSessionView> {
+        sessions.iter().filter(|session| !session.idle).cloned().collect()
     }
 
     fn card(

@@ -67,6 +67,7 @@ impl SessionLoadTests {
         NativeActiveSessionView {
             key: key.to_owned(),
             linked,
+            idle: false,
             ..NativeActiveSessionView::default()
         }
     }
@@ -356,4 +357,17 @@ fn cards_compare_only_linked_sessions_with_their_own_resource_history() -> () {
     assert!(cards[2].loads.is_empty());
     let encoded: String = serde_json::to_string(&cards[0]).unwrap();
     assert!(encoded.contains("\"loads\":[{\"key\":\"cpu\",\"label\":\"CPU ↑\""));
+}
+
+#[test]
+fn idle_retained_cards_neither_receive_load_flags_nor_lower_the_active_baseline() {
+    let mut cards = vec![SessionLoadTests::card("one", true), SessionLoadTests::card("two", true),
+        SessionLoadTests::card("idle", true)];
+    cards[2].idle = true;
+    let resources = vec![SessionLoadTests::resource("one", 50.0), SessionLoadTests::resource("two", 50.0),
+        SessionLoadTests::resource("idle", 0.0)];
+    SessionLoadUtils::mark(&mut cards, &resources, SessionLoadTests::NOW);
+    assert!(cards[0].loads.is_empty());
+    assert!(cards[1].loads.is_empty());
+    assert!(cards[2].loads.is_empty());
 }

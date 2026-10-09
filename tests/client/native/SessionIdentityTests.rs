@@ -30,6 +30,7 @@ impl SessionIdentityTests {
             status: "active".to_owned(),
             source: "Explicit fixture roster".to_owned(),
             captured_at,
+            last_activity_at: None,
             feed_mode: "events".to_owned(),
             task: None,
             executions: Vec::new(),

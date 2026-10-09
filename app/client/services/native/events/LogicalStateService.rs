@@ -26,8 +26,10 @@ impl LogicalStateService {
         let handler: fn(&mut Self, &NativeLogicalEvent, f64) -> Result<(), String> =
             Self::handler(&kind)?;
         self.require_time(now)?;
-        self.require_event_identity(&kind, event)?;
+        let identity = self.require_event_identity(&kind, event)?;
+        let previous = self.agents.get(&identity).cloned();
         handler(self, event, now)?;
+        self.note_activity(&kind, &identity, previous.as_ref(), now);
         self.revision += 1;
         Ok(self.revision)
     }
@@ -99,6 +101,7 @@ impl LogicalStateService {
             status: LogicalEventPolicyService::ACTIVE.to_string(),
             source: LogicalEventPolicyService::SOURCE.to_string(),
             captured_at: now,
+            last_activity_at: None,
             feed_mode: LogicalEventPolicyService::MODE.to_string(),
             task: None,
             executions: Vec::new(),
@@ -232,19 +235,17 @@ impl LogicalStateService {
         Ok(())
     }
 
-    fn require_event_identity(&self, kind: &str, event: &NativeLogicalEvent) -> Result<(), String> {
+    fn require_event_identity(&self, kind: &str, event: &NativeLogicalEvent) -> Result<String, String> {
         match kind {
             LogicalCoordinationService::REGISTER
             | LogicalCoordinationService::UPSERT
             | LogicalCoordinationService::EXECUTION_START
             | LogicalCoordinationService::EXECUTION_FINISH => self
                 .coordination
-                .identity(event.session_id.as_deref(), &event.agent)
-                .map(|_identity: String| -> () { () }),
+                .identity(event.session_id.as_deref(), &event.agent),
             _ => self
                 .text
-                .identifier(Some(&event.agent))
-                .map(|_identity: String| -> () { () }),
+                .identifier(Some(&event.agent)),
         }
     }
 
@@ -389,6 +390,45 @@ impl LogicalStateService {
         agent.status = status;
         agent.model = self.text.model(event.model.as_deref()).or(agent.model);
         self.save_agent(agent, now)
+    }
+
+    fn note_activity(
+        &mut self,
+        kind: &str,
+        identity: &str,
+        previous: Option<&NativeLogicalAgent>,
+        now: f64,
+    ) -> () {
+        let eligible = matches!(kind,
+            "logical.task" | "logical.status" | "logical.execution.start"
+                | "logical.execution.finish" | LogicalCoordinationService::REGISTER
+                | LogicalCoordinationService::UPSERT | LogicalCoordinationService::EXECUTION_START
+                | LogicalCoordinationService::EXECUTION_FINISH);
+        if !eligible {
+            return;
+        }
+        if let Some(next) = self.agents.get_mut(identity) {
+            let task_changed = Self::task_activity(previous) != Self::task_activity(Some(next));
+            let executions_changed = Self::execution_activity(previous) != Self::execution_activity(Some(next));
+            let terminal = self.policy.is_final(&next.status)
+                && previous.is_some_and(|old| old.status != next.status);
+            next.last_activity_at = if task_changed || executions_changed || terminal {
+                Some(now)
+            } else {
+                previous.and_then(|old| old.last_activity_at)
+            };
+        }
+    }
+
+    fn task_activity(agent: Option<&NativeLogicalAgent>) -> Option<(&str, &str)> {
+        agent.and_then(|row| row.task.as_ref()).map(|task| (task.id.as_str(), task.status.as_str()))
+    }
+
+    fn execution_activity(agent: Option<&NativeLogicalAgent>) -> Vec<(&str, &str)> {
+        let mut values: Vec<(&str, &str)> = agent.into_iter().flat_map(|row| &row.executions)
+            .map(|item| (item.id.as_str(), item.status.as_str())).collect();
+        values.sort();
+        values
     }
 
     fn heartbeat(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<(), String> {

@@ -51,6 +51,32 @@ impl ActiveSessionUtils {
         sessions
     }
 
+    pub fn retained(
+        current: Vec<NativeActiveSessionView>,
+        retained: &[NativeActiveSessionView],
+    ) -> Vec<NativeActiveSessionView> {
+        Self::merge_retained(current, retained)
+    }
+
+    fn merge_retained(
+        mut current: Vec<NativeActiveSessionView>,
+        retained: &[NativeActiveSessionView],
+    ) -> Vec<NativeActiveSessionView> {
+        for card in &mut current {
+            Self::stable_start(card, retained);
+        }
+        let keys: BTreeSet<String> = current.iter().map(|card| card.key.clone()).collect();
+        current.extend(retained.iter().filter(|card| card.idle && !keys.contains(&card.key)).cloned());
+        current.sort_by(Self::session_order);
+        current
+    }
+
+    fn stable_start(card: &mut NativeActiveSessionView, retained: &[NativeActiveSessionView]) -> () {
+        if let Some(previous) = retained.iter().find(|previous| previous.key == card.key) {
+            card.started_at = previous.started_at;
+        }
+    }
+
     pub fn harness(family: &str) -> String {
         Self::harness_name(family)
     }
@@ -125,6 +151,7 @@ impl ActiveSessionUtils {
             harness: Self::harness_name(&group.family),
             family: group.family.clone(),
             linked: group.known,
+            idle: false,
             agent_count: total - sub_agents,
             sub_agent_count: sub_agents,
             tool_count: tools,

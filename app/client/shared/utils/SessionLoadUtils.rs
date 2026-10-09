@@ -70,7 +70,7 @@ impl SessionLoadUtils {
     ) -> () {
         let keys: Vec<String> = sessions
             .iter()
-            .filter(|session: &&NativeActiveSessionView| -> bool { session.linked })
+            .filter(|session: &&NativeActiveSessionView| -> bool { session.linked && !session.idle })
             .map(|session: &NativeActiveSessionView| -> String { session.key.clone() })
             .collect();
         let histories: Vec<Vec<Vec<Option<f64>>>> = keys

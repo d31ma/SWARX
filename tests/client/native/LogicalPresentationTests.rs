@@ -39,6 +39,7 @@ impl LogicalPresentationTests {
             status: "active".to_owned(),
             source: "Explicit fixture source".to_owned(),
             captured_at: 1_700_000_000.0,
+            last_activity_at: None,
             feed_mode: "events".to_owned(),
             task: Some(NativeTaskRecord {
                 id: "fixture-task".to_owned(),

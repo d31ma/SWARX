@@ -1,7 +1,7 @@
 use crate::models::{NativeCapabilities, NativeGroup, NativeRuntimeView, NativeSnapshot};
 use crate::utils::{
     BackgroundTaskUtils, ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, ProcessGraphUtils,
-    ProcessOwnerUtils, ProcessTreeUtils, RuntimeViewUtils, SessionViewUtils, ShellEvidenceUtils,
+    OverviewViewUtils, ProcessOwnerUtils, ProcessTreeUtils, RuntimeViewUtils, SessionViewUtils, ShellEvidenceUtils,
 };
 use crate::{EventSource, MetricSource, ObservationClock};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -18,6 +18,7 @@ pub struct MonitorService {
     activity: ActivityHistoryService,
     clock: Arc<dyn ObservationClock>,
     sessions: HarnessSessionService,
+    retention: SessionCardRetentionService,
 }
 
 impl MonitorService {
@@ -61,6 +62,7 @@ impl MonitorService {
             activity,
             clock,
             sessions: HarnessSessionService::new(Vec::new()),
+            retention: SessionCardRetentionService::default(),
         }
     }
 
@@ -87,7 +89,8 @@ impl MonitorService {
     fn current(&self) -> NativeSnapshot {
         let mut result: NativeSnapshot = Self::copy_snapshot(&self.snapshot);
         Self::add_events(&mut result, &self.events);
-        let now: f64 = self.clock.now().0;
+        let time: (f64, f64) = self.clock.now();
+        let now: f64 = time.0;
         result.logical_views = Self::logical_views(&result.logical_agents, now);
         CommandResourceViewUtils::present(
             &mut result.logical_views,
@@ -110,6 +113,8 @@ impl MonitorService {
         result.activity = self.activity.view(&result.logical_agents, now);
         result.background_tasks = BackgroundTaskUtils::tasks(&result, now);
         result.shell_evidence = ShellEvidenceUtils::evidence(&result, now);
+        let current = OverviewViewUtils::current_sessions(&result, &[], now);
+        result.retained_session_cards = self.retention.retain(&current, &result.logical_views, time.0, time.1);
         result
     }
 

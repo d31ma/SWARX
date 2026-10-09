@@ -9,6 +9,7 @@ export interface ActiveSessionView {
   family: string;
   harness: string;
   linked: boolean;
+  idle: boolean;
   agentCount: number;
   subAgentCount: number;
   toolCount: number;

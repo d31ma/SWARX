@@ -76,6 +76,9 @@ impl LogicalRosterPolicyService {
             status: self.status(&row.status, row.reported_status.as_deref())?,
             source: self.source(&row.source)?,
             captured_at: row.captured_at,
+            last_activity_at: row.last_activity_at.filter(|time| {
+                time.is_finite() && *time >= 0.0 && *time <= row.captured_at
+            }),
             feed_mode: Self::RECOVERED.to_string(),
             task: row
                 .task

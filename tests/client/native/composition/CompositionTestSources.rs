@@ -6,11 +6,12 @@ pub struct CompositionTestSources;
 
 impl CompositionTestSources {
     const MARKER: &'static str = "#[Service]";
-    const SERVICES: [&'static str; 4] = [
+    const SERVICES: [&'static str; 5] = [
         "monitoring/MonitorService",
         "monitoring/NativeSnapshotTransportService",
         "activity/ActivityHistoryService",
         "sessions/HarnessSessionService",
+        "sessions/SessionCardRetentionService",
     ];
     const UTILITIES: [&'static str; 22] = [
         "MetricFormatUtils",

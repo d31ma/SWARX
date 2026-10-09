@@ -40,6 +40,21 @@ impl OverviewViewUtils {
     const OTHER_ORDER: i64 = 2;
     const METRICS_UNAVAILABLE: &'static str = "Metrics unavailable";
 
+    pub fn current_sessions(
+        snapshot: &NativeSnapshot,
+        expanded: &[String],
+        now: f64,
+    ) -> Vec<NativeActiveSessionView> {
+        let logical = SessionViewUtils::named_agents(
+            Self::running_agents(&snapshot.logical_views, &snapshot.shell_evidence, now),
+            &snapshot.harness_sessions,
+        );
+        ActiveSessionUtils::sessions(
+            &logical, &snapshot.logical_views, expanded,
+            (&snapshot.background_tasks, &snapshot.session_groups),
+        )
+    }
+
     pub fn view(
         snapshot: &NativeSnapshot,
         selection: &NativeViewSelection,
@@ -61,11 +76,14 @@ impl OverviewViewUtils {
             &snapshot.harness_sessions,
         );
         let logical_count: i64 = logical.len() as i64;
-        let mut active_sessions: Vec<NativeActiveSessionView> = ActiveSessionUtils::sessions(
-            &logical,
-            &snapshot.logical_views,
-            &selection.expanded_sessions,
-            (&snapshot.background_tasks, &snapshot.session_groups),
+        let mut active_sessions: Vec<NativeActiveSessionView> = ActiveSessionUtils::retained(
+            ActiveSessionUtils::sessions(
+                &logical,
+                &snapshot.logical_views,
+                &selection.expanded_sessions,
+                (&snapshot.background_tasks, &snapshot.session_groups),
+            ),
+            &snapshot.retained_session_cards,
         );
         let activity: Vec<NativeSessionActivityView> =
             SessionViewUtils::named_activity(snapshot.activity.clone(), &snapshot.harness_sessions);
@@ -466,9 +484,16 @@ impl OverviewViewUtils {
     }
 
     fn recent_hook(agent: &NativeLogicalAgentView, now: f64) -> bool {
-        let age: f64 = now - agent.captured_at;
+        let Some(activity) = agent.last_activity_at else {
+            return false;
+        };
+        let age: f64 = now - activity;
         [
             agent.feed_mode == Self::EVENT_FEED,
+            activity.is_finite(),
+            activity >= 0.0,
+            agent.captured_at.is_finite(),
+            activity <= agent.captured_at,
             age.is_finite(),
             age >= 0.0,
             age <= Self::WORK_WINDOW_SECONDS,
@@ -513,7 +538,7 @@ impl OverviewViewUtils {
 
     fn notice(count: i64) -> String {
         if count > Self::NO_RECORDS {
-            return "Only verified current work appears here: a running tool, a shell command whose shell process is still running under the verified session process, or a lifecycle hook for an unfinished turn in the last 45 seconds. Idle, completed and stale work leaves this view and stays in Activity.".to_owned();
+            return "Only verified current work appears here: a running tool, a shell command whose shell process is still running under the verified session process, or a lifecycle hook for an unfinished turn in the last 45 seconds. Completed work clears active counts immediately. Session cards stay idle for 10 minutes after meaningful activity; passive polls and heartbeats do not extend retention. Past work stays in Activity.".to_owned();
         }
         "This feed does not prove no agents are working. Reopened apps need a fresh coordinator report; history stays in Activity."
             .to_owned()
