@@ -58,7 +58,6 @@ impl SessionIdentityTests {
             title: title.map(str::to_owned),
             title_source: Self::HARNESS_SOURCE.to_owned(),
             last_activity_at: Some(Self::NOW - 60.0),
-            last_activity_monotonic: None,
             archived: false,
             model: None,
             provider: None,

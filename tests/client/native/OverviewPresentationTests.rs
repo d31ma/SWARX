@@ -1182,7 +1182,6 @@ fn harness_session_names_resource_cards_and_activity_by_exact_id() -> () {
         title: Some("Implement".to_owned()),
         title_source: "Claude desktop session title".to_owned(),
         last_activity_at: Some(OverviewPresentationTests::NOW - 30.0),
-        last_activity_monotonic: None,
         archived: false,
         model: Some("claude-opus-5-5".to_owned()),
         provider: None,
