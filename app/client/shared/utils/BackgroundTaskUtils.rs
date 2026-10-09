@@ -1,6 +1,6 @@
 use crate::models::{
     NativeBackgroundTaskView, NativeCommandObservation, NativeExecutionRecord, NativeLogicalAgent,
-    NativeLogicalAgentView, NativeProcessMetrics, NativeProcessOwner, NativeRuntimeView, NativeSnapshot,
+    NativeLogicalAgentView, NativeProcessMetrics, NativeProcessOwner, NativeRuntimeView, NativeSnapshot, NativeSessionResourceView,
 };
 use crate::utils::{
     CommandResourceViewUtils, HarnessShellUtils, LogicalViewUtils, MetricFormatUtils,
@@ -24,42 +24,103 @@ impl BackgroundTaskUtils {
 
     pub fn tasks(snapshot: &NativeSnapshot, now: f64) -> Vec<NativeBackgroundTaskView> {
         let explicit = Self::explicit_tasks(snapshot, now);
-        let mut tasks = Self::session_tasks(snapshot, now);
-        // A directly bound root wins over the same launch-time root. For a nested
-        // bound command, keep the outer candidate's remaining measured members.
-        tasks.retain_mut(|(legacy, members)| {
-            let roots_overlap = explicit.iter().any(|(bound, processes)| {
-                legacy.session_key == bound.session_key
-                    && members
-                        .first()
-                        .zip(processes.first())
-                        .is_some_and(|(left, right)| {
-                            (left.pid, &left.started) == (right.pid, &right.started)
-                        })
-            });
-            if roots_overlap {
-                return false;
-            }
-            members.retain(|process| {
-                !explicit.iter().any(|(bound, processes)| {
-                    legacy.session_key == bound.session_key
-                        && processes.iter().any(|explicit| {
-                            (explicit.pid, &explicit.started) == (process.pid, &process.started)
-                        })
-                })
-            });
-            if members.is_empty() {
-                return false;
-            }
-            let busy = Self::busy(members);
-            legacy.state = Self::state(busy).to_owned();
-            legacy.state_label = Self::state_label(busy).to_owned();
-            legacy.process_count = members.len() as i64;
-            legacy.pids = Self::pids(members);
-            true
-        });
+        let legacy = Self::session_tasks(snapshot, now);
+        Self::merge_tasks(legacy, explicit)
+    }
+
+    fn merge_tasks(
+        legacy: Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)>,
+        explicit: Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)>,
+    ) -> Vec<NativeBackgroundTaskView> {
+        let mut tasks = Self::remaining_tasks(legacy, &explicit);
         tasks.extend(explicit);
         tasks.into_iter().map(|(view, _)| view).collect()
+    }
+
+    fn remaining_tasks(
+        legacy: Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)>,
+        explicit: &[(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)],
+    ) -> Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)> {
+        legacy.into_iter().filter_map(|(view, members)| Self::remaining_task(view, members, explicit)).collect()
+    }
+
+    fn remaining_task(
+        view: NativeBackgroundTaskView,
+        members: Vec<NativeProcessMetrics>,
+        explicit: &[(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)],
+    ) -> Option<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)> {
+        let overlap = Self::roots_overlap(&view, &members, explicit);
+        let members = Self::remaining_members(&view, members, explicit);
+        let busy = Self::busy(&members);
+        let state = (Self::state(busy).to_owned(), Self::state_label(busy).to_owned());
+        let keep = Self::remaining_allowed(overlap, members.is_empty());
+        Self::remaining_view(view, members, state, keep)
+    }
+
+    fn roots_overlap(
+        legacy: &NativeBackgroundTaskView,
+        members: &[NativeProcessMetrics],
+        explicit: &[(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)],
+    ) -> bool {
+        explicit.iter().any(|(bound, processes)| Self::same_root(legacy, members, bound, processes))
+    }
+
+    fn same_root(
+        legacy: &NativeBackgroundTaskView,
+        members: &[NativeProcessMetrics],
+        bound: &NativeBackgroundTaskView,
+        processes: &[NativeProcessMetrics],
+    ) -> bool {
+        [legacy.session_key == bound.session_key,
+            members.first().zip(processes.first()).is_some_and(|(left, right)| {
+                (left.pid, &left.started) == (right.pid, &right.started)
+            })].into_iter().all(std::convert::identity)
+    }
+
+    fn remaining_members(
+        legacy: &NativeBackgroundTaskView,
+        members: Vec<NativeProcessMetrics>,
+        explicit: &[(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)],
+    ) -> Vec<NativeProcessMetrics> {
+        members.into_iter().filter(|process| !Self::explicit_member(legacy, process, explicit)).collect()
+    }
+
+    fn explicit_member(
+        legacy: &NativeBackgroundTaskView,
+        process: &NativeProcessMetrics,
+        explicit: &[(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)],
+    ) -> bool {
+        explicit.iter().any(|(bound, processes)| Self::bound_member(legacy, process, bound, processes))
+    }
+
+    fn bound_member(
+        legacy: &NativeBackgroundTaskView,
+        process: &NativeProcessMetrics,
+        bound: &NativeBackgroundTaskView,
+        processes: &[NativeProcessMetrics],
+    ) -> bool {
+        [legacy.session_key == bound.session_key,
+            processes.iter().any(|explicit| {
+                (explicit.pid, &explicit.started) == (process.pid, &process.started)
+            })].into_iter().all(std::convert::identity)
+    }
+
+    fn remaining_allowed(overlap: bool, empty: bool) -> bool {
+        [!overlap, !empty].into_iter().all(std::convert::identity)
+    }
+
+    fn remaining_view(
+        mut view: NativeBackgroundTaskView,
+        members: Vec<NativeProcessMetrics>,
+        state: (String, String),
+        keep: bool,
+    ) -> Option<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)> {
+        if !keep { return None; }
+        view.state = state.0;
+        view.state_label = state.1;
+        view.process_count = members.len() as i64;
+        view.pids = Self::pids(&members);
+        Some((view, members))
     }
 
     fn explicit_tasks(
@@ -69,64 +130,105 @@ impl BackgroundTaskUtils {
         let resources = SessionResourceUtils::build(&snapshot.session_groups, now);
         let mut tasks = Vec::new();
         let mut seen = BTreeSet::new();
-        for source in &snapshot.logical_views {
-            if source.family != "Codex" {
-                continue;
-            }
-            let agent = LogicalViewUtils::running_view(source, now);
-            for command in &agent.command_resources {
-                let observation = &command.observation;
-                if observation.scope != "reported-command-process"
-                    || !CommandResourceViewUtils::current_resource(
-                        &agent,
-                        observation,
-                        &snapshot.command_bindings,
-                        now,
-                    )
-                    || !Self::unique_explicit_root(snapshot, observation)
-                {
-                    continue;
-                }
-                let record = agent
-                    .executions
-                    .iter()
-                    .map(|view| &view.execution)
-                    .find(|record| {
-                        record.id == observation.owner.execution_id
-                            && record.background == Some(true)
-                            && ["exec_command", "local_shell", "shell", "Bash"]
-                                .contains(&record.name.as_str())
-                    });
-                let Some(record) = record else {
-                    continue;
-                };
-                let key =
-                    SessionViewUtils::linked_key(&agent.family, &observation.owner.session_id);
-                let group = resources
-                    .iter()
-                    .filter(|session| session.key == key)
-                    .flat_map(|session| session.commands.iter())
-                    .find(|group| Self::explicit_group(group, &agent, observation));
-                let Some(group) = group else {
-                    continue;
-                };
-                if !seen.insert((observation.binding_id.clone(), observation.generation)) {
-                    continue;
-                }
-                let mut view = Self::view(&key, &group.group.processes, Some(record), now);
-                view.key = format!(
-                    "{}:{key}:command:{}:{}",
-                    Self::KEY_PREFIX,
-                    observation.binding_id,
-                    observation.generation
-                );
-                view.attribution = "Caller-reported background command; its current binding and OS process identity matched. Descendants are current measured processes.".to_owned();
-                let mut processes = group.group.processes.clone();
-                processes.sort_by_key(|process| process.pid != observation.pid);
-                tasks.push((view, processes));
-            }
+        for source in snapshot.logical_views.iter().filter(|source| source.family == "Codex") {
+            Self::explicit_source(snapshot, source, (&resources, now), (&mut seen, &mut tasks));
         }
         tasks
+    }
+
+    fn explicit_source(
+        snapshot: &NativeSnapshot,
+        source: &NativeLogicalAgentView,
+        resources: (&[NativeSessionResourceView], f64),
+        state: (&mut BTreeSet<(String, i64)>, &mut Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)>),
+    ) -> () {
+        let agent = LogicalViewUtils::running_view(source, resources.1);
+        for command in &agent.command_resources {
+            Self::explicit_command(snapshot, &agent, &command.observation,
+                (resources.0, resources.1, &mut *state.0, &mut *state.1));
+        }
+    }
+
+    fn explicit_command(
+        snapshot: &NativeSnapshot,
+        agent: &NativeLogicalAgentView,
+        observation: &NativeCommandObservation,
+        context: (&[NativeSessionResourceView], f64,
+            &mut BTreeSet<(String, i64)>, &mut Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)>),
+    ) -> () {
+        let eligible = Self::explicit_current(snapshot, agent, observation, context.1);
+        let record = Self::background_record(agent, observation);
+        let key = SessionViewUtils::linked_key(&agent.family, &observation.owner.session_id);
+        let group = Self::explicit_resource(context.0, &key, agent, observation);
+        Self::append_explicit(&key, record.zip(group), observation,
+            (context.1, eligible, context.2, context.3));
+    }
+
+    fn explicit_current(
+        snapshot: &NativeSnapshot,
+        agent: &NativeLogicalAgentView,
+        observation: &NativeCommandObservation,
+        now: f64,
+    ) -> bool {
+        [observation.scope == "reported-command-process",
+            CommandResourceViewUtils::current_resource(agent, observation, &snapshot.command_bindings, now),
+            Self::unique_explicit_root(snapshot, observation)]
+            .into_iter().all(std::convert::identity)
+    }
+
+    fn background_record<'a>(
+        agent: &'a NativeLogicalAgentView,
+        observation: &NativeCommandObservation,
+    ) -> Option<&'a NativeExecutionRecord> {
+        agent.executions.iter().map(|view| &view.execution)
+            .find(|record| Self::background_execution(record, observation))
+    }
+
+    fn background_execution(record: &NativeExecutionRecord, observation: &NativeCommandObservation) -> bool {
+        [record.id == observation.owner.execution_id, record.background == Some(true),
+            ["exec_command", "local_shell", "shell", "Bash"].contains(&record.name.as_str())]
+            .into_iter().all(std::convert::identity)
+    }
+
+    fn explicit_resource<'a>(
+        resources: &'a [NativeSessionResourceView],
+        key: &str,
+        agent: &NativeLogicalAgentView,
+        observation: &NativeCommandObservation,
+    ) -> Option<&'a NativeRuntimeView> {
+        resources.iter().filter(|session| session.key == key)
+            .flat_map(|session| session.commands.iter())
+            .find(|group| Self::explicit_group(group, agent, observation))
+    }
+
+    fn append_explicit(
+        key: &str,
+        choice: Option<(&NativeExecutionRecord, &NativeRuntimeView)>,
+        observation: &NativeCommandObservation,
+        context: (f64, bool, &mut BTreeSet<(String, i64)>,
+            &mut Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)>),
+    ) -> () {
+        choice.filter(|_| context.1).map(|(record, group)| {
+            let fresh = context.2.insert((observation.binding_id.clone(), observation.generation));
+            Self::push_explicit(key, (group, record, observation), (context.0, fresh), context.3);
+        });
+    }
+
+    fn push_explicit(
+        key: &str,
+        source: (&NativeRuntimeView, &NativeExecutionRecord, &NativeCommandObservation),
+        selection: (f64, bool),
+        tasks: &mut Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)>,
+    ) -> () {
+        if !selection.1 { return; }
+        let (group, record, observation) = source;
+        let mut view = Self::view(key, &group.group.processes, Some(record), selection.0);
+        view.key = format!("{}:{key}:command:{}:{}", Self::KEY_PREFIX,
+            observation.binding_id, observation.generation);
+        view.attribution = "Caller-reported background command; its current binding and OS process identity matched. Descendants are current measured processes.".to_owned();
+        let mut processes = group.group.processes.clone();
+        processes.sort_by_key(|process| process.pid != observation.pid);
+        tasks.push((view, processes));
     }
 
     fn explicit_group(
@@ -134,37 +236,30 @@ impl BackgroundTaskUtils {
         agent: &NativeLogicalAgentView,
         observation: &NativeCommandObservation,
     ) -> bool {
-        group.group.processes.iter().any(|process| {
+        let root = group.group.processes.iter().any(|process| {
             (process.pid, &process.started) == (observation.pid, &observation.started)
-        }) && group.group.owners.iter().any(|owner: &NativeProcessOwner| {
-            owner.agent_id == agent.id
-                && owner.session_id == observation.owner.session_id
-                && owner.task_id == observation.owner.task_id
-                && owner.execution_id == observation.owner.execution_id
-                && owner.binding_id == observation.binding_id
-                && owner.generation == observation.generation
-                && owner.root_pid == observation.pid
-                && owner.root_started == observation.started
-        })
+        });
+        let owner = group.group.owners.iter().any(|owner: &NativeProcessOwner| {
+            (&owner.agent_id, &owner.session_id, &owner.task_id, &owner.execution_id,
+                &owner.binding_id, owner.generation, owner.root_pid, &owner.root_started)
+                == (&agent.id, &observation.owner.session_id, &observation.owner.task_id,
+                    &observation.owner.execution_id, &observation.binding_id,
+                    observation.generation, observation.pid, &observation.started)
+        });
+        [root, owner].into_iter().all(std::convert::identity)
     }
 
     fn unique_explicit_root(
         snapshot: &NativeSnapshot,
         observation: &NativeCommandObservation,
     ) -> bool {
-        // Do not pick an arbitrary actor if contradictory bindings claim one OS identity.
-        snapshot
-            .command_bindings
-            .iter()
-            .filter(|binding| {
-                binding.identity.pid == observation.pid
-                    && binding.identity.started == observation.started
-            })
-            .all(|binding| {
-                binding.id == observation.binding_id
-                    && binding.generation == observation.generation
-                    && binding.owner == observation.owner
-            })
+        // Contradictory bindings for one OS identity never choose an arbitrary actor.
+        snapshot.command_bindings.iter().filter(|binding| {
+            (binding.identity.pid, &binding.identity.started) == (observation.pid, &observation.started)
+        }).all(|binding| {
+            (&binding.id, binding.generation, &binding.owner)
+                == (&observation.binding_id, observation.generation, &observation.owner)
+        })
     }
 
     fn session_tasks(

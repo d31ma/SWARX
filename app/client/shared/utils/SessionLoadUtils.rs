@@ -68,16 +68,21 @@ impl SessionLoadUtils {
         resources: &[NativeSessionResourceView],
         now: f64,
     ) -> () {
-        let keys: Vec<String> = sessions
-            .iter()
-            .filter(|session: &&NativeActiveSessionView| -> bool { session.linked && !session.idle })
-            .map(|session: &NativeActiveSessionView| -> String { session.key.clone() })
-            .collect();
+        let keys: Vec<String> = Self::linked_active_keys(sessions);
         let histories: Vec<Vec<Vec<Option<f64>>>> = keys
             .iter()
             .map(|key: &String| -> Vec<Vec<Option<f64>>> { Self::history(resources, key) })
             .collect();
         Self::assign(sessions, &keys, Self::loads(&histories, now));
+    }
+
+    fn linked_active_keys(sessions: &[NativeActiveSessionView]) -> Vec<String> {
+        sessions.iter().filter(|session| Self::linked_active(session))
+            .map(|session| session.key.clone()).collect()
+    }
+
+    fn linked_active(session: &NativeActiveSessionView) -> bool {
+        [session.linked, !session.idle].into_iter().all(std::convert::identity)
     }
 
     // One SessionUsageUtils::history per compared session; the loads come back in that order.

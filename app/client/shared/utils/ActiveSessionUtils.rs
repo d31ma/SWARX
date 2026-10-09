@@ -52,29 +52,39 @@ impl ActiveSessionUtils {
     }
 
     pub fn retained(
-        current: Vec<NativeActiveSessionView>,
-        retained: &[NativeActiveSessionView],
-    ) -> Vec<NativeActiveSessionView> {
-        Self::merge_retained(current, retained)
-    }
-
-    fn merge_retained(
         mut current: Vec<NativeActiveSessionView>,
         retained: &[NativeActiveSessionView],
     ) -> Vec<NativeActiveSessionView> {
-        for card in &mut current {
-            Self::stable_start(card, retained);
-        }
+        let starts = Self::retained_starts(&current, retained);
+        Self::apply_starts(&mut current, starts);
         let keys: BTreeSet<String> = current.iter().map(|card| card.key.clone()).collect();
-        current.extend(retained.iter().filter(|card| card.idle && !keys.contains(&card.key)).cloned());
+        current.extend(Self::retained_idle(retained, &keys));
         current.sort_by(Self::session_order);
         current
     }
 
-    fn stable_start(card: &mut NativeActiveSessionView, retained: &[NativeActiveSessionView]) -> () {
-        if let Some(previous) = retained.iter().find(|previous| previous.key == card.key) {
-            card.started_at = previous.started_at;
+    fn retained_starts(
+        current: &[NativeActiveSessionView],
+        retained: &[NativeActiveSessionView],
+    ) -> Vec<Option<f64>> {
+        current.iter().map(|card| {
+            retained.iter().find(|previous| previous.key == card.key)
+                .map(|previous| previous.started_at)
+        }).collect()
+    }
+
+    fn apply_starts(current: &mut [NativeActiveSessionView], starts: Vec<Option<f64>>) -> () {
+        for (card, previous) in current.iter_mut().zip(starts) {
+            card.started_at = previous.unwrap_or(card.started_at);
         }
+    }
+
+    fn retained_idle(
+        retained: &[NativeActiveSessionView],
+        keys: &BTreeSet<String>,
+    ) -> Vec<NativeActiveSessionView> {
+        retained.iter().filter(|card| card.idle)
+            .filter(|card| !keys.contains(&card.key)).cloned().collect()
     }
 
     pub fn harness(family: &str) -> String {

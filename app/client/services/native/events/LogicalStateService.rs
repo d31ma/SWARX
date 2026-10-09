@@ -17,6 +17,10 @@ pub struct LogicalStateService {
 }
 
 impl LogicalStateService {
+    const TASK_EVENT: &'static str = "logical.task";
+    const STATUS_EVENT: &'static str = "logical.status";
+    const EXECUTION_START_EVENT: &'static str = "logical.execution.start";
+    const EXECUTION_FINISH_EVENT: &'static str = "logical.execution.finish";
     const CAPACITY_REACHED: &'static str = "Logical agent capacity reached.";
     const UNFINISHED_TASK: &'static str = "Assign an unfinished task before starting an execution.";
     const NO_EXECUTION: &'static str = "No running execution with this ID.";
@@ -40,7 +44,7 @@ impl LogicalStateService {
         let identity = self.require_event_identity(&kind, event)?;
         let previous = self.agents.get(&identity).cloned();
         handler(self, event, now)?;
-        self.note_activity(&kind, &identity, previous.as_ref(), now, monotonic);
+        self.note_activity(&kind, &identity, previous.as_ref(), (now, monotonic));
         self.revision += 1;
         Ok(self.revision)
     }
@@ -88,10 +92,10 @@ impl LogicalStateService {
     ) -> Result<fn(&mut Self, &NativeLogicalEvent, f64) -> Result<(), String>, String> {
         match kind {
             "logical.register" => Ok(Self::register),
-            "logical.task" => Ok(Self::task),
-            "logical.execution.start" => Ok(Self::start_execution),
-            "logical.execution.finish" => Ok(Self::finish_execution),
-            "logical.status" => Ok(Self::status),
+            Self::TASK_EVENT => Ok(Self::task),
+            Self::EXECUTION_START_EVENT => Ok(Self::start_execution),
+            Self::EXECUTION_FINISH_EVENT => Ok(Self::finish_execution),
+            Self::STATUS_EVENT => Ok(Self::status),
             "logical.heartbeat" => Ok(Self::heartbeat),
             "logical.session" => Ok(Self::session),
             LogicalCoordinationService::REGISTER => Ok(Self::coordination_register),
@@ -409,12 +413,12 @@ impl LogicalStateService {
         kind: &str,
         identity: &str,
         previous: Option<&NativeLogicalAgent>,
-        now: f64,
-        monotonic: Option<f64>,
+        clock: (f64, Option<f64>),
     ) -> () {
+        let (now, monotonic) = clock;
         let eligible = matches!(kind,
-            "logical.task" | "logical.status" | "logical.execution.start"
-                | "logical.execution.finish" | LogicalCoordinationService::REGISTER
+            Self::TASK_EVENT | Self::STATUS_EVENT | Self::EXECUTION_START_EVENT
+                | Self::EXECUTION_FINISH_EVENT | LogicalCoordinationService::REGISTER
                 | LogicalCoordinationService::UPSERT | LogicalCoordinationService::EXECUTION_START
                 | LogicalCoordinationService::EXECUTION_FINISH);
         if !eligible {

@@ -37,7 +37,7 @@ impl SessionCardRetentionService {
         }
         for (key, state) in sessions.iter_mut() {
             Self::activity(state, Self::latest_monotonic(key, sources, monotonic),
-                Self::latest_activity(key, sources, wall), wall, monotonic);
+                Self::latest_activity(key, sources, wall), (wall, monotonic));
             Self::metadata(state, current);
         }
         sessions.retain(|key, state| {
@@ -78,7 +78,8 @@ impl SessionCardRetentionService {
         })
     }
 
-    fn activity(state: &mut NativeSessionCardRetentionState, live: Option<f64>, activity: Option<f64>, wall: f64, monotonic: f64) -> () {
+    fn activity(state: &mut NativeSessionCardRetentionState, live: Option<f64>, activity: Option<f64>, clock: (f64, f64)) -> () {
+        let (wall, monotonic) = clock;
         if let Some(time) = live {
             if state.observed_monotonic.is_none_or(|old| time > old) {
                 state.last_activity = time.max(state.last_activity);

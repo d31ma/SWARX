@@ -291,27 +291,43 @@ impl SessionResourceUtils {
         sessions: &[NativeSessionView],
         now: f64,
     ) -> Vec<(String, NativeCommandObservation)> {
-        let mut observations = Vec::new();
-        for session in sessions {
-            for source in &session.agents {
-                let agent = LogicalViewUtils::running_view(source, now);
-                for command in &agent.command_resources {
-                    let identity = command
-                        .observation
-                        .metrics
-                        .as_ref()
-                        .map(|process| {
-                            (process.pid, &process.started)
-                                == (command.observation.pid, &command.observation.started)
-                        })
-                        .unwrap_or(true);
-                    if identity && Self::eligible_link((session, &agent), command, now) {
-                        observations.push((session.key.clone(), command.observation.clone()));
-                    }
-                }
-            }
-        }
-        observations
+        sessions.iter().flat_map(|session| Self::session_history(session, now)).collect()
+    }
+
+    fn session_history(session: &NativeSessionView, now: f64) -> Vec<(String, NativeCommandObservation)> {
+        session.agents.iter().flat_map(|source| Self::source_history(session, source, now)).collect()
+    }
+
+    fn source_history(
+        session: &NativeSessionView,
+        source: &NativeLogicalAgentView,
+        now: f64,
+    ) -> Vec<(String, NativeCommandObservation)> {
+        let agent = LogicalViewUtils::running_view(source, now);
+        agent.command_resources.iter()
+            .filter(|command| Self::history_eligible((session, &agent), command, now))
+            .map(|command| (session.key.clone(), command.observation.clone())).collect()
+    }
+
+    fn history_eligible(
+        source: (&NativeSessionView, &NativeLogicalAgentView),
+        command: &NativeCommandResourceView,
+        now: f64,
+    ) -> bool {
+        let identity = command.observation.metrics.as_ref().map(|process| {
+            (process.pid, &process.started) == (command.observation.pid, &command.observation.started)
+        }).unwrap_or(true);
+        Self::history_link(identity, source, command, now)
+    }
+
+    fn history_link(
+        identity: bool,
+        source: (&NativeSessionView, &NativeLogicalAgentView),
+        command: &NativeCommandResourceView,
+        now: f64,
+    ) -> bool {
+        if !identity { return false; }
+        Self::eligible_link(source, command, now)
     }
 
     fn agent_commands(
@@ -321,19 +337,20 @@ impl SessionResourceUtils {
         groups: &mut Vec<NativeRuntimeView>,
     ) -> () {
         for command in &agent.command_resources {
-            Self::append_command((session, agent), command, now, groups);
+            let eligible = Self::eligible((session, agent), command, now);
+            Self::append_command((session, agent), command, (now, eligible), groups);
         }
     }
 
     fn append_command(
         source: (&NativeSessionView, &NativeLogicalAgentView),
         command: &NativeCommandResourceView,
-        now: f64,
+        selection: (f64, bool),
         groups: &mut Vec<NativeRuntimeView>,
     ) -> () {
-        if Self::eligible(source, command, now) {
+        if selection.1 {
             ProcessOwnerUtils::command_group(source.1, command)
-                .map(|group: NativeGroup| -> () { Self::append_group(group, now, groups) });
+                .map(|group: NativeGroup| -> () { Self::append_group(group, selection.0, groups) });
         }
     }
 

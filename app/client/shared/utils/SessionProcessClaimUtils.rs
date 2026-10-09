@@ -11,6 +11,7 @@ impl SessionProcessClaimUtils {
     const UNIQUE: usize = 1;
     const HISTORY_SECONDS: f64 = 120.0;
     const HISTORY_SAMPLES: usize = 61;
+    const MICROSECONDS_PER_SECOND: u32 = 1_000_000;
 
     pub fn resolve(sessions: &mut [NativeSessionResourceView]) -> () {
         let claims: NativeSessionProcessClaims = Self::claims(sessions);
@@ -23,54 +24,110 @@ impl SessionProcessClaimUtils {
         sources: &[(String, NativeCommandObservation)],
         now: f64,
     ) -> BTreeMap<String, Vec<NativeProcessTreeSample>> {
-        let mut ticks: BTreeMap<
-            u64,
-            Vec<(&str, &NativeCommandObservation, &NativeProcessTreeSample)>,
-        > = BTreeMap::new();
+        let ticks = Self::history_ticks(sources, now);
+        let mut result = Self::project_history(sources, ticks);
+        Self::limit_history(&mut result);
+        result
+    }
+
+    fn history_ticks<'a>(
+        sources: &'a [(String, NativeCommandObservation)],
+        now: f64,
+    ) -> BTreeMap<u64, Vec<(&'a str, &'a NativeCommandObservation, &'a NativeProcessTreeSample)>> {
+        let mut ticks = BTreeMap::new();
         for (session, observation) in sources {
-            for sample in &observation.tree_history {
-                if Self::valid_history_sample(observation, sample, now) {
-                    ticks.entry(sample.time.to_bits()).or_default().push((
-                        session,
-                        observation,
-                        sample,
-                    ));
-                }
-            }
+            Self::observation_ticks(session, observation, now, &mut ticks);
         }
-        let mut result: BTreeMap<String, Vec<NativeProcessTreeSample>> = BTreeMap::new();
+        ticks
+    }
+
+    fn observation_ticks<'a>(
+        session: &'a str,
+        observation: &'a NativeCommandObservation,
+        now: f64,
+        ticks: &mut BTreeMap<u64, Vec<(&'a str, &'a NativeCommandObservation, &'a NativeProcessTreeSample)>>,
+    ) -> () {
+        for sample in observation.tree_history.iter()
+            .filter(|sample| Self::valid_history_sample(observation, sample, now)) {
+            ticks.entry(sample.time.to_bits()).or_default().push((session, observation, sample));
+        }
+    }
+
+    fn project_history(
+        sources: &[(String, NativeCommandObservation)],
+        ticks: BTreeMap<u64, Vec<(&str, &NativeCommandObservation, &NativeProcessTreeSample)>>,
+    ) -> BTreeMap<String, Vec<NativeProcessTreeSample>> {
+        let mut result = BTreeMap::new();
         for (time, samples) in ticks {
             let claims = Self::history_claims(sources, &samples);
-            let mut processes: BTreeMap<String, Vec<NativeProcessMetrics>> = BTreeMap::new();
-            let mut seen: BTreeMap<String, BTreeSet<(i32, String)>> = BTreeMap::new();
-            for (session, observation, sample) in samples {
-                let members = processes.entry(session.to_owned()).or_default();
-                let root = (observation.pid, observation.started.clone());
-                if !Self::assigned(&root, session, &claims) {
-                    continue;
-                }
-                let unique = seen.entry(session.to_owned()).or_default();
-                for process in &sample.processes {
-                    if Self::keep_process(process, (&root, session), &claims, unique) {
-                        members.push(process.clone());
-                    }
-                }
-            }
-            for (session, members) in processes {
-                result
-                    .entry(session)
-                    .or_default()
-                    .push(NativeProcessTreeSample {
-                        time: f64::from_bits(time),
-                        processes: members,
-                    });
-            }
+            let mut processes = BTreeMap::new();
+            let mut seen = BTreeMap::new();
+            Self::history_members(&samples, &claims, (&mut processes, &mut seen));
+            Self::append_tick(time, processes, &mut result);
         }
+        result
+    }
+
+    fn history_members(
+        samples: &[(&str, &NativeCommandObservation, &NativeProcessTreeSample)],
+        claims: &NativeSessionProcessClaims,
+        state: (&mut BTreeMap<String, Vec<NativeProcessMetrics>>,
+            &mut BTreeMap<String, BTreeSet<(i32, String)>>),
+    ) -> () {
+        for (session, observation, sample) in samples {
+            Self::history_sample((session, observation, sample), claims,
+                (&mut *state.0, &mut *state.1));
+        }
+    }
+
+    fn history_sample(
+        source: (&str, &NativeCommandObservation, &NativeProcessTreeSample),
+        claims: &NativeSessionProcessClaims,
+        state: (&mut BTreeMap<String, Vec<NativeProcessMetrics>>,
+            &mut BTreeMap<String, BTreeSet<(i32, String)>>),
+    ) -> () {
+        let (session, observation, sample) = source;
+        // Preserve the empty tick even when an ambiguous root cannot contribute processes.
+        let members = state.0.entry(session.to_owned()).or_default();
+        let root = (observation.pid, observation.started.clone());
+        if !Self::assigned(&root, session, claims) { return; }
+        let unique = state.1.entry(session.to_owned()).or_default();
+        Self::sample_members(&sample.processes, (&root, session), claims, (members, unique));
+    }
+
+    fn sample_members(
+        processes: &[NativeProcessMetrics],
+        command: (&(i32, String), &str),
+        claims: &NativeSessionProcessClaims,
+        state: (&mut Vec<NativeProcessMetrics>, &mut BTreeSet<(i32, String)>),
+    ) -> () {
+        for process in processes {
+            let keep = Self::keep_process(process, command, claims, &mut *state.1);
+            Self::append_history_member(process, keep, &mut *state.0);
+        }
+    }
+
+    fn append_history_member(process: &NativeProcessMetrics, keep: bool, members: &mut Vec<NativeProcessMetrics>) -> () {
+        if keep { members.push(process.clone()); }
+    }
+
+    fn append_tick(
+        time: u64,
+        processes: BTreeMap<String, Vec<NativeProcessMetrics>>,
+        result: &mut BTreeMap<String, Vec<NativeProcessTreeSample>>,
+    ) -> () {
+        for (session, members) in processes {
+            result.entry(session).or_default().push(NativeProcessTreeSample {
+                time: f64::from_bits(time), processes: members,
+            });
+        }
+    }
+
+    fn limit_history(result: &mut BTreeMap<String, Vec<NativeProcessTreeSample>>) -> () {
         for samples in result.values_mut() {
             let remove = samples.len().saturating_sub(Self::HISTORY_SAMPLES);
             samples.drain(..remove);
         }
-        result
     }
 
     fn valid_history_sample(
@@ -78,33 +135,42 @@ impl SessionProcessClaimUtils {
         sample: &NativeProcessTreeSample,
         now: f64,
     ) -> bool {
-        let root_count = sample
-            .processes
-            .iter()
-            .filter(|process| process.pid == observation.pid)
-            .count();
+        let root_count = sample.processes.iter().filter(|process| process.pid == observation.pid).count();
         let root_matches = sample.processes.iter().any(|process| {
             (process.pid, &process.started) == (observation.pid, &observation.started)
         });
-        now.is_finite()
-            && sample.time.is_finite()
-            && sample.time >= 0.0
-            && sample.time >= now - Self::HISTORY_SECONDS
-            && sample.time <= observation.sampled_at
-            && sample.time <= now
-            && observation.pid > 0
-            && Self::history_birth(&observation.started)
-            && (sample.processes.is_empty() || (root_count == Self::UNIQUE && root_matches))
-            && sample
-                .processes
-                .iter()
-                .all(|process| process.pid > 0 && Self::history_birth(&process.started))
+        let clock = Self::history_clock(observation, sample, now);
+        let root = Self::history_root(sample.processes.is_empty(), root_count, root_matches);
+        let processes = Self::history_processes(&sample.processes);
+        [clock, observation.pid > 0, Self::history_birth(&observation.started), root, processes]
+            .into_iter().all(std::convert::identity)
+    }
+
+    fn history_clock(observation: &NativeCommandObservation, sample: &NativeProcessTreeSample, now: f64) -> bool {
+        [now.is_finite(), sample.time.is_finite(), sample.time >= 0.0,
+            sample.time >= now - Self::HISTORY_SECONDS, sample.time <= observation.sampled_at,
+            sample.time <= now].into_iter().all(std::convert::identity)
+    }
+
+    fn history_root(empty: bool, count: usize, matches: bool) -> bool {
+        if empty { return true; }
+        [count == Self::UNIQUE, matches].into_iter().all(std::convert::identity)
+    }
+
+    fn history_processes(processes: &[NativeProcessMetrics]) -> bool {
+        processes.iter().all(|process| Self::history_process(process))
+    }
+
+    fn history_process(process: &NativeProcessMetrics) -> bool {
+        [process.pid > 0, Self::history_birth(&process.started)]
+            .into_iter().all(std::convert::identity)
     }
 
     fn history_birth(value: &str) -> bool {
         value.split_once(':').is_some_and(|(seconds, micros)| {
-            seconds.parse::<u64>().is_ok()
-                && micros.parse::<u32>().is_ok_and(|value| value < 1_000_000)
+            [seconds.parse::<u64>().is_ok(),
+                micros.parse::<u32>().is_ok_and(|value| value < Self::MICROSECONDS_PER_SECOND)]
+                .into_iter().all(std::convert::identity)
         })
     }
 
@@ -113,34 +179,39 @@ impl SessionProcessClaimUtils {
         samples: &[(&str, &NativeCommandObservation, &NativeProcessTreeSample)],
     ) -> NativeSessionProcessClaims {
         let mut claims = NativeSessionProcessClaims::default();
-        // Reserve current binding roots even on an empty tick, so missing metrics cannot
-        // turn a contradictory root claim into an apparently exclusive historical owner.
-        for (session, observation) in sources {
-            claims
-                .births
-                .entry(observation.pid)
-                .or_default()
-                .insert(observation.started.clone());
-            Self::record_claim(
-                (observation.pid, observation.started.clone()),
-                true,
-                session,
-                &mut claims,
-            );
-        }
-        for (session, observation, sample) in samples {
-            for process in &sample.processes {
-                claims
-                    .births
-                    .entry(process.pid)
-                    .or_default()
-                    .insert(process.started.clone());
-                let root =
-                    (process.pid, &process.started) == (observation.pid, &observation.started);
-                Self::record_claim(Self::identity(process), root, session, &mut claims);
-            }
-        }
+        Self::reserve_roots(sources, &mut claims);
+        Self::reserve_samples(samples, &mut claims);
         claims
+    }
+
+    fn reserve_roots(sources: &[(String, NativeCommandObservation)], claims: &mut NativeSessionProcessClaims) -> () {
+        // Missing samples cannot make contradictory current binding roots exclusive.
+        for (session, observation) in sources {
+            claims.births.entry(observation.pid).or_default().insert(observation.started.clone());
+            Self::record_claim((observation.pid, observation.started.clone()), true, session, claims);
+        }
+    }
+
+    fn reserve_samples(
+        samples: &[(&str, &NativeCommandObservation, &NativeProcessTreeSample)],
+        claims: &mut NativeSessionProcessClaims,
+    ) -> () {
+        for (session, observation, sample) in samples {
+            Self::reserve_processes(session, observation, sample, claims);
+        }
+    }
+
+    fn reserve_processes(
+        session: &str,
+        observation: &NativeCommandObservation,
+        sample: &NativeProcessTreeSample,
+        claims: &mut NativeSessionProcessClaims,
+    ) -> () {
+        for process in &sample.processes {
+            claims.births.entry(process.pid).or_default().insert(process.started.clone());
+            let root = (process.pid, &process.started) == (observation.pid, &observation.started);
+            Self::record_claim(Self::identity(process), root, session, claims);
+        }
     }
 
     fn claims(sessions: &[NativeSessionResourceView]) -> NativeSessionProcessClaims {

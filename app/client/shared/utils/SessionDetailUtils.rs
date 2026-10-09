@@ -1,7 +1,7 @@
 use crate::models::{
     NativeActiveSessionView, NativeActivityRecord, NativeLogicalAgentView, NativeProcessGraph,
     NativeProcessRow, NativeRuntimeView, NativeSessionActivityView, NativeSessionDetailView,
-    NativeSessionResourceView, NativeSessionView,
+    NativeSessionResourceView, NativeSessionView, NativeSessionMetricView,
 };
 use crate::utils::{ActiveSessionUtils, ActivityMetricsUtils, ChartDataUtils, SessionUsageUtils};
 use std::cmp::Ordering;
@@ -144,19 +144,13 @@ impl SessionDetailUtils {
         let samples: usize = history.len();
         detail.has_resource_history = history.iter().any(|row| row.iter().skip(1).any(Option::is_some));
         detail.metrics = SessionUsageUtils::metrics(rows, samples);
-        let sampling_gap = rows.is_empty() && resource.is_some_and(|found| !found.history_samples.is_empty());
-        if sampling_gap {
-            for metric in &mut detail.metrics {
-                metric.detail = "Process sampling unavailable; missing resources are not zero.".to_owned();
-            }
-        }
+        let sampling_gap = Self::sampling_gap(rows, resource);
+        Self::sampling_details(&mut detail.metrics, sampling_gap);
         detail.process_count = rows.len() as i64;
         detail.root_count = Self::root_count(commands);
         detail.resource_scope = Self::SCOPES[unlinked].to_owned();
         detail.resource_label = Self::RESOURCE_LABELS[unlinked].to_owned();
-        if sampling_gap {
-            detail.resource_label = "Process sampling unavailable; earlier measured samples stay in history. No current process metrics are inferred.".to_owned();
-        }
+        detail.resource_label = Self::sampling_label(detail.resource_label, sampling_gap);
         detail.tree_label = Self::TREE_LABELS[unlinked].to_owned();
         detail.chart_id = format!("{}{}", Self::CHART_PREFIX, detail.key);
         detail.graph = resource
@@ -167,6 +161,24 @@ impl SessionDetailUtils {
             Self::ACTIVITY_LABELS[usize::from(detail.activity.is_empty())].to_owned();
         detail.activity_metrics = ActivityMetricsUtils::summary(&detail.activity);
         detail
+    }
+
+    fn sampling_gap(rows: &[NativeProcessRow], resource: Option<&NativeSessionResourceView>) -> bool {
+        [rows.is_empty(), resource.is_some_and(|found| !found.history_samples.is_empty())]
+            .into_iter().all(std::convert::identity)
+    }
+
+    fn sampling_details(metrics: &mut [NativeSessionMetricView], gap: bool) -> () {
+        for metric in metrics.iter_mut().filter(|_| gap) {
+            metric.detail = "Process sampling unavailable; missing resources are not zero.".to_owned();
+        }
+    }
+
+    fn sampling_label(label: String, gap: bool) -> String {
+        if gap {
+            return "Process sampling unavailable; earlier measured samples stay in history. No current process metrics are inferred.".to_owned();
+        }
+        label
     }
 
     fn resource<'a>(
