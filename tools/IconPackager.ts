@@ -10,7 +10,14 @@ export class IconPackager {
   private static readonly ICON_SET_NAME: string = 'Observatory.iconset';
   private static readonly APP_PATH: string = 'macos/AgentObservatory.app';
   private static readonly SWIFT_COMPILER: string = '/usr/bin/swiftc';
-  private static readonly IMAGE_TOOL: string = '/usr/bin/sips';
+  private static readonly PNG_SIGNATURE: Buffer = Buffer.from('89504e470d0a1a0a', 'hex');
+  private static readonly PNG_HEADER_BYTES: number = 33;
+  private static readonly PNG_CHUNK_LENGTH_OFFSET: number = 8;
+  private static readonly PNG_CHUNK_TYPE_OFFSET: number = 12;
+  private static readonly PNG_WIDTH_OFFSET: number = 16;
+  private static readonly PNG_HEIGHT_OFFSET: number = 20;
+  private static readonly PNG_HEADER_LENGTH: number = 13;
+  private static readonly PNG_HEADER_TYPE: Buffer = Buffer.from('IHDR', 'ascii');
   private static readonly ICON_TOOL: string = '/usr/bin/iconutil';
   private static readonly SIGN_TOOL: string = '/usr/bin/codesign';
   private static readonly PLIST_TOOL: string = '/usr/bin/plutil';
@@ -80,13 +87,28 @@ export class IconPackager {
     const name: string = `icon_${size}x${size}${suffix}.png`;
     const input: string = path.join(this.icons, `icon-${pixels}.png`);
     const output: string = path.join(this.iconset, name);
-    this.run([IconPackager.IMAGE_TOOL, '-z', String(pixels), String(pixels), input, '--out', output], true);
+    const bytes: Buffer = fs.readFileSync(input);
+    IconPackager.requireImage(bytes, pixels);
+    fs.writeFileSync(output, bytes);
   }
 
   updateFavicon(file: string): void {
     const source: string = fs.readFileSync(file, 'utf8');
     const updated: string = IconPackager.faviconSource(source);
     fs.writeFileSync(file, updated);
+  }
+
+  // Header/dimension validation only; this does not decode pixels or validate PNG CRCs.
+  private static requireImage(bytes: Buffer, pixels: number): void {
+    if (bytes.length < IconPackager.PNG_HEADER_BYTES) throw new Error('Native icon PNG header is truncated.');
+    const valid: boolean = [
+      bytes.subarray(0, IconPackager.PNG_SIGNATURE.length).equals(IconPackager.PNG_SIGNATURE),
+      bytes.readUInt32BE(IconPackager.PNG_CHUNK_LENGTH_OFFSET) === IconPackager.PNG_HEADER_LENGTH,
+      bytes.subarray(IconPackager.PNG_CHUNK_TYPE_OFFSET, IconPackager.PNG_WIDTH_OFFSET).equals(IconPackager.PNG_HEADER_TYPE),
+      bytes.readUInt32BE(IconPackager.PNG_WIDTH_OFFSET) === pixels,
+      bytes.readUInt32BE(IconPackager.PNG_HEIGHT_OFFSET) === pixels,
+    ].every(Boolean);
+    if (!valid) throw new Error(`Native icon PNG must start with IHDR and have ${pixels}x${pixels} dimensions.`);
   }
 
   private static packageRoot(root: string): void {

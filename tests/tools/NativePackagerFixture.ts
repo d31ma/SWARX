@@ -24,7 +24,7 @@ export class NativePackagerFixture {
     process.env.OBSERVATORY_SWIFT_CACHE_PATH = this.swiftCache;
   }
 
-  write(relative: string, contents: string): string {
+  write(relative: string, contents: string | Uint8Array): string {
     const file: string = this.destination(relative);
     this.writeAbsolute(file, contents);
     return file;
@@ -68,6 +68,19 @@ export class NativePackagerFixture {
     this.write('app/dist/macos/AgentObservatory.app/Contents/Resources/WebBundle/index.html', '<html><head></head><body>Fixture</body></html>');
   }
 
+  // Dimension-bearing header fixture, not evidence of full image decoding.
+  png(pixels: number): Buffer {
+    const header: Buffer = Buffer.alloc(33);
+    Buffer.from('89504e470d0a1a0a', 'hex').copy(header);
+    header.writeUInt32BE(13, 8);
+    header.write('IHDR', 12, 'ascii');
+    header.writeUInt32BE(pixels, 16);
+    header.writeUInt32BE(pixels, 20);
+    header[24] = 8;
+    header[25] = 6;
+    return Buffer.concat([header, Buffer.from(`original fixture artwork ${pixels}`)]);
+  }
+
   run: (command: readonly string[], quiet?: boolean) => void = (command: readonly string[], quiet: boolean = false): void => {
     this.commands.push([...command]);
     this.quiet.push(quiet);
@@ -77,7 +90,7 @@ export class NativePackagerFixture {
     } else if (command[0] === '/usr/bin/swiftc') {
       this.writeAbsolute(this.output(command, '-o'), 'fixture executable');
     } else if (command[0]?.endsWith('/native-icon-generator')) {
-      for (const pixels of [16, 32, 64, 128, 256, 512, 1024]) this.write(`app/icons/icon-${pixels}.png`, 'fixture png');
+      for (const pixels of [16, 32, 64, 128, 256, 512, 1024]) this.write(`app/icons/icon-${pixels}.png`, this.png(pixels));
     } else if (command[0] === '/usr/bin/sips') {
       this.writeAbsolute(this.output(command, '--out'), 'fixture resized png');
     } else if (command[0] === '/usr/bin/iconutil') {
@@ -131,7 +144,7 @@ export class NativePackagerFixture {
     return file;
   }
 
-  private writeAbsolute(file: string, contents: string): void {
+  private writeAbsolute(file: string, contents: string | Uint8Array): void {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, contents);
   }

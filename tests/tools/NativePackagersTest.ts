@@ -128,10 +128,26 @@ test('Icon packaging preserves dimensions, plist keys, local favicon and signing
   context.after((): void => fixture.close());
   fixture.icon();
   new IconPackager(fixture.root, fixture.run).package();
-  const images = fixture.commands.filter((command: string[]): boolean => command[0] === '/usr/bin/sips');
-  assert.equal(images.length, 10);
-  assert.ok(images.some((command: string[]): boolean => command.includes(path.join(fixture.artifacts, 'icons/Observatory.iconset/icon_512x512@2x.png'))));
-  assert.ok(images.some((command: string[]): boolean => command.includes(path.join(fixture.artifacts, 'icons/icon-1024.png'))));
+  assert.deepEqual(fixture.commands.map((command: string[]): string | undefined => command[0]),
+    ['/usr/bin/swiftc', path.join(fixture.swiftCache, 'native-icon-generator'), '/usr/bin/iconutil',
+      '/usr/bin/plutil', '/usr/bin/plutil', '/usr/bin/plutil', '/usr/bin/codesign']);
+  const iconset: string = path.join(fixture.artifacts, 'icons/Observatory.iconset');
+  const expected: readonly (readonly [string, number])[] = [
+    ['icon_16x16.png', 16], ['icon_16x16@2x.png', 32],
+    ['icon_32x32.png', 32], ['icon_32x32@2x.png', 64],
+    ['icon_128x128.png', 128], ['icon_128x128@2x.png', 256],
+    ['icon_256x256.png', 256], ['icon_256x256@2x.png', 512],
+    ['icon_512x512.png', 512], ['icon_512x512@2x.png', 1024],
+  ];
+  assert.deepEqual(fs.readdirSync(iconset).sort(), expected.map(([name]): string => name).sort());
+  for (const [name, pixels] of expected) {
+    const original: Buffer = fs.readFileSync(path.join(fixture.artifacts, `icons/icon-${pixels}.png`));
+    const packaged: Buffer = fs.readFileSync(path.join(iconset, name));
+    assert.deepEqual(original, fixture.png(pixels), 'Generated artwork must remain unchanged.');
+    assert.deepEqual(packaged, original, 'Iconset entry must preserve exact generated PNG bytes.');
+    assert.equal(packaged.readUInt32BE(16), pixels);
+    assert.equal(packaged.readUInt32BE(20), pixels);
+  }
   assert.deepEqual(fixture.commands.at(-1), ['/usr/bin/codesign', '--force', '--sign', '-', path.join(fixture.artifacts, 'macos/AgentObservatory.app')]);
   const plist = path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/Info.plist');
   const icon = spawnSync('/usr/bin/plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', plist], {encoding: 'utf8'});
@@ -141,6 +157,51 @@ test('Icon packaging preserves dimensions, plist keys, local favicon and signing
   assert.equal(identifier.stdout.trim(), 'local.fixture.monitor');
   assert.ok(fs.readFileSync(path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/Resources/WebBundle/index.html'), 'utf8').includes('/shared/assets/observatory.svg'));
 });
+
+const invalidIconInputs: readonly (readonly [string, (fixture: NativePackagerFixture) => Buffer | undefined])[] = [
+  ['missing PNG', (): undefined => undefined],
+  ['truncated PNG header', (fixture): Buffer => fixture.png(16).subarray(0, 32)],
+  ['non-PNG signature', (): Buffer => Buffer.alloc(33)],
+  ['wrong first chunk length', (fixture): Buffer => {
+    const bytes: Buffer = fixture.png(16); bytes.writeUInt32BE(12, 8); return bytes;
+  }],
+  ['wrong first chunk type', (fixture): Buffer => {
+    const bytes: Buffer = fixture.png(16); bytes.write('IDAT', 12, 'ascii'); return bytes;
+  }],
+  ['non-ASCII first chunk type', (fixture): Buffer => {
+    const bytes: Buffer = fixture.png(16); Buffer.from([0xc9, 0xc8, 0xc4, 0xd2]).copy(bytes, 12); return bytes;
+  }],
+  ['wrong PNG width', (fixture): Buffer => {
+    const bytes: Buffer = fixture.png(16); bytes.writeUInt32BE(32, 16); return bytes;
+  }],
+  ['wrong PNG height', (fixture): Buffer => {
+    const bytes: Buffer = fixture.png(16); bytes.writeUInt32BE(32, 20); return bytes;
+  }],
+];
+
+for (const [name, contents] of invalidIconInputs) {
+  test(`Icon packaging refuses ${name} without output or input changes`, (context: TestContext): void => {
+    const fixture: NativePackagerFixture = new NativePackagerFixture();
+    context.after((): void => fixture.close());
+    const iconset: string = path.join(fixture.artifacts, 'icons/Observatory.iconset');
+    fs.mkdirSync(iconset, { recursive: true });
+    const input: string = path.join(fixture.artifacts, 'icons/icon-16.png');
+    const output: string = path.join(iconset, 'icon_16x16.png');
+    const bytes: Buffer | undefined = contents(fixture);
+    if (bytes !== undefined) fixture.write('app/icons/icon-16.png', bytes);
+    const packager: IconPackager = new IconPackager(fixture.root, fixture.run);
+    assert.throws((): void => packager.packageImage(16, 1), /PNG|IHDR|dimensions|ENOENT/);
+    assert.equal(fs.existsSync(output), false);
+    assert.equal(fixture.commands.length, 0, 'Rejected images must not invoke any tool.');
+    if (bytes === undefined) assert.equal(fs.existsSync(input), false);
+    else assert.deepEqual(fs.readFileSync(input), bytes);
+    const previous: Buffer = fixture.png(32);
+    fs.writeFileSync(output, previous);
+    assert.throws((): void => packager.packageImage(16, 1), /PNG|IHDR|dimensions|ENOENT/);
+    assert.deepEqual(fs.readFileSync(output), previous, 'Reject before touching an existing output.');
+    assert.equal(fixture.commands.length, 0);
+  });
+}
 
 test('Favicon replacement is idempotent', (context: TestContext): void => {
   const fixture = new NativePackagerFixture();
