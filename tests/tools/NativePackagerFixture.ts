@@ -2,8 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { crc32, deflateSync } from 'node:zlib';
 
 export class NativePackagerFixture {
+  private static readonly pngCache = new Map<string, Buffer>();
   readonly root: string;
   readonly artifacts: string;
   readonly rustCache: string;
@@ -68,17 +70,59 @@ export class NativePackagerFixture {
     this.write('app/dist/macos/AgentObservatory.app/Contents/Resources/WebBundle/index.html', '<html><head></head><body>Fixture</body></html>');
   }
 
-  // Dimension-bearing header fixture, not evidence of full image decoding.
-  png(pixels: number): Buffer {
-    const header: Buffer = Buffer.alloc(33);
-    Buffer.from('89504e470d0a1a0a', 'hex').copy(header);
-    header.writeUInt32BE(13, 8);
-    header.write('IHDR', 12, 'ascii');
-    header.writeUInt32BE(pixels, 16);
-    header.writeUInt32BE(pixels, 20);
-    header[24] = 8;
-    header[25] = 6;
-    return Buffer.concat([header, Buffer.from(`original fixture artwork ${pixels}`)]);
+  png(pixels: number, filter: number = 0): Buffer {
+    const key: string = `${pixels}/${filter}`;
+    const cached: Buffer | undefined = NativePackagerFixture.pngCache.get(key);
+    if (cached !== undefined) return Buffer.from(cached);
+    const header: Buffer = Buffer.alloc(13);
+    header.writeUInt32BE(pixels, 0);
+    header.writeUInt32BE(pixels, 4);
+    header[8] = 8;
+    header[9] = 6;
+    const rgba: Buffer = this.rgba(pixels);
+    const stride: number = pixels * 4;
+    const scanlines: Buffer = Buffer.alloc(pixels * (stride + 1));
+    for (let y: number = 0; y < pixels; y++) {
+      scanlines[y * (stride + 1)] = filter;
+      for (let x: number = 0; x < stride; x++) {
+        const index: number = y * stride + x;
+        const left: number = x >= 4 ? rgba[index - 4]! : 0;
+        const above: number = y > 0 ? rgba[index - stride]! : 0;
+        const diagonal: number = y > 0 && x >= 4 ? rgba[index - stride - 4]! : 0;
+        const p: number = left + above - diagonal;
+        const distances: number[] = [Math.abs(p - left), Math.abs(p - above), Math.abs(p - diagonal)];
+        const paeth: number = [left, above, diagonal][distances.indexOf(Math.min(...distances))]!;
+        const predictions: number[] = [0, left, above, Math.floor((left + above) / 2), paeth];
+        scanlines[y * (stride + 1) + 1 + x] = (rgba[index]! - (predictions[filter] ?? 0)) & 255;
+      }
+    }
+    const png: Buffer = Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'),
+      this.pngChunk('IHDR', header), this.pngChunk('IDAT', deflateSync(scanlines)), this.pngChunk('IEND', Buffer.alloc(0))]);
+    NativePackagerFixture.pngCache.set(key, png);
+    return Buffer.from(png);
+  }
+
+  rgba(pixels: number): Buffer {
+    const result: Buffer = Buffer.alloc(pixels * pixels * 4);
+    for (let y: number = 0; y < pixels; y++) {
+      for (let x: number = 0; x < pixels; x++) {
+        const index: number = (y * pixels + x) * 4;
+        result[index] = (x * 13 + y * 3) & 255;
+        result[index + 1] = (x * 7 + y * 11) & 255;
+        result[index + 2] = (x + y * 17) & 255;
+        result[index + 3] = (x * 19 + y * 23) & 255;
+      }
+    }
+    return result;
+  }
+
+  pngChunk(type: string, payload: Buffer): Buffer {
+    const result: Buffer = Buffer.alloc(payload.length + 12);
+    result.writeUInt32BE(payload.length, 0);
+    result.write(type, 4, 'ascii');
+    payload.copy(result, 8);
+    result.writeUInt32BE(crc32(result.subarray(4, result.length - 4)), result.length - 4);
+    return result;
   }
 
   run: (command: readonly string[], quiet?: boolean) => void = (command: readonly string[], quiet: boolean = false): void => {
@@ -94,7 +138,8 @@ export class NativePackagerFixture {
     } else if (command[0] === '/usr/bin/sips') {
       this.writeAbsolute(this.output(command, '--out'), 'fixture resized png');
     } else if (command[0] === '/usr/bin/iconutil') {
-      this.writeAbsolute(this.output(command, '-o'), 'icnsfixture');
+      if (command[2] === 'iconset') this.decodeIcon(command[3]!, this.output(command, '-o'));
+      else this.writeAbsolute(this.output(command, '-o'), 'icnsfixture');
     } else if (command[0] === '/usr/bin/plutil') {
       const result = spawnSync(command[0], command.slice(1), { encoding: 'utf8' });
       if (result.error) throw result.error;
@@ -106,6 +151,17 @@ export class NativePackagerFixture {
     fs.rmSync(this.root, { recursive: true });
     fs.rmSync(this.artifacts, { recursive: true });
     this.restoreEnvironment();
+  }
+
+  private decodeIcon(source: string, output: string): void {
+    const bytes: Buffer = fs.readFileSync(source);
+    if (bytes.toString('ascii', 0, 4) !== 'icns' || bytes.readUInt32BE(4) !== bytes.length) {
+      throw new Error('Fixture decoder refuses invalid ICNS framing.');
+    }
+    fs.mkdirSync(output);
+    // Platform pixel fidelity is checked by real Apple decode in the separate admitted packaging lane.
+    const originals: string = path.join(this.artifacts, 'icons/Observatory.iconset');
+    for (const name of fs.readdirSync(originals)) this.writeAbsolute(path.join(output, name), fs.readFileSync(path.join(originals, name)));
   }
 
   private destination(relative: string): string {

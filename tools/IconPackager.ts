@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { crc32, inflateSync } from 'node:zlib';
 import { ToolCommandUtils } from './utils/ToolCommandUtils.ts';
 import { ToolEntryUtils } from './utils/ToolEntryUtils.ts';
 import { ToolPathUtils } from './utils/ToolPathUtils.ts';
@@ -18,6 +19,17 @@ export class IconPackager {
   private static readonly PNG_HEIGHT_OFFSET: number = 20;
   private static readonly PNG_HEADER_LENGTH: number = 13;
   private static readonly PNG_HEADER_TYPE: Buffer = Buffer.from('IHDR', 'ascii');
+  private static readonly MAX_PNG_BYTES: number = 16 * 1024 * 1024;
+  private static readonly MAX_ICNS_BYTES: number = 0xffffffff;
+  private static readonly RESOURCES: readonly (readonly [string, string, number])[] = [
+    ['is32', 'icon_16x16.png', 16], ['s8mk', 'icon_16x16.png', 16],
+    ['ic11', 'icon_16x16@2x.png', 32],
+    ['il32', 'icon_32x32.png', 32], ['l8mk', 'icon_32x32.png', 32],
+    ['ic12', 'icon_32x32@2x.png', 64],
+    ['ic07', 'icon_128x128.png', 128], ['ic13', 'icon_128x128@2x.png', 256],
+    ['ic08', 'icon_256x256.png', 256], ['ic14', 'icon_256x256@2x.png', 512],
+    ['ic09', 'icon_512x512.png', 512], ['ic10', 'icon_512x512@2x.png', 1024],
+  ];
   private static readonly ICON_TOOL: string = '/usr/bin/iconutil';
   private static readonly SIGN_TOOL: string = '/usr/bin/codesign';
   private static readonly PLIST_TOOL: string = '/usr/bin/plutil';
@@ -129,7 +141,152 @@ export class IconPackager {
   }
 
   private createIcon(): void {
-    this.run([IconPackager.ICON_TOOL, '-c', 'icns', this.iconset, IconPackager.OUTPUT_FLAG, path.join(this.icons, IconPackager.ICON_NAME)]);
+    const images = new Map<string, { bytes: Buffer; compressed: Buffer; pixels: number }>();
+    const entries: Buffer[] = [];
+    for (const [type, name, pixels] of IconPackager.RESOURCES) {
+      let image = images.get(name);
+      if (image === undefined) {
+        const bytes: Buffer = fs.readFileSync(path.join(this.iconset, name));
+        IconPackager.requireImage(bytes, pixels);
+        const compressed: Buffer = IconPackager.pngData(bytes);
+        image = { bytes, compressed, pixels };
+        images.set(name, image);
+      }
+      let payload: Buffer = image.bytes;
+      if (type === 'is32' || type === 'il32' || type === 's8mk' || type === 'l8mk') {
+        const rgba: Buffer = IconPackager.smallPixels(image.compressed, pixels);
+        const channels: Buffer[] = [0, 1, 2, 3].map((channel: number): Buffer =>
+          Buffer.from(rgba.filter((_value: number, index: number): boolean => index % 4 === channel)));
+        payload = type === 's8mk' || type === 'l8mk' ? channels[3]!
+          : Buffer.concat(channels.slice(0, 3).map(IconPackager.literalChannel));
+      }
+      entries.push(IconPackager.frame(type, payload));
+    }
+    const toc: Buffer = IconPackager.frame('TOC ', Buffer.concat(entries.map((entry: Buffer): Buffer => entry.subarray(0, 8))));
+    const bytes: Buffer = IconPackager.frame('icns', Buffer.concat([toc, ...entries]));
+    const validation: string = fs.mkdtempSync(path.join(this.icons, 'icns-validation-'));
+    const candidate: string = path.join(validation, IconPackager.ICON_NAME);
+    const decoded: string = path.join(validation, 'decoded.iconset');
+    fs.writeFileSync(candidate, bytes);
+    this.run([IconPackager.ICON_TOOL, '-c', 'iconset', candidate, IconPackager.OUTPUT_FLAG, decoded]);
+    if (!fs.statSync(decoded).isDirectory() || fs.lstatSync(decoded).isSymbolicLink()
+      || JSON.stringify(fs.readdirSync(decoded).sort()) !== JSON.stringify([...images.keys()].sort())) {
+      throw new Error('ICNS decoder returned an unexpected iconset.');
+    }
+    for (const [name, image] of images) {
+      const delivered: string = path.join(decoded, name);
+      if (!fs.lstatSync(delivered).isFile() || fs.lstatSync(delivered).isSymbolicLink()) {
+        throw new Error('ICNS decoder returned a non-regular PNG.');
+      }
+      const decodedBytes: Buffer = fs.readFileSync(delivered);
+      IconPackager.requireImage(decodedBytes, image.pixels);
+      const decodedData: Buffer = IconPackager.pngData(decodedBytes);
+      if (image.pixels <= 32 && !IconPackager.smallPixels(decodedData, image.pixels)
+        .equals(IconPackager.smallPixels(image.compressed, image.pixels))) {
+        throw new Error('ICNS decoder changed original small PNG pixels.');
+      }
+      if (!fs.readFileSync(path.join(this.iconset, name)).equals(image.bytes)
+        || !fs.readFileSync(path.join(this.icons, `icon-${image.pixels}.png`)).equals(image.bytes)) {
+        throw new Error('ICNS validation changed original PNG bytes.');
+      }
+    }
+    if (!fs.readFileSync(candidate).equals(bytes)) throw new Error('ICNS decoder changed the candidate.');
+    fs.renameSync(candidate, path.join(this.icons, IconPackager.ICON_NAME));
+  }
+
+  private static frame(type: string, payload: Buffer): Buffer {
+    const length: number = payload.length + 8;
+    if (!/^[A-Za-z0-9 ]{4}$/.test(type) || !Number.isSafeInteger(length) || length > IconPackager.MAX_ICNS_BYTES) {
+      throw new Error('Invalid ICNS resource or 32-bit length.');
+    }
+    const header: Buffer = Buffer.alloc(8);
+    header.write(type, 0, 'ascii');
+    header.writeUInt32BE(length, 4);
+    return Buffer.concat([header, payload]);
+  }
+
+  // Only the generated 8-bit RGBA, noninterlaced PNG subset is supported.
+  private static pngData(bytes: Buffer): Buffer {
+    if (bytes.length > IconPackager.MAX_PNG_BYTES || !bytes.subarray(24, 29).equals(Buffer.from([8, 6, 0, 0, 0]))) {
+      throw new Error('Unsupported or oversized native icon PNG.');
+    }
+    const data: Buffer[] = [];
+    let offset: number = 8;
+    let ended: boolean = false;
+    let afterData: boolean = false;
+    while (offset < bytes.length) {
+      if (bytes.length - offset < 12) throw new Error('Truncated PNG chunk.');
+      const length: number = bytes.readUInt32BE(offset);
+      const end: number = offset + 12 + length;
+      if (end > bytes.length) throw new Error('Truncated PNG chunk payload.');
+      const rawType: Buffer = bytes.subarray(offset + 4, offset + 8);
+      const type: string = rawType.toString('latin1');
+      if (!/^[A-Za-z]{2}[A-Z][A-Za-z]$/.test(type)
+        || crc32(bytes.subarray(offset + 4, end - 4)) !== bytes.readUInt32BE(end - 4)) {
+        throw new Error('Invalid PNG chunk type or CRC.');
+      }
+      if (offset === 8) {
+        if (type !== 'IHDR' || length !== 13) throw new Error('PNG must start with IHDR.');
+      } else if (type === 'IDAT') {
+        if (afterData) throw new Error('PNG IDAT chunks must be contiguous.');
+        data.push(bytes.subarray(offset + 8, end - 4));
+      } else if (type === 'IEND') {
+        if (length !== 0 || end !== bytes.length || data.length === 0) throw new Error('Invalid PNG IEND.');
+        ended = true;
+      } else {
+        if ((rawType[0]! & 32) === 0) throw new Error('Unsupported critical PNG chunk.');
+        if (data.length > 0) afterData = true;
+      }
+      offset = end;
+    }
+    if (!ended || data.length === 0) throw new Error('PNG IDAT/IEND is missing.');
+    const compressed: Buffer = Buffer.concat(data);
+    if (compressed.length === 0) throw new Error('PNG IDAT is empty.');
+    return compressed;
+  }
+
+  private static smallPixels(compressed: Buffer, pixels: number): Buffer {
+    if (pixels !== 16 && pixels !== 32) throw new Error('Legacy ICNS pixels must be 16 or 32.');
+    const stride: number = pixels * 4;
+    const length: number = pixels * (stride + 1);
+    // Node's info option returns this runtime shape; its declarations retain the Buffer return type.
+    const result = inflateSync(compressed, { maxOutputLength: length, info: true }) as unknown as
+      { buffer: Buffer; engine: { bytesWritten: number } };
+    if (result.buffer.length !== length || result.engine.bytesWritten !== compressed.length) {
+      throw new Error('Invalid PNG IDAT inflated length or trailing compressed bytes.');
+    }
+    const rgba: Buffer = Buffer.alloc(pixels * stride);
+    for (let y: number = 0; y < pixels; y++) {
+      const filter: number = result.buffer[y * (stride + 1)]!;
+      if (filter > 4) throw new Error('Unsupported PNG scanline filter.');
+      for (let x: number = 0; x < stride; x++) {
+        const index: number = y * stride + x;
+        const left: number = x >= 4 ? rgba[index - 4]! : 0;
+        const above: number = y > 0 ? rgba[index - stride]! : 0;
+        const upperLeft: number = y > 0 && x >= 4 ? rgba[index - stride - 4]! : 0;
+        const prediction: number = filter === 0 ? 0 : filter === 1 ? left : filter === 2 ? above
+          : filter === 3 ? Math.floor((left + above) / 2) : IconPackager.paeth(left, above, upperLeft);
+        rgba[index] = (result.buffer[y * (stride + 1) + 1 + x]! + prediction) & 255;
+      }
+    }
+    return rgba;
+  }
+
+  private static paeth(left: number, above: number, upperLeft: number): number {
+    const prediction: number = left + above - upperLeft;
+    const a: number = Math.abs(prediction - left);
+    const b: number = Math.abs(prediction - above);
+    const c: number = Math.abs(prediction - upperLeft);
+    return a <= b && a <= c ? left : b <= c ? above : upperLeft;
+  }
+
+  private static literalChannel(channel: Buffer): Buffer {
+    const packets: Buffer[] = [];
+    for (let offset: number = 0; offset < channel.length; offset += 128) {
+      const packet: Buffer = channel.subarray(offset, offset + 128);
+      packets.push(Buffer.from([packet.length - 1]), packet);
+    }
+    return Buffer.concat(packets);
   }
 
   private copyIcon(): void {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { deflateSync } from 'node:zlib';
 import { NativeRustPackager } from '../../tools/NativeRustPackager.ts';
 import { NativeHostCustomizer } from '../../tools/NativeHostCustomizer.ts';
 import { IconPackager } from '../../tools/IconPackager.ts';
@@ -131,6 +132,12 @@ test('Icon packaging preserves dimensions, plist keys, local favicon and signing
   assert.deepEqual(fixture.commands.map((command: string[]): string | undefined => command[0]),
     ['/usr/bin/swiftc', path.join(fixture.swiftCache, 'native-icon-generator'), '/usr/bin/iconutil',
       '/usr/bin/plutil', '/usr/bin/plutil', '/usr/bin/plutil', '/usr/bin/codesign']);
+  const decode: string[] = fixture.commands[2]!;
+  assert.deepEqual(decode.slice(0, 3), ['/usr/bin/iconutil', '-c', 'iconset']);
+  assert.equal(decode[4], '-o');
+  assert.equal(path.basename(decode[5]!), 'decoded.iconset');
+  assert.deepEqual(fs.readFileSync(path.join(fixture.artifacts, 'icons/Observatory.icns')),
+    fs.readFileSync(path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/Resources/Observatory.icns')));
   const iconset: string = path.join(fixture.artifacts, 'icons/Observatory.iconset');
   const expected: readonly (readonly [string, number])[] = [
     ['icon_16x16.png', 16], ['icon_16x16@2x.png', 32],
@@ -200,6 +207,183 @@ for (const [name, contents] of invalidIconInputs) {
     assert.throws((): void => packager.packageImage(16, 1), /PNG|IHDR|dimensions|ENOENT/);
     assert.deepEqual(fs.readFileSync(output), previous, 'Reject before touching an existing output.');
     assert.equal(fixture.commands.length, 0);
+  });
+}
+
+function icnsEntries(bytes: Buffer): Map<string, Buffer> {
+  assert.equal(bytes.toString('ascii', 0, 4), 'icns');
+  assert.equal(bytes.readUInt32BE(4), bytes.length);
+  const types: string[] = ['is32', 's8mk', 'ic11', 'il32', 'l8mk', 'ic12', 'ic07', 'ic13', 'ic08', 'ic14', 'ic09', 'ic10'];
+  assert.equal(bytes.toString('ascii', 8, 12), 'TOC ');
+  assert.equal(bytes.readUInt32BE(12), 8 + types.length * 8);
+  let offset: number = 16 + types.length * 8;
+  const result = new Map<string, Buffer>();
+  for (const [index, type] of types.entries()) {
+    const length: number = bytes.readUInt32BE(offset + 4);
+    assert.ok(length >= 8 && offset + length <= bytes.length);
+    assert.equal(bytes.toString('ascii', offset, offset + 4), type);
+    assert.deepEqual(bytes.subarray(16 + index * 8, 24 + index * 8), bytes.subarray(offset, offset + 8));
+    result.set(type, bytes.subarray(offset + 8, offset + length));
+    offset += length;
+  }
+  assert.equal(offset, bytes.length);
+  return result;
+}
+
+function legacyPixels(rgb: Buffer, alpha: Buffer): Buffer {
+  const channels: number[][] = [[], [], []];
+  let offset: number = 0;
+  for (const channel of channels) {
+    while (channel.length < alpha.length) {
+      const prefix: number = rgb[offset++]!;
+      assert.ok(prefix <= 127, 'Assembler must use literal RLE packets.');
+      const count: number = prefix + 1;
+      assert.ok(channel.length + count <= alpha.length && offset + count <= rgb.length);
+      channel.push(...rgb.subarray(offset, offset + count));
+      offset += count;
+    }
+  }
+  assert.equal(offset, rgb.length);
+  const rgba: Buffer = Buffer.alloc(alpha.length * 4);
+  for (let index: number = 0; index < alpha.length; index++) {
+    for (let channel: number = 0; channel < 3; channel++) rgba[index * 4 + channel] = channels[channel]![index]!;
+    rgba[index * 4 + 3] = alpha[index]!;
+  }
+  return rgba;
+}
+
+for (const filter of [0, 1, 2, 3, 4]) {
+  test(`ICNS TOC, original PNG payloads and legacy RGB/alpha preserve filter ${filter} pixels`, (context: TestContext): void => {
+    const fixture = new NativePackagerFixture();
+    context.after((): void => fixture.close());
+    fixture.icon();
+    const run = (command: readonly string[], quiet?: boolean): void => {
+      fixture.run(command, quiet);
+      if (command[0]?.endsWith('/native-icon-generator')) {
+        for (const pixels of [16, 32]) fixture.write(`app/icons/icon-${pixels}.png`, fixture.png(pixels, filter));
+      }
+    };
+    const packager = new IconPackager(fixture.root, run);
+    packager.package();
+    const file: string = path.join(fixture.artifacts, 'icons/Observatory.icns');
+    const first: Buffer = fs.readFileSync(file);
+    const entries: Map<string, Buffer> = icnsEntries(first);
+    for (const [rgb, mask, pixels] of [['is32', 's8mk', 16], ['il32', 'l8mk', 32]] as const) {
+      assert.equal(entries.get(mask)!.length, pixels * pixels);
+      assert.deepEqual(legacyPixels(entries.get(rgb)!, entries.get(mask)!), fixture.rgba(pixels));
+    }
+    for (const [type, pixels] of [['ic11', 32], ['ic12', 64], ['ic07', 128], ['ic13', 256],
+      ['ic08', 256], ['ic14', 512], ['ic09', 512], ['ic10', 1024]] as const) {
+      assert.deepEqual(entries.get(type), fs.readFileSync(path.join(fixture.artifacts, `icons/icon-${pixels}.png`)));
+    }
+    packager.package();
+    assert.deepEqual(fs.readFileSync(file), first, 'Assembly is deterministic across fresh decoder directories.');
+    const decodes: string[][] = fixture.commands.filter((command): boolean => command[0] === '/usr/bin/iconutil');
+    assert.equal(decodes.length, 2);
+    assert.ok(decodes.every((command): boolean => command[2] === 'iconset'));
+    assert.notEqual(decodes[0]![5], decodes[1]![5]);
+  });
+}
+
+function pngWithData(fixture: NativePackagerFixture, compressed: Buffer): Buffer {
+  const valid: Buffer = fixture.png(16);
+  return Buffer.concat([valid.subarray(0, 33), fixture.pngChunk('IDAT', compressed), fixture.pngChunk('IEND', Buffer.alloc(0))]);
+}
+
+const invalidAssemblyInputs: readonly (readonly [string, (fixture: NativePackagerFixture) => Buffer])[] = [
+  ['bad chunk CRC', (f): Buffer => { const b = f.png(16); b[32] = b[32]! ^ 1; return b; }],
+  ['truncated chunk', (f): Buffer => f.png(16).subarray(0, -1)],
+  ['oversized chunk length', (f): Buffer => { const b = f.png(16); b.writeUInt32BE(0xffffffff, 33); return b; }],
+  ['duplicate IHDR', (f): Buffer => { const b = f.png(16); return Buffer.concat([b.subarray(0, 33), b.subarray(8)]); }],
+  ['missing IEND', (f): Buffer => f.png(16).subarray(0, -12)],
+  ['trailing PNG bytes', (f): Buffer => Buffer.concat([f.png(16), Buffer.from([0])])],
+  ['missing IDAT', (f): Buffer => Buffer.concat([f.png(16).subarray(0, 33), f.pngChunk('IEND', Buffer.alloc(0))])],
+  ['empty IDAT', (f): Buffer => pngWithData(f, Buffer.alloc(0))],
+  ['unknown critical chunk', (f): Buffer => { const b = f.png(16); return Buffer.concat([b.subarray(0, 33), f.pngChunk('ABCD', Buffer.alloc(0)), b.subarray(33)]); }],
+  ['noncontiguous IDAT', (f): Buffer => { const b = f.png(16); const n = b.readUInt32BE(33); const data = b.subarray(41, 41 + n); return Buffer.concat([b.subarray(0, 33), f.pngChunk('IDAT', data.subarray(0, 2)), f.pngChunk('tEXt', Buffer.alloc(0)), f.pngChunk('IDAT', data.subarray(2)), b.subarray(-12)]); }],
+  ['invalid reserved chunk letter', (f): Buffer => { const b = f.png(16); return Buffer.concat([b.subarray(0, 33), f.pngChunk('abca', Buffer.alloc(0)), b.subarray(33)]); }],
+  ['invalid IDAT compression', (f): Buffer => pngWithData(f, Buffer.from([0, 1, 2]))],
+  ['short inflated length', (f): Buffer => pngWithData(f, deflateSync(Buffer.alloc(16 * 65 - 1)))],
+  ['long inflated length', (f): Buffer => pngWithData(f, deflateSync(Buffer.alloc(16 * 65 + 1)))],
+  ['inflation bomb', (f): Buffer => pngWithData(f, deflateSync(Buffer.alloc(1024 * 1024)))],
+  ['trailing compressed bytes', (f): Buffer => pngWithData(f, Buffer.concat([deflateSync(Buffer.alloc(16 * 65)), Buffer.from([1, 2, 3])]))],
+  ['unsupported scanline filter', (f): Buffer => f.png(16, 5)],
+  ...([['bit depth', 8, 16], ['color type', 9, 2], ['compression', 10, 1], ['filter method', 11, 1], ['interlace', 12, 1]] as const)
+    .map(([name, offset, value]): readonly [string, (fixture: NativePackagerFixture) => Buffer] =>
+      [`unsupported ${name}`, (f): Buffer => { const b = f.png(16); const header = Buffer.from(b.subarray(16, 29)); header[offset] = value; return Buffer.concat([b.subarray(0, 8), f.pngChunk('IHDR', header), b.subarray(33)]); }]),
+];
+
+for (const [name, corrupt] of invalidAssemblyInputs) {
+  test(`ICNS assembly refuses ${name} and preserves previous valid ICNS`, (context: TestContext): void => {
+    const fixture = new NativePackagerFixture();
+    context.after((): void => fixture.close());
+    fixture.icon();
+    new IconPackager(fixture.root, fixture.run).package();
+    const file: string = path.join(fixture.artifacts, 'icons/Observatory.icns');
+    const delivered: string = path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/Resources/Observatory.icns');
+    const previous: Buffer = fs.readFileSync(file);
+    const previousDelivered: Buffer = fs.readFileSync(delivered);
+    const bad: Buffer = corrupt(fixture);
+    fixture.commands.length = 0;
+    const run = (command: readonly string[], quiet?: boolean): void => {
+      fixture.run(command, quiet);
+      if (command[0]?.endsWith('/native-icon-generator')) fixture.write('app/icons/icon-16.png', bad);
+    };
+    assert.throws((): void => new IconPackager(fixture.root, run).package());
+    assert.deepEqual(fs.readFileSync(file), previous);
+    assert.deepEqual(fs.readFileSync(delivered), previousDelivered);
+    assert.deepEqual(fs.readFileSync(path.join(fixture.artifacts, 'icons/icon-16.png')), bad);
+    assert.equal(fixture.commands.some((command): boolean => command[0] === '/usr/bin/iconutil' || command[0] === '/usr/bin/codesign'), false);
+  });
+}
+
+test('ICNS assembly validates large PNG CRCs before replacing the previous icon', (context: TestContext): void => {
+  const fixture = new NativePackagerFixture();
+  context.after((): void => fixture.close());
+  fixture.icon();
+  new IconPackager(fixture.root, fixture.run).package();
+  const file: string = path.join(fixture.artifacts, 'icons/Observatory.icns');
+  const previous: Buffer = fs.readFileSync(file);
+  const bad: Buffer = fixture.png(1024);
+  bad[bad.length - 1] = bad[bad.length - 1]! ^ 1;
+  fixture.commands.length = 0;
+  const run = (command: readonly string[], quiet?: boolean): void => {
+    fixture.run(command, quiet);
+    if (command[0]?.endsWith('/native-icon-generator')) fixture.write('app/icons/icon-1024.png', bad);
+  };
+  assert.throws((): void => new IconPackager(fixture.root, run).package(), /CRC/);
+  assert.deepEqual(fs.readFileSync(file), previous);
+  assert.deepEqual(fs.readFileSync(path.join(fixture.artifacts, 'icons/icon-1024.png')), bad);
+  assert.equal(fixture.commands.some((command): boolean => command[0] === '/usr/bin/iconutil' || command[0] === '/usr/bin/codesign'), false);
+});
+
+for (const mode of ['decoder failure', 'missing image', 'extra image', 'wrong dimensions', 'symlink image', 'bad decoded CRC', 'changed decoded pixels', 'changed original', 'changed candidate']) {
+  test(`ICNS mandatory readback rejects ${mode} before final replacement/signing`, (context: TestContext): void => {
+    const fixture = new NativePackagerFixture();
+    context.after((): void => fixture.close());
+    fixture.icon();
+    new IconPackager(fixture.root, fixture.run).package();
+    const file: string = path.join(fixture.artifacts, 'icons/Observatory.icns');
+    const previous: Buffer = fs.readFileSync(file);
+    fixture.commands.length = 0;
+    const run = (command: readonly string[], quiet?: boolean): void => {
+      fixture.run(command, quiet);
+      if (command[0] !== '/usr/bin/iconutil' || command[2] !== 'iconset') return;
+      const directory: string = command[5]!;
+      const png: string = path.join(directory, 'icon_16x16.png');
+      if (mode === 'decoder failure') throw new Error('Fixture decoder failure');
+      if (mode === 'missing image') fs.unlinkSync(png);
+      if (mode === 'extra image') fs.writeFileSync(path.join(directory, 'extra.png'), fixture.png(16));
+      if (mode === 'wrong dimensions') fs.writeFileSync(png, fixture.png(32));
+      if (mode === 'symlink image') { fs.unlinkSync(png); fs.symlinkSync(path.join(fixture.artifacts, 'icons/icon-16.png'), png); }
+      if (mode === 'bad decoded CRC') { const bad = fixture.png(16); bad[32] = bad[32]! ^ 1; fs.writeFileSync(png, bad); }
+      if (mode === 'changed decoded pixels') fs.writeFileSync(png, pngWithData(fixture, deflateSync(Buffer.alloc(16 * 65))));
+      if (mode === 'changed original') fs.writeFileSync(path.join(fixture.artifacts, 'icons/icon-16.png'), fixture.png(32));
+      if (mode === 'changed candidate') fs.appendFileSync(command[3]!, Buffer.from([0]));
+    };
+    assert.throws((): void => new IconPackager(fixture.root, run).package());
+    assert.deepEqual(fs.readFileSync(file), previous);
+    assert.equal(fixture.commands.some((command): boolean => command[0] === '/usr/bin/codesign'), false);
   });
 }
 
