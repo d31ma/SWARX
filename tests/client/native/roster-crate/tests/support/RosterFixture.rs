@@ -50,6 +50,7 @@ impl RosterFixture {
             source: "Coordinator lifecycle hooks".to_string(),
             captured_at: 1000.0,
             last_activity_at: None,
+            last_activity_monotonic: None,
             feed_mode: "events".to_string(),
             task: Some(NativeTaskRecord {
                 id: "actual-task".to_string(),

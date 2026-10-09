@@ -22,6 +22,17 @@ impl LogicalStateService {
     const NO_EXECUTION: &'static str = "No running execution with this ID.";
     const FIRST_OBSERVATION: f64 = 0.0;
     pub fn apply(&mut self, event: &NativeLogicalEvent, now: f64) -> Result<i64, String> {
+        self.apply_at(event, now, None)
+    }
+
+    // Production receiver and monitor share one ObservationClock. The paired monotonic value
+    // orders actual activity even when the receiver's wall clock moves backwards.
+    pub fn apply_observed(&mut self, event: &NativeLogicalEvent, time: (f64, f64)) -> Result<i64, String> {
+        self.require_time(time.1)?;
+        self.apply_at(event, time.0, Some(time.1))
+    }
+
+    fn apply_at(&mut self, event: &NativeLogicalEvent, now: f64, monotonic: Option<f64>) -> Result<i64, String> {
         let kind: String = self.text.identifier(Some(&event.event_type))?;
         let handler: fn(&mut Self, &NativeLogicalEvent, f64) -> Result<(), String> =
             Self::handler(&kind)?;
@@ -29,7 +40,7 @@ impl LogicalStateService {
         let identity = self.require_event_identity(&kind, event)?;
         let previous = self.agents.get(&identity).cloned();
         handler(self, event, now)?;
-        self.note_activity(&kind, &identity, previous.as_ref(), now);
+        self.note_activity(&kind, &identity, previous.as_ref(), now, monotonic);
         self.revision += 1;
         Ok(self.revision)
     }
@@ -102,6 +113,7 @@ impl LogicalStateService {
             source: LogicalEventPolicyService::SOURCE.to_string(),
             captured_at: now,
             last_activity_at: None,
+            last_activity_monotonic: None,
             feed_mode: LogicalEventPolicyService::MODE.to_string(),
             task: None,
             executions: Vec::new(),
@@ -398,6 +410,7 @@ impl LogicalStateService {
         identity: &str,
         previous: Option<&NativeLogicalAgent>,
         now: f64,
+        monotonic: Option<f64>,
     ) -> () {
         let eligible = matches!(kind,
             "logical.task" | "logical.status" | "logical.execution.start"
@@ -412,11 +425,13 @@ impl LogicalStateService {
             let executions_changed = Self::execution_activity(previous) != Self::execution_activity(Some(next));
             let terminal = self.policy.is_final(&next.status)
                 && previous.is_some_and(|old| old.status != next.status);
-            next.last_activity_at = if task_changed || executions_changed || terminal {
-                Some(now)
+            if task_changed || executions_changed || terminal {
+                next.last_activity_at = Some(now);
+                next.last_activity_monotonic = monotonic;
             } else {
-                previous.and_then(|old| old.last_activity_at)
-            };
+                next.last_activity_at = previous.and_then(|old| old.last_activity_at);
+                next.last_activity_monotonic = previous.and_then(|old| old.last_activity_monotonic);
+            }
         }
     }
 

@@ -1,6 +1,6 @@
 <logic :if="(observatory.sessionView === 'detail' || observatory.sessionView === 'inactive') && observatory.sessionTab === 'resources'">
   <section id="session-panel-resources" role="tabpanel" aria-labelledby="session-tab-resources" class="history-scroll session-tab-panel" tabindex="0" :data-session="observatory.model.sessionDetail.key" :data-scope="observatory.model.sessionDetail.resourceScope">
-    <logic :if="observatory.model.sessionDetail.processCount">
+    <logic :if="observatory.model.sessionDetail.processCount || observatory.model.sessionDetail.hasResourceHistory">
       <div class="resource-chart-layout">
         <div class="chart-tabs" role="group" aria-orientation="vertical" aria-label="History metric">
           <w-btn :variant="observatory.series === 'cpu' ? 'tonal' : 'text'" on:click="observatory.setSeries('cpu')">CPU</w-btn>
@@ -12,6 +12,7 @@
           <article class="history-card" :data-group="observatory.model.sessionDetail.chartId">
             <header class="history-card-header">
               <h3>Session usage · {observatory.model.sessionDetail.processCount} current processes · {observatory.model.sessionDetail.rootCount} verified roots</h3>
+              <p>{observatory.model.sessionDetail.resourceLabel}</p>
               <div class="session-metrics" role="list" aria-label="Current measured session usage">
                 <loop :for="metric of observatory.model.sessionDetail.metrics">
                   <logic :if="metric.series === observatory.series"><div role="listitem" :class="'session-metric' + (metric.available ? '' : ' is-unavailable')" :data-metric="metric.key"><small>{metric.label}</small><strong>{metric.value}</strong><p>{metric.detail}</p></div></logic>
@@ -24,6 +25,6 @@
         </div>
       </div>
     </logic>
-    <logic :if="!observatory.model.sessionDetail.processCount"><div class="empty">No measured session usage.<p>Metrics appear when a verified session harness or command link with a matching OS identity is reported for this session. No remote model work is measured.</p></div></logic>
+    <logic :if="!observatory.model.sessionDetail.processCount && !observatory.model.sessionDetail.hasResourceHistory"><div class="empty">No measured session usage.<p>{observatory.model.sessionDetail.resourceLabel}</p><p>Metrics appear when a verified session harness or command link with a matching OS identity is reported for this session. No remote model work is measured.</p></div></logic>
   </section>
 </logic>

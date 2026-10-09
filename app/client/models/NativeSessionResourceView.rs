@@ -1,4 +1,4 @@
-use crate::models::{NativeProcessGraph, NativeProcessRow, NativeRuntimeView};
+use crate::models::{NativeProcessGraph, NativeProcessRow, NativeProcessTreeSample, NativeRuntimeView};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NativeSessionResourceView {
@@ -16,6 +16,9 @@ pub struct NativeSessionResourceView {
     #[serde(rename = "sourceRecordCount")]
     pub source_record_count: i64,
     pub commands: Vec<NativeRuntimeView>,
+    // Bound historical measurements are independent of the current live tree and never sent raw.
+    #[serde(skip)]
+    pub history_samples: Vec<NativeProcessTreeSample>,
     pub tree: Vec<NativeProcessRow>,
     pub graph: NativeProcessGraph,
     #[serde(rename = "resourceNotice")]

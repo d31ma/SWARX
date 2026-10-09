@@ -78,7 +78,7 @@ impl SessionDetailUtils {
     ) -> Vec<NativeRuntimeView> {
         detail
             .map(|found: &NativeSessionDetailView| -> NativeRuntimeView {
-                Self::session_chart(found, Self::commands(resources, &found.key), now)
+                Self::session_chart(found, &Self::history(resources, &found.key), now)
             })
             .into_iter()
             .collect()
@@ -140,12 +140,23 @@ impl SessionDetailUtils {
             .unwrap_or_default();
         let commands: &[NativeRuntimeView] = Self::commands(resources, &detail.key);
         let unlinked: usize = usize::from(rows.is_empty());
-        let samples: usize = SessionUsageUtils::history(commands).len();
+        let history = Self::history(resources, &detail.key);
+        let samples: usize = history.len();
+        detail.has_resource_history = history.iter().any(|row| row.iter().skip(1).any(Option::is_some));
         detail.metrics = SessionUsageUtils::metrics(rows, samples);
+        let sampling_gap = rows.is_empty() && resource.is_some_and(|found| !found.history_samples.is_empty());
+        if sampling_gap {
+            for metric in &mut detail.metrics {
+                metric.detail = "Process sampling unavailable; missing resources are not zero.".to_owned();
+            }
+        }
         detail.process_count = rows.len() as i64;
         detail.root_count = Self::root_count(commands);
         detail.resource_scope = Self::SCOPES[unlinked].to_owned();
         detail.resource_label = Self::RESOURCE_LABELS[unlinked].to_owned();
+        if sampling_gap {
+            detail.resource_label = "Process sampling unavailable; earlier measured samples stay in history. No current process metrics are inferred.".to_owned();
+        }
         detail.tree_label = Self::TREE_LABELS[unlinked].to_owned();
         detail.chart_id = format!("{}{}", Self::CHART_PREFIX, detail.key);
         detail.graph = resource
@@ -176,6 +187,12 @@ impl SessionDetailUtils {
             .unwrap_or_default()
     }
 
+    fn history(resources: &[NativeSessionResourceView], key: &str) -> Vec<Vec<Option<f64>>> {
+        Self::resource(resources, key)
+            .map(|found| SessionUsageUtils::history_from_samples(&found.history_samples))
+            .unwrap_or_default()
+    }
+
     fn root_count(commands: &[NativeRuntimeView]) -> i64 {
         commands
             .iter()
@@ -188,7 +205,7 @@ impl SessionDetailUtils {
 
     fn session_chart(
         detail: &NativeSessionDetailView,
-        commands: &[NativeRuntimeView],
+        history: &[Vec<Option<f64>>],
         now: f64,
     ) -> NativeRuntimeView {
         let mut view: NativeRuntimeView = NativeRuntimeView::default();
@@ -196,7 +213,7 @@ impl SessionDetailUtils {
         view.group.name = detail.title.clone();
         view.group.family = detail.family.clone();
         view.group.scope = Self::USAGE_SCOPE.to_owned();
-        view.charts = ChartDataUtils::build(&SessionUsageUtils::history(commands), now);
+        view.charts = ChartDataUtils::build(history, now);
         view
     }
 

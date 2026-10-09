@@ -80,6 +80,7 @@ impl SessionDetailTests {
 
     fn resource(commands: Vec<NativeRuntimeView>) -> NativeSessionResourceView {
         let tree: Vec<NativeProcessRow> = ProcessTreeUtils::runtime_tree(&commands);
+        let history_samples = commands.iter().flat_map(|command| command.group.tree_history.iter().cloned()).collect();
         NativeSessionResourceView {
             key: Self::KEY.to_owned(),
             id: Some(Self::SESSION.to_owned()),
@@ -96,6 +97,7 @@ impl SessionDetailTests {
             graph: crate::utils::ProcessGraphUtils::build(&tree),
             tree,
             commands,
+            history_samples,
             resource_notice: String::new(),
             harness_header: false,
         }

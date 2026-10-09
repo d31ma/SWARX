@@ -262,3 +262,77 @@ fn absent_malformed_or_future_activity_cannot_fabricate_a_current_hook() {
         assert!(view.active_sessions.is_empty());
     }
 }
+
+impl SessionCardRetentionTests {
+    // Same output evidence as LogicalEventReceiverService's paired ObservationClock.
+    fn received(status: &str, wall: f64, monotonic: f64) -> NativeLogicalAgentView {
+        let mut agent = Self::at(Self::agent("session", status), wall);
+        agent.last_activity_monotonic = Some(monotonic);
+        agent
+    }
+}
+
+
+#[test]
+fn genuine_completion_after_wall_rollback_retains_for_600_monotonic_seconds() {
+    let service = SessionCardRetentionService::default();
+    let running = SessionCardRetentionTests::received("running", 1000.0, 0.0);
+    service.retain(&[SessionCardRetentionTests::card("session")], &[running], 1000.0, 0.0);
+    let completed = SessionCardRetentionTests::received("completed", 600.0, 500.0);
+    let idle = service.retain(&[], &[completed], 600.0, 500.0);
+    assert_eq!(idle.len(), 1);
+    assert!(idle[0].idle);
+    assert_eq!((idle[0].agent_total, idle[0].tool_count), (0, 0));
+    assert_eq!(service.retain(&[], &[], 700.0, 600.0).len(), 1);
+    assert_eq!(service.retain(&[], &[], 1199.999, 1099.999).len(), 1);
+    assert!(service.retain(&[], &[], 1200.0, 1100.0).is_empty());
+}
+
+#[test]
+fn reported_background_finish_after_wall_rollback_renews_the_same_card() {
+    let service = SessionCardRetentionService::default();
+    let mut card = SessionCardRetentionTests::card("session");
+    card.agent_total = 0;
+    card.agent_count = 0;
+    card.tool_count = 0;
+    card.background_running = 1;
+    let running = SessionCardRetentionTests::received("running", 1000.0, 0.0);
+    service.retain(&[card], &[running], 1000.0, 0.0);
+    let completed = SessionCardRetentionTests::received("completed", 600.0, 500.0);
+    let idle = service.retain(&[], &[completed], 600.0, 500.0);
+    assert_eq!(idle[0].key, "Codex:session");
+    assert_eq!(idle[0].background_running, 0);
+    assert!(idle[0].idle);
+    assert_eq!(service.retain(&[], &[], 1199.999, 1099.999).len(), 1);
+    assert!(service.retain(&[], &[], 1200.0, 1100.0).is_empty());
+}
+
+
+#[test]
+fn passive_poll_heartbeat_title_and_recovery_do_not_renew_monotonic_activity() {
+    let service = SessionCardRetentionService::default();
+    let running = SessionCardRetentionTests::received("running", 1000.0, 0.0);
+    service.retain(&[SessionCardRetentionTests::card("session")], &[running], 1000.0, 0.0);
+    let mut completed = SessionCardRetentionTests::received("completed", 600.0, 500.0);
+    service.retain(&[], &[completed.clone()], 600.0, 500.0);
+    completed.captured_at = 550.0; // Passive clock rollback/heartbeat preserves actual activity.
+    completed.name = "Renamed worker".to_owned();
+    service.retain(&[], &[completed], 550.0, 900.0);
+    let mut recovered = SessionCardRetentionTests::agent("session", "completed");
+    recovered.feed_mode = "recovered".to_owned();
+    recovered = SessionCardRetentionTests::at(recovered, 1600.0);
+    service.retain(&[], &[recovered], 1700.0, 1000.0);
+    assert_eq!(service.retain(&[], &[], 1799.999, 1099.999).len(), 1);
+    assert!(service.retain(&[], &[], 1800.0, 1100.0).is_empty());
+}
+
+#[test]
+fn delayed_live_observation_keeps_already_elapsed_monotonic_activity_age() {
+    let service = SessionCardRetentionService::default();
+    let running = SessionCardRetentionTests::received("running", 1000.0, 0.0);
+    service.retain(&[SessionCardRetentionTests::card("session")], &[running], 1000.0, 0.0);
+    let completed = SessionCardRetentionTests::received("completed", 600.0, 500.0);
+    assert_eq!(service.retain(&[], &[completed], 1500.0, 800.0).len(), 1);
+    assert_eq!(service.retain(&[], &[], 1799.999, 1099.999).len(), 1);
+    assert!(service.retain(&[], &[], 1800.0, 1100.0).is_empty());
+}

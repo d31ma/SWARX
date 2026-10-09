@@ -71,6 +71,7 @@ impl CommandResourceViewTests {
             source: "explicit fixture".to_owned(),
             captured_at: Self::NOW,
             last_activity_at: None,
+            last_activity_monotonic: None,
             feed_mode: "events".to_owned(),
             task: Some(NativeTaskRecord {
                 id: "fixture-task".to_owned(),

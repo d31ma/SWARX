@@ -45,6 +45,7 @@ impl SessionActivityIdentityTests {
             source: "Explicit fixture roster".to_owned(),
             captured_at,
             last_activity_at: None,
+            last_activity_monotonic: None,
             feed_mode: "events".to_owned(),
             task: None,
             executions,

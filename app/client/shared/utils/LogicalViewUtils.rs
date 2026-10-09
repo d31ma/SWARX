@@ -63,6 +63,7 @@ impl LogicalViewUtils {
             source: agent.source.clone(),
             captured_at: agent.captured_at,
             last_activity_at: agent.last_activity_at,
+            last_activity_monotonic: agent.last_activity_monotonic,
             feed_mode: agent.feed_mode.clone(),
             task: agent.task.clone(),
             executions: Self::executions(&agent.executions),

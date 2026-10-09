@@ -112,3 +112,65 @@ fn malformed_or_future_stored_activity_is_discarded_without_freshening_capture()
         assert_eq!(sanitized[0].captured_at, 100.0);
     }
 }
+
+
+struct ActivityClock(std::sync::Mutex<(f64, f64)>);
+
+impl event_slice::ObservationClock for ActivityClock {
+    fn now(&self) -> (f64, f64) {
+        *self.0.lock().unwrap()
+    }
+}
+
+#[test]
+fn real_receiver_orders_background_finish_by_monotonic_time_after_wall_rollback() {
+    use event_slice::services::LogicalEventReceiverService;
+    let clock = std::sync::Arc::new(ActivityClock(std::sync::Mutex::new((1000.0, 0.0))));
+    let receiver = LogicalEventReceiverService::new(clock.clone(), Err("Explicit no-store fixture".to_owned()));
+    let send = |value: serde_json::Value| {
+        assert!(receiver.receive(&serde_json::to_vec(&value).unwrap()).accepted);
+    };
+    send(serde_json::json!({"type":"logical.register","agent":"worker","family":"Codex","session_id":"session"}));
+    send(serde_json::json!({"type":"logical.task","agent":"worker","task":"assignment","status":"running"}));
+    send(serde_json::json!({"type":"logical.execution.start","agent":"worker","execution":"background","name":"exec_command","background":true}));
+    assert_eq!(receiver.rows()[0].last_activity_monotonic, Some(0.0));
+    *clock.0.lock().unwrap() = (600.0, 500.0);
+    send(serde_json::json!({"type":"logical.execution.finish","agent":"worker","execution":"background","status":"completed","duration_seconds":500.0,"last_activity_monotonic":99999}));
+    let completed = receiver.rows().remove(0);
+    assert_eq!(completed.last_activity_at, Some(600.0));
+    assert_eq!(completed.last_activity_monotonic, Some(500.0));
+    assert_eq!(completed.executions[0].background, Some(true));
+    *clock.0.lock().unwrap() = (600.0, 501.0); // A second genuine transition with the same wall timestamp.
+    send(serde_json::json!({"type":"logical.task","agent":"worker","task":"assignment","status":"completed"}));
+    assert_eq!(receiver.rows()[0].last_activity_monotonic, Some(501.0));
+    *clock.0.lock().unwrap() = (550.0, 700.0);
+    send(serde_json::json!({"type":"logical.heartbeat","agent":"worker","last_activity_monotonic":99999}));
+    let row = receiver.rows().remove(0);
+    assert_eq!(row.last_activity_monotonic, Some(501.0));
+    assert!(serde_json::to_value(&row).unwrap().get("last_activity_monotonic").is_none());
+    let mut incoming = serde_json::to_value(&row).unwrap();
+    incoming["last_activity_monotonic"] = 99999.into();
+    let decoded: NativeLogicalAgent = serde_json::from_value(incoming).unwrap();
+    assert_eq!(decoded.last_activity_monotonic, None);
+    let policy = LogicalRosterPolicyService::default();
+    assert_eq!(policy.sanitized(&[row]).unwrap()[0].last_activity_monotonic, None);
+}
+
+#[test]
+fn unchanged_coordinator_labels_preserve_paired_monotonic_activity() {
+    let mut state = LogicalStateService::default();
+    let mut value = serde_json::json!({"type":"logical.coordination.upsert","agent":"/root","family":"Codex","session_id":"00000000-0000-4000-8000-000000000001","task":"assignment","status":"running"});
+    let decode = |value| serde_json::from_value::<NativeLogicalEvent>(value).unwrap();
+    state.apply_observed(&decode(value.clone()), (1000.0, 0.0)).unwrap();
+    value["name"] = "Renamed worker".into();
+    value["task_name"] = "Renamed assignment".into();
+    state.apply_observed(&decode(value.clone()), (600.0, 500.0)).unwrap();
+    assert_eq!(state.rows(600.0)[0].last_activity_monotonic, Some(0.0));
+    value["task"] = "new-assignment".into();
+    state.apply_observed(&decode(value), (600.0, 501.0)).unwrap();
+    assert_eq!(state.rows(600.0)[0].last_activity_monotonic, Some(501.0));
+    let revision = state.revision();
+    let invalid = serde_json::json!({"type":"logical.heartbeat","agent":"/root"});
+    assert!(state.apply_observed(&decode(invalid), (600.0, f64::NAN)).is_err());
+    assert_eq!(state.revision(), revision);
+}

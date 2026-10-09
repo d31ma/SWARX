@@ -47,6 +47,7 @@ impl LogicalCoordinationService {
             source: Self::SOURCE.to_string(),
             captured_at: now,
             last_activity_at: None,
+            last_activity_monotonic: None,
             feed_mode: Self::MODE.to_string(),
             task,
             executions: Vec::new(),

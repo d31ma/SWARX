@@ -79,6 +79,7 @@ impl LogicalRosterPolicyService {
             last_activity_at: row.last_activity_at.filter(|time| {
                 time.is_finite() && *time >= 0.0 && *time <= row.captured_at
             }),
+            last_activity_monotonic: None,
             feed_mode: Self::RECOVERED.to_string(),
             task: row
                 .task
@@ -239,6 +240,7 @@ impl LogicalRosterPolicyService {
     }
 
     fn recover_agent(&self, mut row: NativeLogicalAgent, now: f64) -> NativeLogicalAgent {
+        row.last_activity_monotonic = None;
         row.reported_status = Some(row.status);
         row.status = Self::STALE.to_string();
         row.age_seconds = (now - row.captured_at).max(0.0);

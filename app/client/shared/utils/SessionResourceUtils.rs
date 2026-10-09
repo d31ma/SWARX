@@ -218,6 +218,11 @@ impl SessionResourceUtils {
     fn views(sessions: &[NativeSessionView], now: f64) -> Vec<NativeSessionResourceView> {
         let mut views: Vec<NativeSessionResourceView> = Self::candidate_views(sessions, now);
         SessionProcessClaimUtils::resolve(&mut views);
+        let history: Vec<(String, NativeCommandObservation)> = Self::history_observations(sessions, now);
+        let mut samples = SessionProcessClaimUtils::history_samples(&history, now);
+        for view in &mut views {
+            view.history_samples = samples.remove(&view.key).unwrap_or_default();
+        }
         Self::summaries(&mut views);
         views
     }
@@ -263,6 +268,7 @@ impl SessionResourceUtils {
             command_count: commands.len() as i64,
             process_count: tree.len() as i64,
             graph: ProcessGraphUtils::build(&tree),
+            history_samples: Vec::new(),
             tree,
             commands,
             harness_header: false,
@@ -279,6 +285,33 @@ impl SessionResourceUtils {
             group.group.scope != Self::SESSION_SCOPE
         });
         groups
+    }
+
+    fn history_observations(
+        sessions: &[NativeSessionView],
+        now: f64,
+    ) -> Vec<(String, NativeCommandObservation)> {
+        let mut observations = Vec::new();
+        for session in sessions {
+            for source in &session.agents {
+                let agent = LogicalViewUtils::running_view(source, now);
+                for command in &agent.command_resources {
+                    let identity = command
+                        .observation
+                        .metrics
+                        .as_ref()
+                        .map(|process| {
+                            (process.pid, &process.started)
+                                == (command.observation.pid, &command.observation.started)
+                        })
+                        .unwrap_or(true);
+                    if identity && Self::eligible_link((session, &agent), command, now) {
+                        observations.push((session.key.clone(), command.observation.clone()));
+                    }
+                }
+            }
+        }
+        observations
     }
 
     fn agent_commands(
@@ -309,6 +342,14 @@ impl SessionResourceUtils {
         command: &NativeCommandResourceView,
         now: f64,
     ) -> bool {
+        Self::eligible_link(source, command, now) && Self::identity(command)
+    }
+
+    fn eligible_link(
+        source: (&NativeSessionView, &NativeLogicalAgentView),
+        command: &NativeCommandResourceView,
+        now: f64,
+    ) -> bool {
         let observation: &NativeCommandObservation = &command.observation;
         [
             source.0.known,
@@ -319,7 +360,6 @@ impl SessionResourceUtils {
             observation.provenance == Self::PROVENANCE,
             observation.validation == Self::VALIDATION,
             Self::fresh(observation.sampled_at, now),
-            Self::identity(command),
         ]
         .into_iter()
         .all(std::convert::identity)

@@ -30,6 +30,7 @@ fn agent(id: &str, executions: Vec<NativeExecutionRecord>) -> NativeLogicalAgent
         source: "Coordinator-reported team roster".to_string(),
         captured_at: 1_700_000_000.0,
         last_activity_at: None,
+        last_activity_monotonic: None,
         feed_mode: "coordinator-report".to_string(),
         task: None,
         executions,

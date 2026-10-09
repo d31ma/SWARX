@@ -33,6 +33,16 @@ impl CommandResourceViewUtils {
         Self::agents(agents, observations, bindings, now);
     }
 
+    // Shared gate for projections consuming the same registry-backed observation.
+    pub fn current_resource(
+        agent: &NativeLogicalAgentView,
+        observation: &NativeCommandObservation,
+        bindings: &[NativeCommandBinding],
+        now: f64,
+    ) -> bool {
+        Self::eligible(agent, observation, bindings, now)
+    }
+
     pub fn current_agent(
         agent: &NativeLogicalAgentView,
         observation: &NativeCommandObservation,

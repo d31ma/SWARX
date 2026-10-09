@@ -1,8 +1,12 @@
 use crate::models::{
     NativeBackgroundTaskView, NativeCommandObservation, NativeExecutionRecord, NativeLogicalAgent,
-    NativeProcessMetrics, NativeSnapshot,
+    NativeLogicalAgentView, NativeProcessMetrics, NativeProcessOwner, NativeRuntimeView, NativeSnapshot,
 };
-use crate::utils::{HarnessShellUtils, MetricFormatUtils, SessionViewUtils, TimeFormatUtils};
+use crate::utils::{
+    CommandResourceViewUtils, HarnessShellUtils, LogicalViewUtils, MetricFormatUtils,
+    SessionResourceUtils, SessionViewUtils, TimeFormatUtils,
+};
+use std::collections::BTreeSet;
 
 pub struct BackgroundTaskUtils;
 
@@ -19,11 +23,155 @@ impl BackgroundTaskUtils {
     const UNMATCHED: &'static str = "Shell child of the verified session harness process; no background launch report matched it, so title and command are unknown.";
 
     pub fn tasks(snapshot: &NativeSnapshot, now: f64) -> Vec<NativeBackgroundTaskView> {
-        Self::session_tasks(snapshot, now)
+        let explicit = Self::explicit_tasks(snapshot, now);
+        let mut tasks = Self::session_tasks(snapshot, now);
+        // A directly bound root wins over the same launch-time root. For a nested
+        // bound command, keep the outer candidate's remaining measured members.
+        tasks.retain_mut(|(legacy, members)| {
+            let roots_overlap = explicit.iter().any(|(bound, processes)| {
+                legacy.session_key == bound.session_key
+                    && members
+                        .first()
+                        .zip(processes.first())
+                        .is_some_and(|(left, right)| {
+                            (left.pid, &left.started) == (right.pid, &right.started)
+                        })
+            });
+            if roots_overlap {
+                return false;
+            }
+            members.retain(|process| {
+                !explicit.iter().any(|(bound, processes)| {
+                    legacy.session_key == bound.session_key
+                        && processes.iter().any(|explicit| {
+                            (explicit.pid, &explicit.started) == (process.pid, &process.started)
+                        })
+                })
+            });
+            if members.is_empty() {
+                return false;
+            }
+            let busy = Self::busy(members);
+            legacy.state = Self::state(busy).to_owned();
+            legacy.state_label = Self::state_label(busy).to_owned();
+            legacy.process_count = members.len() as i64;
+            legacy.pids = Self::pids(members);
+            true
+        });
+        tasks.extend(explicit);
+        tasks.into_iter().map(|(view, _)| view).collect()
     }
 
-    fn session_tasks(snapshot: &NativeSnapshot, now: f64) -> Vec<NativeBackgroundTaskView> {
-        let mut tasks: Vec<NativeBackgroundTaskView> = Vec::new();
+    fn explicit_tasks(
+        snapshot: &NativeSnapshot,
+        now: f64,
+    ) -> Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)> {
+        let resources = SessionResourceUtils::build(&snapshot.session_groups, now);
+        let mut tasks = Vec::new();
+        let mut seen = BTreeSet::new();
+        for source in &snapshot.logical_views {
+            if source.family != "Codex" {
+                continue;
+            }
+            let agent = LogicalViewUtils::running_view(source, now);
+            for command in &agent.command_resources {
+                let observation = &command.observation;
+                if observation.scope != "reported-command-process"
+                    || !CommandResourceViewUtils::current_resource(
+                        &agent,
+                        observation,
+                        &snapshot.command_bindings,
+                        now,
+                    )
+                    || !Self::unique_explicit_root(snapshot, observation)
+                {
+                    continue;
+                }
+                let record = agent
+                    .executions
+                    .iter()
+                    .map(|view| &view.execution)
+                    .find(|record| {
+                        record.id == observation.owner.execution_id
+                            && record.background == Some(true)
+                            && ["exec_command", "local_shell", "shell", "Bash"]
+                                .contains(&record.name.as_str())
+                    });
+                let Some(record) = record else {
+                    continue;
+                };
+                let key =
+                    SessionViewUtils::linked_key(&agent.family, &observation.owner.session_id);
+                let group = resources
+                    .iter()
+                    .filter(|session| session.key == key)
+                    .flat_map(|session| session.commands.iter())
+                    .find(|group| Self::explicit_group(group, &agent, observation));
+                let Some(group) = group else {
+                    continue;
+                };
+                if !seen.insert((observation.binding_id.clone(), observation.generation)) {
+                    continue;
+                }
+                let mut view = Self::view(&key, &group.group.processes, Some(record), now);
+                view.key = format!(
+                    "{}:{key}:command:{}:{}",
+                    Self::KEY_PREFIX,
+                    observation.binding_id,
+                    observation.generation
+                );
+                view.attribution = "Caller-reported background command; its current binding and OS process identity matched. Descendants are current measured processes.".to_owned();
+                let mut processes = group.group.processes.clone();
+                processes.sort_by_key(|process| process.pid != observation.pid);
+                tasks.push((view, processes));
+            }
+        }
+        tasks
+    }
+
+    fn explicit_group(
+        group: &NativeRuntimeView,
+        agent: &NativeLogicalAgentView,
+        observation: &NativeCommandObservation,
+    ) -> bool {
+        group.group.processes.iter().any(|process| {
+            (process.pid, &process.started) == (observation.pid, &observation.started)
+        }) && group.group.owners.iter().any(|owner: &NativeProcessOwner| {
+            owner.agent_id == agent.id
+                && owner.session_id == observation.owner.session_id
+                && owner.task_id == observation.owner.task_id
+                && owner.execution_id == observation.owner.execution_id
+                && owner.binding_id == observation.binding_id
+                && owner.generation == observation.generation
+                && owner.root_pid == observation.pid
+                && owner.root_started == observation.started
+        })
+    }
+
+    fn unique_explicit_root(
+        snapshot: &NativeSnapshot,
+        observation: &NativeCommandObservation,
+    ) -> bool {
+        // Do not pick an arbitrary actor if contradictory bindings claim one OS identity.
+        snapshot
+            .command_bindings
+            .iter()
+            .filter(|binding| {
+                binding.identity.pid == observation.pid
+                    && binding.identity.started == observation.started
+            })
+            .all(|binding| {
+                binding.id == observation.binding_id
+                    && binding.generation == observation.generation
+                    && binding.owner == observation.owner
+            })
+    }
+
+    fn session_tasks(
+        snapshot: &NativeSnapshot,
+        now: f64,
+    ) -> Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)> {
+        let mut tasks = Vec::new();
         let agents: &[NativeLogicalAgent] = &snapshot.logical_agents;
         for (observation, main) in
             HarnessShellUtils::sessions(&snapshot.command_observations, agents, now)
@@ -39,7 +187,7 @@ impl BackgroundTaskUtils {
         main: &NativeLogicalAgent,
         agents: &[NativeLogicalAgent],
         now: f64,
-    ) -> Vec<NativeBackgroundTaskView> {
+    ) -> Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)> {
         let session: &str = observation.owner.session_id.as_str();
         let session_key: String = SessionViewUtils::linked_key(&main.family, session);
         let records: Vec<&NativeExecutionRecord> = HarnessShellUtils::records(main, agents);
@@ -105,7 +253,7 @@ impl BackgroundTaskUtils {
         pairs: Vec<(Vec<NativeProcessMetrics>, Option<&NativeExecutionRecord>)>,
         open: &[f64],
         now: f64,
-    ) -> Vec<NativeBackgroundTaskView> {
+    ) -> Vec<(NativeBackgroundTaskView, Vec<NativeProcessMetrics>)> {
         pairs
             .into_iter()
             .filter(
@@ -114,7 +262,9 @@ impl BackgroundTaskUtils {
             )
             .map(
                 |(group, record): (Vec<NativeProcessMetrics>, Option<&NativeExecutionRecord>)|
-                 -> NativeBackgroundTaskView { Self::view(session_key, &group, record, now) },
+                 -> (NativeBackgroundTaskView, Vec<NativeProcessMetrics>) {
+                    (Self::view(session_key, &group, record, now), group)
+                 },
             )
             .collect()
     }

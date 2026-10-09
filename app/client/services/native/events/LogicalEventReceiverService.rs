@@ -157,7 +157,7 @@ impl LogicalEventReceiverService {
         let event: NativeLogicalEvent = self.wire.decode(data)?;
         let time: (f64, f64) = self.clock.now();
         let mut state: MutexGuard<'_, LogicalStateService> = self.state_lock();
-        let revision: i64 = state.apply(&event, time.0)?;
+        let revision: i64 = state.apply_observed(&event, time)?;
         let rows: Vec<NativeLogicalAgent> = self.current_rows(&state, time.0);
         self.retained_bindings(&rows, time);
         self.recovery_lock().persist(rows);

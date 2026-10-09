@@ -27,14 +27,17 @@ impl SessionCardRetentionService {
         let mut sessions = self.lock();
         for card in current {
             let activity = Self::latest_activity(&card.key, sources, wall);
+            let live = Self::latest_monotonic(&card.key, sources, monotonic);
             sessions.entry(card.key.clone()).or_insert_with(|| NativeSessionCardRetentionState {
                 card: card.clone(),
-                last_activity: activity.map_or(monotonic, |time| monotonic - (wall - time)),
+                last_activity: live.unwrap_or_else(|| activity.map_or(monotonic, |time| monotonic - (wall - time))),
                 observed_activity: activity,
+                observed_monotonic: live,
             });
         }
         for (key, state) in sessions.iter_mut() {
-            Self::activity(state, Self::latest_activity(key, sources, wall), wall, monotonic);
+            Self::activity(state, Self::latest_monotonic(key, sources, monotonic),
+                Self::latest_activity(key, sources, wall), wall, monotonic);
             Self::metadata(state, current);
         }
         sessions.retain(|key, state| {
@@ -54,6 +57,14 @@ impl SessionCardRetentionService {
             .max_by(f64::total_cmp)
     }
 
+    fn latest_monotonic(key: &str, sources: &[NativeLogicalAgentView], monotonic: f64) -> Option<f64> {
+        sources.iter().filter(|agent| Self::matches(key, agent))
+            .filter(|agent| ["events", "coordinator-report"].contains(&agent.feed_mode.as_str()))
+            .filter_map(|agent| agent.last_activity_monotonic)
+            .filter(|time| time.is_finite() && *time >= 0.0 && *time <= monotonic)
+            .max_by(f64::total_cmp)
+    }
+
     fn matches(key: &str, agent: &NativeLogicalAgentView) -> bool {
         agent.session.as_ref().is_some_and(|session| format!("{}:{}", agent.family, session.id) == key)
     }
@@ -67,7 +78,18 @@ impl SessionCardRetentionService {
         })
     }
 
-    fn activity(state: &mut NativeSessionCardRetentionState, activity: Option<f64>, wall: f64, monotonic: f64) -> () {
+    fn activity(state: &mut NativeSessionCardRetentionState, live: Option<f64>, activity: Option<f64>, wall: f64, monotonic: f64) -> () {
+        if let Some(time) = live {
+            if state.observed_monotonic.is_none_or(|old| time > old) {
+                state.last_activity = time.max(state.last_activity);
+                state.observed_monotonic = Some(time);
+            }
+            return;
+        }
+        // A replayed/recovered wall stamp cannot supersede this run's verified monotonic activity.
+        if state.observed_monotonic.is_some() {
+            return;
+        }
         if let Some(time) = activity.filter(|time| state.observed_activity.is_none_or(|old| *time > old)) {
             // Convert a newly observed receiver epoch to this monitor's monotonic domain once.
             // Re-reading the same timestamp cannot move the deadline when either clock changes.

@@ -101,6 +101,296 @@ impl SessionResourcePresentationTests {
     }
 }
 
+impl SessionResourcePresentationTests {
+    fn gap_observation() -> NativeCommandObservation {
+        let mut observation = Self::observation();
+        let mut root = observation.metrics.clone().unwrap();
+        root.cpu_percent = Some(2.0);
+        let mut child = observation.descendants[0].clone();
+        child.cpu_percent = Some(3.0);
+        observation.tree_history = vec![
+            crate::models::NativeProcessTreeSample {
+                time: 98.0,
+                processes: vec![root, child],
+            },
+            crate::models::NativeProcessTreeSample {
+                time: 100.0,
+                processes: Vec::new(),
+            },
+        ];
+        observation.metrics = None;
+        observation.descendants.clear();
+        observation
+    }
+
+    fn gap_overview(
+        raw: NativeLogicalAgent,
+        observation: NativeCommandObservation,
+        bindings: Vec<NativeCommandBinding>,
+        now: f64,
+    ) -> NativeOverviewView {
+        let mut agents = vec![LogicalViewUtils::agent(&raw, now)];
+        CommandResourceViewUtils::present(&mut agents, &[observation], &bindings, now);
+        let snapshot = NativeSnapshot {
+            ready: true,
+            sampled_at: now,
+            session_groups: SessionViewUtils::sessions(&agents),
+            logical_views: agents,
+            ..NativeSnapshot::default()
+        };
+        let selection = NativeViewSelection {
+            selected_session: "Codex:fixture-session".to_owned(),
+            ..NativeViewSelection::default()
+        };
+        OverviewViewUtils::view(&snapshot, &selection, now)
+    }
+
+    fn gap_history(observation: NativeCommandObservation) -> NativeOverviewView {
+        let mut raw = CommandResourceViewTests::raw_agent();
+        raw.executions[0].source = Some(raw.source.clone());
+        Self::gap_overview(
+            raw,
+            observation,
+            vec![CommandResourceViewTests::binding()],
+            Self::NOW,
+        )
+    }
+}
+
+#[test]
+fn sampling_gap_preserves_selected_resources_history_without_live_nodes() -> () {
+    let view = SessionResourcePresentationTests::gap_history(
+        SessionResourcePresentationTests::gap_observation(),
+    );
+    let detail = view.session_detail.as_ref().unwrap();
+    assert!(detail.has_resource_history);
+    assert_eq!((detail.process_count, detail.root_count), (0, 0));
+    assert!(detail.graph.nodes.is_empty());
+    assert!(detail
+        .metrics
+        .iter()
+        .all(|metric| !metric.available && metric.detail.contains("sampling unavailable")));
+    let chart = view
+        .chart_resources
+        .iter()
+        .find(|chart| chart.group.id == detail.chart_id)
+        .unwrap();
+    let points = &chart.charts[0].series[0].points;
+    assert_eq!(points[0].y, Some(5.0));
+    assert_eq!(points[1].y, None);
+    let wire = serde_json::to_string(&view).unwrap();
+    assert!(!wire.contains("history_samples"));
+    assert!(!wire.contains("tree_history"));
+}
+
+#[test]
+fn sampling_gap_history_ends_when_binding_or_execution_context_ends() -> () {
+    let observation = SessionResourcePresentationTests::gap_observation();
+    for transition in ["unbind", "finish", "stale", "generation", "birth"] {
+        let mut raw = CommandResourceViewTests::raw_agent();
+        raw.executions[0].source = Some(raw.source.clone());
+        let mut bindings = vec![CommandResourceViewTests::binding()];
+        match transition {
+            "unbind" => bindings.clear(),
+            "finish" => {
+                raw.executions[0].status = "completed".to_owned();
+                raw.executions[0].finished_at = Some(100.0);
+            }
+            "stale" => {
+                raw.stale = true;
+                raw.status = "stale".to_owned();
+            }
+            "generation" => bindings[0].generation += 1,
+            "birth" => bindings[0].identity.started = "20:1".to_owned(),
+            _ => unreachable!(),
+        }
+        let view = SessionResourcePresentationTests::gap_overview(
+            raw,
+            observation.clone(),
+            bindings,
+            100.0,
+        );
+        let detail = view.session_detail.unwrap();
+        assert!(!detail.has_resource_history, "{transition}");
+        assert!(detail.graph.nodes.is_empty(), "{transition}");
+    }
+}
+
+#[test]
+fn sampling_gap_recovery_restores_live_metrics_without_filling_the_gap() -> () {
+    let mut observation = SessionResourcePresentationTests::gap_observation();
+    observation.metrics = SessionResourcePresentationTests::observation().metrics;
+    observation.descendants = SessionResourcePresentationTests::observation().descendants;
+    observation
+        .tree_history
+        .push(crate::models::NativeProcessTreeSample {
+            time: 100.0,
+            processes: vec![observation.metrics.clone().unwrap()],
+        });
+    // A later actual tick, rather than replacing the earlier missing tick.
+    observation.tree_history.last_mut().unwrap().time = 100.5;
+    observation.sampled_at = 100.5;
+    let mut raw = CommandResourceViewTests::raw_agent();
+    raw.executions[0].source = Some(raw.source.clone());
+    let view = SessionResourcePresentationTests::gap_overview(
+        raw,
+        observation,
+        vec![CommandResourceViewTests::binding()],
+        100.5,
+    );
+    let detail = view.session_detail.as_ref().unwrap();
+    assert_eq!((detail.process_count, detail.root_count), (2, 1));
+    assert!(detail.has_resource_history);
+    let chart = view
+        .chart_resources
+        .iter()
+        .find(|chart| chart.group.id == detail.chart_id)
+        .unwrap();
+    assert_eq!(chart.charts[0].series[0].points[1].y, None);
+    assert_eq!(chart.charts[0].series[0].points[2].y, Some(0.0));
+}
+
+#[test]
+fn sampling_gap_does_not_use_invalid_trust_identity_or_future_history() -> () {
+    for failure in [
+        "trust",
+        "scope",
+        "owner",
+        "missing-root",
+        "wrong-root",
+        "future",
+        "nonfinite",
+        "old",
+        "metrics-birth",
+    ] {
+        let mut observation = SessionResourcePresentationTests::gap_observation();
+        match failure {
+            "trust" => observation.validation = "unverified".to_owned(),
+            "scope" => observation.scope = "shared-runtime".to_owned(),
+            "owner" => observation.owner.task_id = "other-task".to_owned(),
+            "missing-root" => {
+                observation.tree_history[0].processes.remove(0);
+            }
+            "wrong-root" => observation.tree_history[0].processes[0].started = "20:1".to_owned(),
+            "future" => observation.tree_history[0].time = 101.0,
+            "nonfinite" => observation.tree_history[0].time = f64::NAN,
+            "old" => observation.tree_history[0].time = -21.0,
+            "metrics-birth" => {
+                observation.metrics = SessionResourcePresentationTests::observation().metrics;
+                observation.metrics.as_mut().unwrap().started = "20:1".to_owned();
+            }
+            _ => unreachable!(),
+        }
+        let view = SessionResourcePresentationTests::gap_history(observation);
+        assert!(
+            !view.session_detail.unwrap().has_resource_history,
+            "{failure}"
+        );
+    }
+}
+
+#[test]
+fn sampling_gap_empty_ticks_are_unavailable_instead_of_zero_usage() -> () {
+    let mut observation = SessionResourcePresentationTests::gap_observation();
+    observation.tree_history[0].processes.clear();
+    let view = SessionResourcePresentationTests::gap_history(observation);
+    let detail = view.session_detail.unwrap();
+    assert!(!detail.has_resource_history);
+    assert!(detail.metrics.iter().all(|metric| !metric.available));
+    assert_eq!(detail.process_count, 0);
+}
+
+#[test]
+fn sampling_gap_stale_observation_cannot_keep_prior_history_current() -> () {
+    let raw = CommandResourceViewTests::raw_agent();
+    let view = SessionResourcePresentationTests::gap_overview(
+        raw,
+        SessionResourcePresentationTests::gap_observation(),
+        vec![CommandResourceViewTests::binding()],
+        108.001,
+    );
+    assert!(!view.session_detail.unwrap().has_resource_history);
+}
+
+#[test]
+fn sampling_gap_history_claims_keep_one_process_per_tick_and_no_ambiguous_root() -> () {
+    use crate::utils::{SessionProcessClaimUtils, SessionUsageUtils};
+    let parent = SessionResourcePresentationTests::gap_observation();
+    let mut child = parent.clone();
+    child.pid = 43;
+    child.started = "10:2".to_owned();
+    child.tree_history[0].processes.remove(0);
+    let same = SessionProcessClaimUtils::history_samples(
+        &[
+            ("same".to_owned(), parent.clone()),
+            ("same".to_owned(), child),
+        ],
+        100.0,
+    );
+    let rows = SessionUsageUtils::history_from_samples(&same["same"]);
+    assert_eq!(rows[0][1], Some(5.0));
+    assert_eq!(same["same"][0].processes.len(), 2);
+    let conflict = SessionProcessClaimUtils::history_samples(
+        &[
+            ("one".to_owned(), parent.clone()),
+            ("two".to_owned(), parent),
+        ],
+        100.0,
+    );
+    assert!(conflict
+        .values()
+        .flat_map(|samples| samples.iter())
+        .all(|sample| sample.processes.is_empty()));
+}
+
+#[test]
+fn sampling_gap_child_pid_reuse_is_distinct_across_ticks_and_ambiguous_within_one_tick() -> () {
+    use crate::utils::SessionProcessClaimUtils;
+    let mut observation = SessionResourcePresentationTests::gap_observation();
+    let mut later = observation.tree_history[0].clone();
+    later.time = 99.0;
+    later.processes[1].started = "20:2".to_owned();
+    observation.tree_history.insert(1, later.clone());
+    let samples = SessionProcessClaimUtils::history_samples(
+        &[("same".to_owned(), observation.clone())],
+        100.0,
+    );
+    assert_eq!(samples["same"][0].processes[1].started, "10:2");
+    assert_eq!(samples["same"][1].processes[1].started, "20:2");
+    observation.tree_history[0]
+        .processes
+        .push(later.processes[1].clone());
+    let samples =
+        SessionProcessClaimUtils::history_samples(&[("same".to_owned(), observation)], 100.0);
+    assert_eq!(samples["same"][0].processes.len(), 1);
+    assert_eq!(samples["same"][0].processes[0].pid, 42);
+}
+
+#[test]
+fn sampling_gap_history_is_bounded_and_old_detail_wire_defaults_availability() -> () {
+    use crate::utils::SessionProcessClaimUtils;
+    let mut observation = SessionResourcePresentationTests::gap_observation();
+    let root = observation.tree_history[0].processes[0].clone();
+    observation.sampled_at = 200.0;
+    observation.tree_history = (0..=200)
+        .map(|time| crate::models::NativeProcessTreeSample {
+            time: time as f64,
+            processes: vec![root.clone()],
+        })
+        .collect();
+    let samples =
+        SessionProcessClaimUtils::history_samples(&[("same".to_owned(), observation)], 200.0);
+    assert_eq!(samples["same"].len(), 61);
+    assert_eq!(samples["same"][0].time, 140.0);
+    let view = SessionResourcePresentationTests::gap_history(
+        SessionResourcePresentationTests::gap_observation(),
+    );
+    let mut wire = serde_json::to_value(view.session_detail.unwrap()).unwrap();
+    wire.as_object_mut().unwrap().remove("hasResourceHistory");
+    let old: crate::models::NativeSessionDetailView = serde_json::from_value(wire).unwrap();
+    assert!(!old.has_resource_history);
+}
+
 #[test]
 fn session_without_process_binding_stays_visible_with_unknown_resources() -> () {
     let wire = SessionResourcePresentationTests::wire(

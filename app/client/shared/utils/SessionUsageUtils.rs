@@ -79,6 +79,21 @@ impl SessionUsageUtils {
             .collect()
     }
 
+    // Empty samples remain null gaps; past measurements never become current process rows.
+    pub fn history_from_samples(samples: &[NativeProcessTreeSample]) -> Vec<Vec<Option<f64>>> {
+        let mut ticks: BTreeMap<u64, Vec<&NativeProcessMetrics>> = BTreeMap::new();
+        for sample in samples {
+            ticks
+                .entry(sample.time.to_bits())
+                .or_default()
+                .extend(sample.processes.iter());
+        }
+        ticks
+            .into_iter()
+            .map(|(time, processes)| Self::row(f64::from_bits(time), processes))
+            .collect()
+    }
+
     fn ticks(commands: &[NativeRuntimeView]) -> BTreeMap<u64, Vec<&NativeProcessMetrics>> {
         let mut ticks: BTreeMap<u64, Vec<&NativeProcessMetrics>> = BTreeMap::new();
         for sample in commands.iter().flat_map(
