@@ -288,7 +288,17 @@ fn coordinator_tools_with_similar_names_still_count() -> () {
 fn idle_agent_rows_say_no_tool_running() -> () {
     let mut agent = ActiveSessionTests::worker("quiet", "Codex", Some(("quiet", "Quiet")), 100.0);
     agent.executions.clear();
-    let sessions = ActiveSessionTests::sessions(vec![agent]);
+    // Fresh transport capture alone is not lifecycle evidence.
+    let passive = ActiveSessionTests::view(vec![agent.clone()], &[]);
+    assert!(passive.active_sessions.is_empty());
+    assert_eq!((passive.active_summary.agents, passive.active_summary.sessions, passive.active_summary.tools), (0, 0, 0));
+    // A genuine recent unfinished-turn hook keeps the agent active without a tool.
+    agent.last_activity_at = Some(ActiveSessionTests::RECENT);
+    let view = ActiveSessionTests::view(vec![agent], &[]);
+    let sessions = &view.active_sessions;
+    assert_eq!(sessions.len(), 1);
+    assert!(!sessions[0].idle);
+    assert_eq!((view.active_summary.agents, view.active_summary.sessions, view.active_summary.tools), (1, 1, 0));
     assert_eq!(sessions[0].agents[0].tool_label, "No tool running");
     assert!(sessions[0].agents[0].action_detail.is_none());
     assert_eq!(sessions[0].tool_count, 0);
