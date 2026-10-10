@@ -74,7 +74,7 @@ class OverviewRequestTest {
     BrowserServiceTestUtils.load(context, 'ChartService');
     BrowserServiceTestUtils.load(context, 'ViewContinuityService');
     BrowserServiceTestUtils.load(context, 'PresentationService');
-    BrowserServiceTestUtils.load(context, 'ScriptUtils', 'utils');
+    BrowserServiceTestUtils.load(context, 'ScriptUtils', 'shared/utils');
   }
 
   /** @param {vm.Context} context @returns {import('../../app/client/services/browser/PresentationService.js').default} */
