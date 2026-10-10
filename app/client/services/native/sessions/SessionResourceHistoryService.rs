@@ -4,7 +4,7 @@ use crate::models::{
     NativeProcessTreeSample, NativeResourceHistoryEnd, NativeSessionLink,
     NativeSessionResourceHistoryState, NativeSessionResourceView, NativeSnapshot,
 };
-use crate::utils::{SessionResourceUtils, SessionViewUtils};
+use crate::utils::{CommandResourceViewUtils, SessionResourceUtils, SessionViewUtils};
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -15,7 +15,8 @@ use std::sync::{Mutex, MutexGuard, PoisonError};
 // never extended, gap-filled or aged against the current time. A lease expiry also removes the
 // binding and is indistinguishable from an unbind here, so its outcome stays unreported.
 // A stale or recovered owner row, a changed binding generation, owner or root identity, or a
-// still-current binding whose measurement is missing clears the history instead.
+// still-current binding whose measurement is missing clears the history instead. A stale idle
+// session row that still verified its harness link (a lingering session) remains trusted.
 //
 // Bound: at most one frozen history per exact session key. It is dropped when that session card
 // is no longer retained, when the session has a current verified link again (its next binding
@@ -142,7 +143,8 @@ impl SessionResourceHistoryService {
     ) -> Option<NativeResourceHistoryEnd> {
         let agent: Option<&NativeLogicalAgentView> =
             Self::owner_agent(key, link, &snapshot.logical_views);
-        let trusted: bool = agent.is_some_and(Self::trusted_agent);
+        let trusted: bool = agent
+            .is_some_and(|agent: &NativeLogicalAgentView| -> bool { Self::trusted_agent(agent, link) });
         let changed: bool = Self::changed_binding(link, &snapshot.command_bindings);
         let bound: bool = Self::bound(link, &snapshot.command_bindings);
         let outcome: Option<(Option<f64>, String)> =
@@ -194,10 +196,12 @@ impl SessionResourceHistoryService {
             })
     }
 
-    fn trusted_agent(agent: &NativeLogicalAgentView) -> bool {
+    fn trusted_agent(agent: &NativeLogicalAgentView, link: &NativeCommandObservation) -> bool {
         [
-            !agent.stale,
             Self::REPORT_FEEDS.contains(&agent.feed_mode.as_str()),
+            [!agent.stale, CommandResourceViewUtils::current_agent(agent, link)]
+                .into_iter()
+                .any(std::convert::identity),
         ]
         .into_iter()
         .all(std::convert::identity)

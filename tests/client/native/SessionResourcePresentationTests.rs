@@ -241,9 +241,19 @@ impl ResourceHistoryReads {
         bindings: Vec<NativeCommandBinding>,
         now: f64,
     ) -> NativeOverviewView {
-        let snapshot = self.snapshot(std::slice::from_ref(raw), observations, bindings, now);
+        self.read_session(Self::KEY, raw, (observations, bindings), now)
+    }
+
+    fn read_session(
+        &self,
+        key: &str,
+        raw: &NativeLogicalAgent,
+        links: (&[NativeCommandObservation], Vec<NativeCommandBinding>),
+        now: f64,
+    ) -> NativeOverviewView {
+        let snapshot = self.snapshot(std::slice::from_ref(raw), links.0, links.1, now);
         let selection = NativeViewSelection {
-            selected_session: Self::KEY.to_owned(),
+            selected_session: key.to_owned(),
             ..NativeViewSelection::default()
         };
         OverviewViewUtils::view(&snapshot, &selection, now)
@@ -1114,4 +1124,62 @@ fn a_stale_idle_session_keeps_its_still_bound_harness_resources() -> () {
     assert_eq!(present("idle", std::slice::from_ref(&binding)), 1);
     assert_eq!(present("idle", &[]), 0);
     assert_eq!(present("completed", std::slice::from_ref(&binding)), 0);
+}
+
+impl SessionHarnessPresentation {
+    fn measured() -> NativeCommandObservation {
+        let mut observation = Self::observation();
+        let mut processes = vec![observation.metrics.clone().unwrap()];
+        processes.extend(observation.descendants.iter().cloned());
+        observation.tree_history = vec![crate::models::NativeProcessTreeSample {
+            time: 98.0,
+            processes,
+        }];
+        observation
+    }
+}
+
+#[test]
+fn ended_harness_link_keeps_frozen_history_for_a_lingering_or_finished_session() -> () {
+    let key = SessionViewUtils::linked_key("Claude", SessionHarnessPresentation::SESSION);
+    for case in ["lingering", "completed"] {
+        let reads = ResourceHistoryReads::new();
+        let mut raw = SessionHarnessPresentation::raw(SessionHarnessPresentation::SESSION, "active");
+        raw.task = CommandResourceViewTests::raw_agent().task;
+        raw.last_activity_at = Some(50.0);
+        raw.captured_at = 50.0;
+        // A recent hook gives the session its card before the harness link is sampled.
+        assert_eq!(reads.read_session(&key, &raw, (&[], Vec::new()), 50.0).active_sessions.len(), 1);
+        if case == "lingering" {
+            raw.stale = true;
+            raw.status = "stale".to_owned();
+            raw.reported_status = Some("idle".to_owned());
+        }
+        let live = reads.read_session(
+            &key,
+            &raw,
+            (&[SessionHarnessPresentation::measured()], vec![SessionHarnessPresentation::binding()]),
+            100.0,
+        );
+        assert!(live.session_detail.unwrap().has_resource_history, "{case}");
+        let (observations, bindings, outcome) = match case {
+            "lingering" => (Vec::new(), Vec::new(), "no outcome was reported"),
+            _ => {
+                raw.status = "completed".to_owned();
+                raw.last_activity_at = Some(100.5);
+                raw.captured_at = 100.5;
+                (
+                    vec![SessionHarnessPresentation::measured()],
+                    vec![SessionHarnessPresentation::binding()],
+                    "Reported completed at",
+                )
+            }
+        };
+        let ended = reads.read_session(&key, &raw, (&observations, bindings), 101.0);
+        let detail = ended.session_detail.as_ref().unwrap();
+        assert!(detail.resource_ended, "{case}");
+        assert!(detail.resource_label.contains(outcome), "{case}: {}", detail.resource_label);
+        assert!(detail.graph.nodes.is_empty(), "{case}");
+        assert_eq!(ResourceHistoryReads::cpu(&ended), vec![(98.0, Some(5.0))], "{case}");
+    }
 }
