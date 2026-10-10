@@ -195,6 +195,7 @@ fn pre_tool_use_starts_an_execution_named_only_by_the_tool() -> () {
         ClaudeHookMapperTests::main("PreToolUse"),
         vec![
             ClaudeHookMapperTests::claude_register(),
+            ClaudeHookMapperTests::status(session, "active"),
             ClaudeHookMapperTests::task(session, ClaudeHookMapperTests::PROMPT, "active"),
             ClaudeHookMapperTests::start(session, ClaudeHookMapperTests::PROMPT),
         ]
@@ -262,6 +263,7 @@ fn subagent_hooks_use_a_distinct_agent_bound_to_the_same_session() -> () {
         ClaudeHookMapperTests::claude(&payload("PreToolUse")),
         vec![
             ClaudeHookMapperTests::subagent_register(family),
+            ClaudeHookMapperTests::status(&agent, "active"),
             ClaudeHookMapperTests::task(&agent, prompt, "active"),
             ClaudeHookMapperTests::start(&agent, prompt),
         ]
@@ -306,6 +308,7 @@ fn codex_turn_id_is_the_task_for_tool_actions_and_stop() -> () {
         ClaudeHookMapperTests::codex(&payload("PreToolUse")),
         vec![
             ClaudeHookMapperTests::codex_register(),
+            ClaudeHookMapperTests::status(session, "active"),
             ClaudeHookMapperTests::task(session, turn, "active"),
             ClaudeHookMapperTests::start(session, turn),
         ]
@@ -374,6 +377,7 @@ fn qwen_code_hooks_use_the_shared_mapping_with_the_qwen_family() -> () {
         ClaudeHookMapperTests::qwen(&payload("PreToolUse")),
         vec![
             ClaudeHookMapperTests::qwen_register(),
+            ClaudeHookMapperTests::status(session, "active"),
             ClaudeHookMapperTests::task(session, prompt, "active"),
             ClaudeHookMapperTests::start(session, prompt),
         ]
@@ -453,16 +457,23 @@ fn no_event_carries_a_session_name_or_unrequested_fields() -> () {
 
 #[test]
 fn missing_task_id_reports_no_task_and_no_execution() -> () {
+    let session: &str = ClaudeHookMapperTests::SESSION;
     let payload: Value = ClaudeHookFixture::without("PreToolUse", "prompt_id");
     assert_eq!(
         ClaudeHookMapperTests::claude(&payload),
-        vec![ClaudeHookMapperTests::claude_register()]
+        vec![
+            ClaudeHookMapperTests::claude_register(),
+            ClaudeHookMapperTests::status(session, "active"),
+        ]
     );
     let mut codex: Value = ClaudeHookFixture::codex_payload("PreToolUse");
     codex.as_object_mut().unwrap().remove("turn_id");
     assert_eq!(
         ClaudeHookMapperTests::codex(&codex),
-        vec![ClaudeHookMapperTests::codex_register()]
+        vec![
+            ClaudeHookMapperTests::codex_register(),
+            ClaudeHookMapperTests::status(session, "active"),
+        ]
     );
 }
 
@@ -561,6 +572,7 @@ fn a_reported_model_rides_only_on_registration_and_agent_status() -> () {
         ClaudeHookMapperTests::models(&ClaudeHookFixture::codex_events(&tool)),
         vec![
             ClaudeHookMapperTests::reported("logical.register"),
+            ClaudeHookMapperTests::reported("logical.status"),
             "logical.task=-".to_owned(),
             "logical.execution.start=-".to_owned(),
         ]

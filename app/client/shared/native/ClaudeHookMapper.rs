@@ -38,7 +38,7 @@ impl ClaudeHookMapper {
             Some(Self::SESSION_START | Self::USER_PROMPT_SUBMIT) => {
                 Some((Self::ACTIVE, Self::ACTIVE, Self::NONE))
             }
-            Some(Self::BEFORE_TOOL_USE) => Some((Self::NONE, Self::ACTIVE, Self::START)),
+            Some(Self::BEFORE_TOOL_USE) => Some((Self::ACTIVE, Self::ACTIVE, Self::START)),
             Some(Self::POST_TOOL_USE) => Some((Self::NONE, Self::NONE, Self::COMPLETED)),
             Some(Self::POST_TOOL_USE_FAILURE) => Some((Self::NONE, Self::NONE, Self::FAILED)),
             Some(Self::STOP) => Some((Self::IDLE, Self::COMPLETED, Self::NONE)),

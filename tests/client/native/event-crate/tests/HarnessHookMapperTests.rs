@@ -143,6 +143,7 @@ fn pi_extension_payloads_map_through_the_shared_claude_mapping() -> () {
         HarnessHookMapperTests::pi("PreToolUse"),
         vec![
             HarnessHookMapperTests::pi_register(),
+            HarnessHookMapperTests::status(session, "active"),
             HarnessHookMapperTests::task(session, run, "active"),
             HarnessHookMapperTests::start(session, run, call, HarnessHookFixture::PI_TOOL),
         ]
@@ -214,7 +215,14 @@ fn goose_hooks_read_the_event_key_and_report_session_status_only() -> () {
 
 #[test]
 fn goose_tool_hooks_report_no_task_or_action_without_a_reported_turn() -> () {
-    for event in ["PreToolUse", "PostToolUse", "PostToolUseFailure"] {
+    assert_eq!(
+        HarnessHookMapperTests::goose("PreToolUse"),
+        vec![
+            HarnessHookMapperTests::goose_register(),
+            HarnessHookMapperTests::status(HarnessHookFixture::GOOSE_SESSION, "active"),
+        ]
+    );
+    for event in ["PostToolUse", "PostToolUseFailure"] {
         assert_eq!(
             HarnessHookMapperTests::goose(event),
             vec![HarnessHookMapperTests::goose_register()]
@@ -343,6 +351,7 @@ fn opencode_plugin_payloads_use_the_reported_opencode_or_kilo_family() -> () {
             HarnessHookMapperTests::opencode("PreToolUse", family),
             vec![
                 register.clone(),
+                HarnessHookMapperTests::status(session, "active"),
                 HarnessHookMapperTests::task(session, message, "active"),
                 HarnessHookMapperTests::start(
                     session,
