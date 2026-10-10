@@ -235,19 +235,22 @@ impl SessionProcessClaimUtils {
         processes: &[NativeProcessMetrics],
         claims: &NativeSessionProcessClaims,
     ) -> Option<(i32, String)> {
-        let mut parent: i32 = process.parent;
         // Bounded by the tree size so a malformed parent cycle cannot loop.
-        for _ in 0..processes.len() {
-            let found: &NativeProcessMetrics = processes
-                .iter()
-                .find(|candidate: &&NativeProcessMetrics| -> bool { candidate.pid == parent })?;
-            let identity: (i32, String) = Self::identity(found);
-            if claims.roots.contains_key(&identity) {
-                return Some(identity);
-            }
-            parent = found.parent;
-        }
-        None
+        std::iter::successors(Self::parent(process, processes), |found: &&NativeProcessMetrics| {
+            Self::parent(found, processes)
+        })
+        .take(processes.len())
+        .map(Self::identity)
+        .find(|identity: &(i32, String)| -> bool { claims.roots.contains_key(identity) })
+    }
+
+    fn parent<'a>(
+        process: &NativeProcessMetrics,
+        processes: &'a [NativeProcessMetrics],
+    ) -> Option<&'a NativeProcessMetrics> {
+        processes
+            .iter()
+            .find(|candidate: &&NativeProcessMetrics| -> bool { candidate.pid == process.parent })
     }
 
     fn record_lineage_claim(
@@ -256,21 +259,36 @@ impl SessionProcessClaimUtils {
         session: &str,
         claims: &mut NativeSessionProcessClaims,
     ) -> () {
-        if [relation.0, relation.1].into_iter().any(std::convert::identity) {
-            Self::record_claim(identity, relation.0, session, claims);
-        }
+        // (root, nearest-root lineage): a root claims as a root, a lineage-only process as a
+        // descendant, and a process under a different nearest root makes no claim.
+        let target: Option<&mut BTreeMap<(i32, String), BTreeSet<String>>> = match relation {
+            (true, _) => Some(&mut claims.roots),
+            (false, true) => Some(&mut claims.descendants),
+            (false, false) => None,
+        };
+        target.into_iter().for_each(|map: &mut BTreeMap<(i32, String), BTreeSet<String>>| -> () {
+            map.entry(identity.clone()).or_default().insert(session.to_owned());
+        });
     }
 
     fn claims(sessions: &[NativeSessionResourceView]) -> NativeSessionProcessClaims {
         let mut claims: NativeSessionProcessClaims = NativeSessionProcessClaims::default();
         // Every current root first, so each descendant can follow its nearest verified root.
-        for session in sessions {
-            Self::session_roots(session, &mut claims);
-        }
-        for session in sessions {
-            Self::session_claims(session, &mut claims);
-        }
+        Self::all_session_roots(sessions, &mut claims);
+        Self::all_session_claims(sessions, &mut claims);
         claims
+    }
+
+    fn all_session_roots(sessions: &[NativeSessionResourceView], claims: &mut NativeSessionProcessClaims) -> () {
+        for session in sessions {
+            Self::session_roots(session, claims);
+        }
+    }
+
+    fn all_session_claims(sessions: &[NativeSessionResourceView], claims: &mut NativeSessionProcessClaims) -> () {
+        for session in sessions {
+            Self::session_claims(session, claims);
+        }
     }
 
     fn session_roots(
@@ -328,19 +346,7 @@ impl SessionProcessClaimUtils {
         session: &str,
         claims: &mut NativeSessionProcessClaims,
     ) -> () {
-        if root {
-            claims
-                .roots
-                .entry(identity)
-                .or_default()
-                .insert(session.to_owned());
-            return;
-        }
-        claims
-            .descendants
-            .entry(identity)
-            .or_default()
-            .insert(session.to_owned());
+        Self::record_lineage_claim(identity, (root, true), session, claims);
     }
 
     fn project(
