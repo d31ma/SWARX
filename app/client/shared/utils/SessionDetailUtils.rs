@@ -1,9 +1,11 @@
 use crate::models::{
     NativeActiveSessionView, NativeActivityRecord, NativeLogicalAgentView, NativeProcessGraph,
-    NativeProcessRow, NativeRuntimeView, NativeSessionActivityView, NativeSessionDetailView,
-    NativeSessionResourceView, NativeSessionView, NativeSessionMetricView,
+    NativeProcessRow, NativeResourceHistoryEnd, NativeRuntimeView, NativeSessionActivityView,
+    NativeSessionDetailView, NativeSessionResourceView, NativeSessionView, NativeSessionMetricView,
 };
-use crate::utils::{ActiveSessionUtils, ActivityMetricsUtils, ChartDataUtils, SessionUsageUtils};
+use crate::utils::{
+    ActiveSessionUtils, ActivityMetricsUtils, ChartDataUtils, SessionUsageUtils, TimeFormatUtils,
+};
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
@@ -33,6 +35,9 @@ impl SessionDetailUtils {
         "Reported actions for this session's agents, newest first. Times are hook receipts.",
         "No past activity reported for this session.",
     ];
+    const ENDED_HISTORY: &'static str = "Measured history is kept as captured and no longer updates; no current processes or metrics are shown.";
+    const ENDED_METRIC: &'static str = "Process link ended; no current measurement.";
+    const ENDED_TREE: &'static str = "No current processes: the verified process link ended.";
     const ROLES: [&'static str; Self::OUTCOMES] = ["Agent", "Sub-agent"];
     const UNKNOWN_ROLE: &'static str = "Role not reported";
 
@@ -156,6 +161,11 @@ impl SessionDetailUtils {
         detail.graph = resource
             .map(|found: &NativeSessionResourceView| -> NativeProcessGraph { found.graph.clone() })
             .unwrap_or_default();
+        let end: Option<&NativeResourceHistoryEnd> = resource
+            .and_then(|found: &NativeSessionResourceView| -> Option<&NativeResourceHistoryEnd> {
+                found.history_end.as_ref()
+            });
+        Self::ended_details(&mut detail, end.map(Self::end_label));
         detail.activity = Self::activity(&detail, activity, Self::agents(reported));
         detail.activity_label =
             Self::ACTIVITY_LABELS[usize::from(detail.activity.is_empty())].to_owned();
@@ -164,8 +174,42 @@ impl SessionDetailUtils {
     }
 
     fn sampling_gap(rows: &[NativeProcessRow], resource: Option<&NativeSessionResourceView>) -> bool {
-        [rows.is_empty(), resource.is_some_and(|found| !found.history_samples.is_empty())]
-            .into_iter().all(std::convert::identity)
+        [
+            rows.is_empty(),
+            resource.is_some_and(|found| !found.history_samples.is_empty()),
+            resource.is_none_or(|found| found.history_end.is_none()),
+        ]
+        .into_iter()
+        .all(std::convert::identity)
+    }
+
+    // A frozen history of an ended link: no current processes or measurements, with its end.
+    fn ended_details(detail: &mut NativeSessionDetailView, label: Option<String>) -> () {
+        let Some(label) = label else {
+            return;
+        };
+        detail.resource_ended = true;
+        detail.resource_label = label;
+        detail.tree_label = Self::ENDED_TREE.to_owned();
+        Self::ended_metrics(&mut detail.metrics);
+    }
+
+    fn ended_metrics(metrics: &mut [NativeSessionMetricView]) -> () {
+        for metric in metrics.iter_mut() {
+            metric.detail = Self::ENDED_METRIC.to_owned();
+        }
+    }
+
+    fn end_label(end: &NativeResourceHistoryEnd) -> String {
+        let time: String = TimeFormatUtils::local_time(end.ended_at);
+        let summary: String = end
+            .outcome
+            .as_deref()
+            .map(|outcome: &str| -> String { format!("Reported {outcome} at {time}.") })
+            .unwrap_or_else(|| -> String {
+                format!("Verified process link ended after its last sample at {time}; no outcome was reported.")
+            });
+        format!("{summary} {}", Self::ENDED_HISTORY)
     }
 
     fn sampling_details(metrics: &mut [NativeSessionMetricView], gap: bool) -> () {

@@ -134,6 +134,7 @@ impl SessionLoadTests {
             source_record_count: 1,
             commands: vec![command],
             history_samples: Vec::new(),
+            history_end: None,
             tree: Vec::new(),
             graph: NativeProcessGraph::default(),
             resource_notice: String::new(),

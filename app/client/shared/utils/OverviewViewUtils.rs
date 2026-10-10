@@ -87,9 +87,13 @@ impl OverviewViewUtils {
         );
         let activity: Vec<NativeSessionActivityView> =
             SessionViewUtils::named_activity(snapshot.activity.clone(), &snapshot.harness_sessions);
-        let all_resource_sessions: Vec<NativeSessionResourceView> =
+        let mut all_resource_sessions: Vec<NativeSessionResourceView> =
             SessionResourceUtils::build(&snapshot.session_groups, now);
         SessionLoadUtils::mark(&mut active_sessions, &all_resource_sessions, now);
+        SessionResourceUtils::add_ended_history(
+            &mut all_resource_sessions,
+            &snapshot.ended_resource_histories,
+        );
         let all_contexts: Vec<NativeRuntimeView> =
             SessionResourceUtils::contexts(&groups, &all_resource_sessions);
         let resource_sessions: Vec<NativeSessionResourceView> = Self::harness_sessions(

@@ -23,6 +23,7 @@ export interface SessionDetailView {
   rootCount: number;
   chartId: string;
   hasResourceHistory: boolean;
+  resourceEnded: boolean;
   graph: ProcessGraph;
   treeLabel: string;
   background: BackgroundTaskView[];

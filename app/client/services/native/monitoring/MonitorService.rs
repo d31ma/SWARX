@@ -19,6 +19,7 @@ pub struct MonitorService {
     clock: Arc<dyn ObservationClock>,
     sessions: HarnessSessionService,
     retention: SessionCardRetentionService,
+    resource_history: SessionResourceHistoryService,
 }
 
 impl MonitorService {
@@ -63,6 +64,7 @@ impl MonitorService {
             clock,
             sessions: HarnessSessionService::new(Vec::new()),
             retention: SessionCardRetentionService::default(),
+            resource_history: SessionResourceHistoryService::default(),
         }
     }
 
@@ -115,6 +117,7 @@ impl MonitorService {
         result.shell_evidence = ShellEvidenceUtils::evidence(&result, now);
         let current = OverviewViewUtils::current_sessions(&result, &[], now);
         result.retained_session_cards = self.retention.retain(&current, &result.logical_views, time.0, time.1);
+        result.ended_resource_histories = self.resource_history.retain(&result, now);
         result
     }
 

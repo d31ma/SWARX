@@ -33,6 +33,8 @@ pub struct NativeSessionDetailView {
     pub chart_id: String,
     #[serde(default, rename = "hasResourceHistory")]
     pub has_resource_history: bool,
+    #[serde(default, rename = "resourceEnded")]
+    pub resource_ended: bool,
     pub graph: NativeProcessGraph,
     #[serde(rename = "treeLabel")]
     pub tree_label: String,

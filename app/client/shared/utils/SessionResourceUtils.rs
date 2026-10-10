@@ -1,7 +1,7 @@
 use crate::models::{
-    NativeCommandObservation, NativeCommandResourceView, NativeGroup, NativeLogicalAgentView,
-    NativeProcessMetrics, NativeProcessRow, NativeRuntimeView, NativeSessionResourceView,
-    NativeSessionView, NativeViewSelection,
+    NativeCommandObservation, NativeCommandResourceView, NativeEndedResourceHistory, NativeGroup,
+    NativeLogicalAgentView, NativeProcessMetrics, NativeProcessRow, NativeRuntimeView,
+    NativeSessionResourceView, NativeSessionView, NativeViewSelection,
 };
 use crate::utils::{
     ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, ProcessGraphUtils,
@@ -26,6 +26,14 @@ impl SessionResourceUtils {
 
     pub fn build(sessions: &[NativeSessionView], now: f64) -> Vec<NativeSessionResourceView> {
         Self::views(sessions, now)
+    }
+
+    // A frozen history fills only the exact session that has no current verified link or history.
+    pub fn add_ended_history(
+        sessions: &mut [NativeSessionResourceView],
+        histories: &[NativeEndedResourceHistory],
+    ) -> () {
+        Self::ended_histories(sessions, histories);
     }
 
     pub fn contexts(
@@ -74,6 +82,36 @@ impl SessionResourceUtils {
         Self::chart_sessions(sessions, (&mut seen, &mut sources));
         Self::chart_groups(contexts, (&mut seen, &mut sources));
         sources
+    }
+
+    fn ended_histories(
+        sessions: &mut [NativeSessionResourceView],
+        histories: &[NativeEndedResourceHistory],
+    ) -> () {
+        for history in histories {
+            Self::ended_history(sessions, history);
+        }
+    }
+
+    fn ended_history(
+        sessions: &mut [NativeSessionResourceView],
+        history: &NativeEndedResourceHistory,
+    ) -> () {
+        for session in sessions
+            .iter_mut()
+            .filter(|session: &&mut NativeSessionResourceView| -> bool {
+                [
+                    session.key == history.key,
+                    session.commands.is_empty(),
+                    session.history_samples.is_empty(),
+                ]
+                .into_iter()
+                .all(std::convert::identity)
+            })
+        {
+            session.history_samples = history.samples.clone();
+            session.history_end = Some(history.end.clone());
+        }
     }
 
     fn filtered_views(
@@ -269,6 +307,7 @@ impl SessionResourceUtils {
             process_count: tree.len() as i64,
             graph: ProcessGraphUtils::build(&tree),
             history_samples: Vec::new(),
+            history_end: None,
             tree,
             commands,
             harness_header: false,

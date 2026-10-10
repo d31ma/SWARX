@@ -1,4 +1,7 @@
-use crate::models::{NativeProcessGraph, NativeProcessRow, NativeProcessTreeSample, NativeRuntimeView};
+use crate::models::{
+    NativeProcessGraph, NativeProcessRow, NativeProcessTreeSample, NativeResourceHistoryEnd,
+    NativeRuntimeView,
+};
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct NativeSessionResourceView {
@@ -19,6 +22,9 @@ pub struct NativeSessionResourceView {
     // Bound historical measurements are independent of the current live tree and never sent raw.
     #[serde(skip)]
     pub history_samples: Vec<NativeProcessTreeSample>,
+    // Set only when history_samples is the frozen history of a genuinely ended link.
+    #[serde(skip)]
+    pub history_end: Option<NativeResourceHistoryEnd>,
     pub tree: Vec<NativeProcessRow>,
     pub graph: NativeProcessGraph,
     #[serde(rename = "resourceNotice")]

@@ -5,7 +5,8 @@ use crate::models::{
     NativeResourceTotals, NativeRuntimeView, NativeSnapshot, NativeViewSelection,
 };
 use crate::TachyonRustServices::{
-    CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionViewUtils,
+    CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionCardRetentionService,
+    SessionResourceHistoryService, SessionViewUtils,
 };
 
 struct SessionResourcePresentationTests;
@@ -183,37 +184,323 @@ fn sampling_gap_preserves_selected_resources_history_without_live_nodes() -> () 
     assert!(!wire.contains("tree_history"));
 }
 
-#[test]
-fn sampling_gap_history_ends_when_binding_or_execution_context_ends() -> () {
-    let observation = SessionResourcePresentationTests::gap_observation();
-    for transition in ["unbind", "finish", "stale", "generation", "birth"] {
+/// Consecutive MonitorService::current reads: card retention first, then the ended-history owner.
+struct ResourceHistoryReads {
+    retention: SessionCardRetentionService,
+    history: SessionResourceHistoryService,
+}
+
+impl ResourceHistoryReads {
+    const KEY: &'static str = "Codex:fixture-session";
+
+    fn new() -> Self {
+        Self {
+            retention: SessionCardRetentionService::default(),
+            history: SessionResourceHistoryService::default(),
+        }
+    }
+
+    fn raw() -> NativeLogicalAgent {
         let mut raw = CommandResourceViewTests::raw_agent();
         raw.executions[0].source = Some(raw.source.clone());
+        raw
+    }
+
+    fn snapshot(
+        &self,
+        raws: &[NativeLogicalAgent],
+        observations: &[NativeCommandObservation],
+        bindings: Vec<NativeCommandBinding>,
+        now: f64,
+    ) -> NativeSnapshot {
+        let mut agents: Vec<NativeLogicalAgentView> = raws
+            .iter()
+            .map(|raw| LogicalViewUtils::agent(raw, now))
+            .collect();
+        CommandResourceViewUtils::present(&mut agents, observations, &bindings, now);
+        let mut snapshot = NativeSnapshot {
+            ready: true,
+            sampled_at: now,
+            session_groups: SessionViewUtils::sessions(&agents),
+            logical_views: agents,
+            command_bindings: bindings,
+            ..NativeSnapshot::default()
+        };
+        let current = OverviewViewUtils::current_sessions(&snapshot, &[], now);
+        snapshot.retained_session_cards =
+            self.retention
+                .retain(&current, &snapshot.logical_views, now, now);
+        snapshot.ended_resource_histories = self.history.retain(&snapshot, now);
+        snapshot
+    }
+
+    fn read(
+        &self,
+        raw: &NativeLogicalAgent,
+        observations: &[NativeCommandObservation],
+        bindings: Vec<NativeCommandBinding>,
+        now: f64,
+    ) -> NativeOverviewView {
+        self.read_session(Self::KEY, raw, (observations, bindings), now)
+    }
+
+    fn read_session(
+        &self,
+        key: &str,
+        raw: &NativeLogicalAgent,
+        links: (&[NativeCommandObservation], Vec<NativeCommandBinding>),
+        now: f64,
+    ) -> NativeOverviewView {
+        let snapshot = self.snapshot(std::slice::from_ref(raw), links.0, links.1, now);
+        let selection = NativeViewSelection {
+            selected_session: key.to_owned(),
+            ..NativeViewSelection::default()
+        };
+        OverviewViewUtils::view(&snapshot, &selection, now)
+    }
+
+    fn cpu(view: &NativeOverviewView) -> Vec<(f64, Option<f64>)> {
+        let detail = view.session_detail.as_ref().unwrap();
+        view.chart_resources
+            .iter()
+            .find(|chart| chart.group.id == detail.chart_id)
+            .map(|chart| {
+                chart.charts[0].series[0]
+                    .points
+                    .iter()
+                    .map(|point| (point.x, point.y))
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    fn live(&self) -> () {
+        let view = self.read(
+            &Self::raw(),
+            &[SessionResourcePresentationTests::gap_observation()],
+            vec![CommandResourceViewTests::binding()],
+            100.0,
+        );
+        assert!(view.session_detail.unwrap().has_resource_history);
+    }
+
+    fn next_link() -> (NativeCommandObservation, NativeCommandBinding) {
+        let mut binding = CommandResourceViewTests::binding();
+        binding.id = "fixture-run:2".to_owned();
+        binding.generation = 2;
+        binding.identity.pid = 77;
+        binding.identity.started = "30:1".to_owned();
+        binding.received_at = 115.0;
+        let mut observation = CommandResourceViewTests::observation();
+        observation.binding_id = binding.id.clone();
+        observation.generation = 2;
+        observation.pid = 77;
+        observation.started = "30:1".to_owned();
+        observation.sampled_at = 120.0;
+        let root = observation.metrics.as_mut().unwrap();
+        root.pid = 77;
+        root.started = "30:1".to_owned();
+        root.cpu_percent = Some(7.0);
+        observation.tree_history = vec![crate::models::NativeProcessTreeSample {
+            time: 119.0,
+            processes: vec![root.clone()],
+        }];
+        (observation, binding)
+    }
+}
+
+#[test]
+fn sampling_gap_history_stays_frozen_after_a_genuine_link_end() -> () {
+    for transition in ["unbind", "root-exit", "finish", "cancelled"] {
+        let reads = ResourceHistoryReads::new();
+        reads.live();
+        let mut raw = ResourceHistoryReads::raw();
+        let mut observations = vec![SessionResourcePresentationTests::gap_observation()];
         let mut bindings = vec![CommandResourceViewTests::binding()];
         match transition {
             "unbind" => bindings.clear(),
+            "root-exit" => {
+                bindings.clear();
+                observations.clear();
+            }
             "finish" => {
                 raw.executions[0].status = "completed".to_owned();
-                raw.executions[0].finished_at = Some(100.0);
+                raw.executions[0].finished_at = Some(100.5);
             }
+            "cancelled" => {
+                raw.executions[0].status = "cancelled".to_owned();
+                raw.executions[0].finished_at = Some(100.5);
+                bindings.clear();
+                observations.clear();
+            }
+            _ => unreachable!(),
+        }
+        // The later read is past the 120 s window measured from now: the frozen samples stay.
+        for now in [101.0, 400.0] {
+            let view = reads.read(&raw, &observations, bindings.clone(), now);
+            let detail = view.session_detail.as_ref().unwrap();
+            assert!(detail.has_resource_history, "{transition} {now}");
+            assert!(detail.resource_ended, "{transition} {now}");
+            assert_eq!((detail.process_count, detail.root_count), (0, 0), "{transition}");
+            assert!(detail.graph.nodes.is_empty(), "{transition}");
+            assert!(detail.metrics.iter().all(|metric| !metric.available));
+            assert!(!detail.resource_label.contains("sampling unavailable"));
+            assert!(detail.tree_label.contains("ended"), "{transition}");
+            let outcome = match transition {
+                "finish" => "Reported completed at",
+                "cancelled" => "Reported cancelled at",
+                _ => "no outcome was reported",
+            };
+            assert!(detail.resource_label.contains(outcome), "{}", detail.resource_label);
+            assert_eq!(
+                ResourceHistoryReads::cpu(&view),
+                vec![(98.0, Some(5.0)), (100.0, None)],
+                "{transition} {now}"
+            );
+            assert_eq!(view.resource_sessions[0].command_count, 0);
+            assert!(view.resource_sessions[0].tree.is_empty());
+        }
+    }
+}
+
+#[test]
+fn sampling_gap_history_ends_when_binding_identity_or_execution_context_is_untrusted() -> () {
+    for transition in ["stale", "recovered", "generation", "birth", "sampler-failure"] {
+        let reads = ResourceHistoryReads::new();
+        reads.live();
+        let mut raw = ResourceHistoryReads::raw();
+        let mut observations = vec![SessionResourcePresentationTests::gap_observation()];
+        let mut bindings = vec![CommandResourceViewTests::binding()];
+        match transition {
             "stale" => {
                 raw.stale = true;
                 raw.status = "stale".to_owned();
             }
+            "recovered" => {
+                raw.stale = true;
+                raw.status = "stale".to_owned();
+                raw.feed_mode = "recovered".to_owned();
+            }
             "generation" => bindings[0].generation += 1,
             "birth" => bindings[0].identity.started = "20:1".to_owned(),
+            "sampler-failure" => observations.clear(),
             _ => unreachable!(),
         }
-        let view = SessionResourcePresentationTests::gap_overview(
-            raw,
-            observation.clone(),
-            bindings,
-            100.0,
-        );
-        let detail = view.session_detail.unwrap();
-        assert!(!detail.has_resource_history, "{transition}");
-        assert!(detail.graph.nodes.is_empty(), "{transition}");
+        for now in [101.0, 400.0] {
+            let view = reads.read(&raw, &observations, bindings.clone(), now);
+            let detail = view.session_detail.unwrap();
+            assert!(!detail.has_resource_history, "{transition} {now}");
+            assert!(!detail.resource_ended, "{transition} {now}");
+            assert!(detail.graph.nodes.is_empty(), "{transition}");
+        }
     }
+}
+
+#[test]
+fn ended_resource_history_never_renews_the_session_card_and_is_dropped_with_it() -> () {
+    let reads = ResourceHistoryReads::new();
+    let control = ResourceHistoryReads::new();
+    let mut raw = ResourceHistoryReads::raw();
+    raw.last_activity_at = Some(100.0);
+    reads.read(
+        &raw,
+        &[SessionResourcePresentationTests::gap_observation()],
+        vec![CommandResourceViewTests::binding()],
+        100.0,
+    );
+    control.read(&raw, &[], Vec::new(), 100.0);
+    raw.executions[0].status = "completed".to_owned();
+    raw.executions[0].finished_at = Some(110.0);
+    raw.last_activity_at = Some(110.0);
+    raw.captured_at = 110.0;
+    let ended = reads.read(&raw, &[], Vec::new(), 110.0);
+    control.read(&raw, &[], Vec::new(), 110.0);
+    assert_eq!(ended.active_sessions.len(), 1);
+    assert!(ended.session_detail.unwrap().resource_ended);
+    // The control has no measured history: both cards expire exactly 600 s after the finish.
+    for (now, kept) in [(709.999, true), (710.0, false)] {
+        let view = reads.read(&raw, &[], Vec::new(), now);
+        let unmeasured = control.read(&raw, &[], Vec::new(), now);
+        assert_eq!(view.active_sessions.len(), usize::from(kept), "{now}");
+        assert_eq!(unmeasured.active_sessions.len(), usize::from(kept), "{now}");
+        let detail = view.session_detail.unwrap();
+        assert_eq!(detail.has_resource_history, kept, "{now}");
+        assert_eq!(detail.resource_ended, kept, "{now}");
+    }
+    // A later report revives the exact session card; the dropped history does not return.
+    raw.executions[0].status = "running".to_owned();
+    raw.executions[0].finished_at = None;
+    raw.last_activity_at = Some(720.0);
+    raw.captured_at = 720.0;
+    let resumed = reads.read(&raw, &[], Vec::new(), 720.0);
+    assert_eq!(resumed.active_sessions.len(), 1);
+    assert!(!resumed.session_detail.unwrap().has_resource_history);
+}
+
+#[test]
+fn ended_resource_history_is_replaced_by_the_sessions_next_binding() -> () {
+    let reads = ResourceHistoryReads::new();
+    reads.live();
+    let raw = ResourceHistoryReads::raw();
+    let ended = reads.read(&raw, &[], Vec::new(), 101.0);
+    assert_eq!(
+        ResourceHistoryReads::cpu(&ended),
+        vec![(98.0, Some(5.0)), (100.0, None)]
+    );
+    let (observation, binding) = ResourceHistoryReads::next_link();
+    let next = reads.read(&raw, &[observation.clone()], vec![binding], 120.0);
+    let detail = next.session_detail.as_ref().unwrap();
+    assert!(!detail.resource_ended);
+    assert_eq!(detail.process_count, 1);
+    assert_eq!(ResourceHistoryReads::cpu(&next), vec![(119.0, Some(7.0))]);
+    let unbound = reads.read(&raw, &[observation], Vec::new(), 121.0);
+    assert!(unbound.session_detail.as_ref().unwrap().resource_ended);
+    assert_eq!(ResourceHistoryReads::cpu(&unbound), vec![(119.0, Some(7.0))]);
+}
+
+#[test]
+fn ended_resource_histories_are_bounded_to_the_active_link_cap() -> () {
+    let reads = ResourceHistoryReads::new();
+    let mut raws: Vec<NativeLogicalAgent> = Vec::new();
+    let mut observations: Vec<NativeCommandObservation> = Vec::new();
+    let mut bindings: Vec<NativeCommandBinding> = Vec::new();
+    for index in 0..130 {
+        let session = format!("session-{index}");
+        let mut raw = ResourceHistoryReads::raw();
+        raw.id = format!("agent-{index}");
+        raw.session.as_mut().unwrap().id = session.clone();
+        raw.executions[0].session_id = Some(session.clone());
+        let mut binding = CommandResourceViewTests::binding();
+        binding.id = format!("fixture-run:{index}");
+        binding.owner.agent_id = raw.id.clone();
+        binding.owner.session_id = session;
+        binding.identity.pid = 1000 + index;
+        let mut observation = CommandResourceViewTests::observation();
+        observation.binding_id = binding.id.clone();
+        observation.owner = binding.owner.clone();
+        observation.pid = binding.identity.pid;
+        observation.sampled_at = 99.0 + f64::from(index) / 1000.0;
+        observation.metrics.as_mut().unwrap().pid = binding.identity.pid;
+        observation.tree_history = vec![crate::models::NativeProcessTreeSample {
+            time: observation.sampled_at,
+            processes: vec![observation.metrics.clone().unwrap()],
+        }];
+        raws.push(raw);
+        observations.push(observation);
+        bindings.push(binding);
+    }
+    let live = reads.snapshot(&raws, &observations, bindings, 100.0);
+    assert_eq!(live.retained_session_cards.len(), 130);
+    let ended = reads.snapshot(&raws, &[], Vec::new(), 101.0);
+    assert_eq!(ended.ended_resource_histories.len(), 128);
+    let keys: Vec<&str> = ended
+        .ended_resource_histories
+        .iter()
+        .map(|history| history.key.as_str())
+        .collect();
+    assert!(!keys.contains(&"Codex:session-0"));
+    assert!(!keys.contains(&"Codex:session-1"));
+    assert!(keys.contains(&"Codex:session-129"));
 }
 
 #[test]
@@ -837,4 +1124,62 @@ fn a_stale_idle_session_keeps_its_still_bound_harness_resources() -> () {
     assert_eq!(present("idle", std::slice::from_ref(&binding)), 1);
     assert_eq!(present("idle", &[]), 0);
     assert_eq!(present("completed", std::slice::from_ref(&binding)), 0);
+}
+
+impl SessionHarnessPresentation {
+    fn measured() -> NativeCommandObservation {
+        let mut observation = Self::observation();
+        let mut processes = vec![observation.metrics.clone().unwrap()];
+        processes.extend(observation.descendants.iter().cloned());
+        observation.tree_history = vec![crate::models::NativeProcessTreeSample {
+            time: 98.0,
+            processes,
+        }];
+        observation
+    }
+}
+
+#[test]
+fn ended_harness_link_keeps_frozen_history_for_a_lingering_or_finished_session() -> () {
+    let key = SessionViewUtils::linked_key("Claude", SessionHarnessPresentation::SESSION);
+    for case in ["lingering", "completed"] {
+        let reads = ResourceHistoryReads::new();
+        let mut raw = SessionHarnessPresentation::raw(SessionHarnessPresentation::SESSION, "active");
+        raw.task = CommandResourceViewTests::raw_agent().task;
+        raw.last_activity_at = Some(50.0);
+        raw.captured_at = 50.0;
+        // A recent hook gives the session its card before the harness link is sampled.
+        assert_eq!(reads.read_session(&key, &raw, (&[], Vec::new()), 50.0).active_sessions.len(), 1);
+        if case == "lingering" {
+            raw.stale = true;
+            raw.status = "stale".to_owned();
+            raw.reported_status = Some("idle".to_owned());
+        }
+        let live = reads.read_session(
+            &key,
+            &raw,
+            (&[SessionHarnessPresentation::measured()], vec![SessionHarnessPresentation::binding()]),
+            100.0,
+        );
+        assert!(live.session_detail.unwrap().has_resource_history, "{case}");
+        let (observations, bindings, outcome) = match case {
+            "lingering" => (Vec::new(), Vec::new(), "no outcome was reported"),
+            _ => {
+                raw.status = "completed".to_owned();
+                raw.last_activity_at = Some(100.5);
+                raw.captured_at = 100.5;
+                (
+                    vec![SessionHarnessPresentation::measured()],
+                    vec![SessionHarnessPresentation::binding()],
+                    "Reported completed at",
+                )
+            }
+        };
+        let ended = reads.read_session(&key, &raw, (&observations, bindings), 101.0);
+        let detail = ended.session_detail.as_ref().unwrap();
+        assert!(detail.resource_ended, "{case}");
+        assert!(detail.resource_label.contains(outcome), "{case}: {}", detail.resource_label);
+        assert!(detail.graph.nodes.is_empty(), "{case}");
+        assert_eq!(ResourceHistoryReads::cpu(&ended), vec![(98.0, Some(5.0))], "{case}");
+    }
 }
