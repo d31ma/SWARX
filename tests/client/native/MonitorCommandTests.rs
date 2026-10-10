@@ -38,3 +38,20 @@ fn sampler_failure_does_not_publish_old_command_metrics_as_live() -> () {
     assert!(failed.command_observations.is_empty());
     monitor.stop();
 }
+
+#[test]
+fn monitor_keeps_the_measured_history_frozen_after_the_link_is_revoked() -> () {
+    let fixture: MonitorCommandFixture = MonitorCommandFixture::new();
+    let monitor: MonitorService = fixture.monitor();
+    let first = fixture.wait(&monitor, true);
+    assert_eq!(first.logical_views[0].command_resources.len(), 1);
+    assert!(first.ended_resource_histories.is_empty());
+    fixture.bound.store(false, Ordering::SeqCst);
+    let ended = monitor.read();
+    assert!(ended.logical_views[0].command_resources.is_empty());
+    assert_eq!(ended.ended_resource_histories.len(), 1);
+    assert_eq!(ended.ended_resource_histories[0].key, "Codex:fixture-session");
+    assert_eq!(ended.ended_resource_histories[0].samples.len(), 1);
+    assert_eq!(ended.ended_resource_histories[0].end.outcome, None);
+    monitor.stop();
+}

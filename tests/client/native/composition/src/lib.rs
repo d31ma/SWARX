@@ -8,12 +8,13 @@ pub use {clock::*, metrics::*, events::*, harness_source::*};
 #[allow(non_snake_case)]
 pub mod TachyonRustServices {
     pub use crate::utils::{ChartDataUtils, CommandResourceViewUtils, LogicalViewUtils, OverviewViewUtils, SessionViewUtils, TimeFormatUtils, MetricFormatUtils, ProcessGraphUtils, ProcessTreeUtils, RuntimeViewUtils};
-    mod monitor { use super::{ActivityHistoryService, HarnessSessionService, SessionCardRetentionService}; include!(concat!(env!("OUT_DIR"), "/MonitorService.rs")); }
+    mod monitor { use super::{ActivityHistoryService, HarnessSessionService, SessionCardRetentionService, SessionResourceHistoryService}; include!(concat!(env!("OUT_DIR"), "/MonitorService.rs")); }
     mod transport { include!(concat!(env!("OUT_DIR"), "/NativeSnapshotTransportService.rs")); }
     mod activity { include!(concat!(env!("OUT_DIR"), "/ActivityHistoryService.rs")); }
     mod sessions { include!(concat!(env!("OUT_DIR"), "/HarnessSessionService.rs")); }
     mod retention { include!(concat!(env!("OUT_DIR"), "/SessionCardRetentionService.rs")); }
-    pub use {monitor::*, transport::*, activity::*, sessions::*, retention::*};
+    mod resource_history { include!(concat!(env!("OUT_DIR"), "/SessionResourceHistoryService.rs")); }
+    pub use {monitor::*, transport::*, activity::*, sessions::*, retention::*, resource_history::*};
 }
 #[cfg(test)]
 mod monitor_tests { include!(concat!(env!("CARGO_MANIFEST_DIR"), "/../MonitorTests.rs")); }

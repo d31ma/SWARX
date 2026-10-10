@@ -98,6 +98,7 @@ impl SessionDetailTests {
             tree,
             commands,
             history_samples,
+            history_end: None,
             resource_notice: String::new(),
             harness_header: false,
         }

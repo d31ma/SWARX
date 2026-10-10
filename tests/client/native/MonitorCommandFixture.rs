@@ -1,6 +1,6 @@
 use crate::models::{
     NativeCommandBinding, NativeCommandObservation, NativeGroup, NativeLogicalAgent,
-    NativeResourceTotals, NativeSnapshot,
+    NativeProcessTreeSample, NativeResourceTotals, NativeSnapshot,
 };
 use crate::{EventSource, MetricSource, ObservationClock};
 use crate::TachyonRustServices::{ActivityHistoryService, MonitorService};
@@ -65,7 +65,12 @@ impl MetricSource for MonitorCommandFixture {
         false
     }
     fn command_observations(&self) -> Vec<NativeCommandObservation> {
-        vec![CommandResourceViewTests::observation()]
+        let mut observation: NativeCommandObservation = CommandResourceViewTests::observation();
+        observation.tree_history = vec![NativeProcessTreeSample {
+            time: observation.sampled_at,
+            processes: observation.metrics.iter().cloned().collect(),
+        }];
+        vec![observation]
     }
 }
 
@@ -75,7 +80,9 @@ impl EventSource for MonitorCommandFixture {
     }
     fn stop(&mut self) -> () {}
     fn rows(&self) -> Vec<NativeLogicalAgent> {
-        vec![CommandResourceViewTests::raw_agent()]
+        let mut raw: NativeLogicalAgent = CommandResourceViewTests::raw_agent();
+        raw.executions[0].source = Some(raw.source.clone());
+        vec![raw]
     }
     fn revision(&self) -> i64 {
         1
