@@ -207,19 +207,81 @@ impl SessionProcessClaimUtils {
         sample: &NativeProcessTreeSample,
         claims: &mut NativeSessionProcessClaims,
     ) -> () {
+        let command: (i32, String) = (observation.pid, observation.started.clone());
         for process in &sample.processes {
             claims.births.entry(process.pid).or_default().insert(process.started.clone());
             let root = (process.pid, &process.started) == (observation.pid, &observation.started);
-            Self::record_claim(Self::identity(process), root, session, claims);
+            let lineage: bool = Self::nearest_root_is(&command, process, &sample.processes, claims);
+            Self::record_lineage_claim(Self::identity(process), (root, lineage), session, claims);
+        }
+    }
+
+    // A descendant belongs to the closest verified root above it in this tree. A command bound
+    // explicitly inside another session's harness keeps its own subtree; the outer root does not
+    // also claim those processes and make them ambiguous. Unknown lineage keeps the claim.
+    fn nearest_root_is(
+        command: &(i32, String),
+        process: &NativeProcessMetrics,
+        processes: &[NativeProcessMetrics],
+        claims: &NativeSessionProcessClaims,
+    ) -> bool {
+        Self::nearest_root(process, processes, claims)
+            .map(|nearest: (i32, String)| -> bool { &nearest == command })
+            .unwrap_or(true)
+    }
+
+    fn nearest_root(
+        process: &NativeProcessMetrics,
+        processes: &[NativeProcessMetrics],
+        claims: &NativeSessionProcessClaims,
+    ) -> Option<(i32, String)> {
+        let mut parent: i32 = process.parent;
+        // Bounded by the tree size so a malformed parent cycle cannot loop.
+        for _ in 0..processes.len() {
+            let found: &NativeProcessMetrics = processes
+                .iter()
+                .find(|candidate: &&NativeProcessMetrics| -> bool { candidate.pid == parent })?;
+            let identity: (i32, String) = Self::identity(found);
+            if claims.roots.contains_key(&identity) {
+                return Some(identity);
+            }
+            parent = found.parent;
+        }
+        None
+    }
+
+    fn record_lineage_claim(
+        identity: (i32, String),
+        relation: (bool, bool),
+        session: &str,
+        claims: &mut NativeSessionProcessClaims,
+    ) -> () {
+        if [relation.0, relation.1].into_iter().any(std::convert::identity) {
+            Self::record_claim(identity, relation.0, session, claims);
         }
     }
 
     fn claims(sessions: &[NativeSessionResourceView]) -> NativeSessionProcessClaims {
         let mut claims: NativeSessionProcessClaims = NativeSessionProcessClaims::default();
+        // Every current root first, so each descendant can follow its nearest verified root.
+        for session in sessions {
+            Self::session_roots(session, &mut claims);
+        }
         for session in sessions {
             Self::session_claims(session, &mut claims);
         }
         claims
+    }
+
+    fn session_roots(
+        session: &NativeSessionResourceView,
+        claims: &mut NativeSessionProcessClaims,
+    ) -> () {
+        for command in &session.commands {
+            let root: (i32, String) = Self::root_identity(command);
+            claims.births.entry(root.0).or_default().insert(root.1.clone());
+            Self::record_claim(root, true, &session.key, claims);
+        }
     }
 
     fn session_claims(
@@ -253,8 +315,11 @@ impl SessionProcessClaimUtils {
             .entry(process.pid)
             .or_default()
             .insert(process.started.clone());
-        let root: bool = identity == Self::root_identity(command);
-        Self::record_claim(identity, root, session, claims);
+        let command_root: (i32, String) = Self::root_identity(command);
+        let root: bool = identity == command_root;
+        let lineage: bool =
+            Self::nearest_root_is(&command_root, process, &command.group.processes, claims);
+        Self::record_lineage_claim(identity, (root, lineage), session, claims);
     }
 
     fn record_claim(
