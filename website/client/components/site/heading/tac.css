@@ -1,0 +1,26 @@
+.section-head {
+  max-width: 44rem;
+  margin: 0 auto 2.5rem;
+  text-align: center;
+}
+
+.section-head h2 {
+  margin: 0.75rem 0;
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.section-head p {
+  margin: 0;
+  color: var(--w-text-subtle);
+  line-height: 1.7;
+}
+
+.eyebrow {
+  color: var(--w-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}

@@ -1,0 +1,48 @@
+.site-header {
+  z-index: 50;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-right: auto;
+  color: var(--w-text);
+  text-decoration: none;
+}
+
+.brand-name {
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.header-nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+/* Three section links are all the page has; on a phone they sit below the
+   fold anyway, so the bar keeps only the brand, theme and GitHub. */
+@media (max-width: 640px) {
+  .header-nav {
+    display: none;
+  }
+}
+
+.skip-link {
+  position: absolute;
+  left: -999px;
+}
+
+.skip-link:focus {
+  left: 0.5rem;
+  top: 0.5rem;
+  z-index: 100;
+}

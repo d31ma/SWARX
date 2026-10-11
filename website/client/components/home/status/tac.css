@@ -1,0 +1,39 @@
+.status {
+  padding: clamp(3.5rem, 7vw, 6rem) 1rem;
+}
+
+.status-list {
+  display: grid;
+  gap: 1rem;
+  margin: 0;
+}
+
+.status-list > div {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--w-divider);
+}
+
+.status-list dt {
+  color: var(--w-primary);
+  font-weight: 600;
+}
+
+.status-list dd {
+  margin: 0;
+  color: var(--w-text-subtle);
+  line-height: 1.65;
+}
+
+.status-list a {
+  color: var(--w-primary);
+}
+
+@media (max-width: 599.98px) {
+  .status-list > div {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+  }
+}

@@ -1,0 +1,28 @@
+.features {
+  padding: clamp(3.5rem, 7vw, 6rem) 1rem;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feature-card {
+  padding: 1.5rem;
+  background: var(--w-surface-container-low);
+}
+
+.feature-card h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.1rem;
+}
+
+.feature-card p {
+  margin: 0;
+  color: var(--w-text-subtle);
+  line-height: 1.65;
+}

@@ -1,0 +1,36 @@
+@layer duvay, brand;
+@import "../assets/duvay/duvay.min.css" layer(duvay);
+
+/* Swarx colours come from the app mark: a blue to lavender line on navy.
+   DuVay sets color-scheme for light, dark and auto, so light-dark() picks
+   the right value for each theme without a second token block. */
+@layer brand {
+  :root {
+    --swarx-blue: light-dark(#2f5fb3, #98c1ff);
+    --swarx-lavender: light-dark(#6a4fd0, #b3a0ff);
+    --swarx-gradient: linear-gradient(110deg, var(--swarx-blue), var(--swarx-lavender));
+    --swarx-glow: light-dark(rgb(47 95 179 / 0.12), rgb(152 193 255 / 0.18));
+    --swarx-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --w-primary: var(--swarx-blue);
+    --w-on-primary: light-dark(#ffffff, #0d1630);
+    --w-primary-container: light-dark(rgb(47 95 179 / 0.12), rgb(152 193 255 / 0.16));
+    --w-on-primary-container: light-dark(#1f3f7a, #cfe0ff);
+    --w-surface: light-dark(#f7f8fc, #0d1020);
+    --w-surface-container-low: light-dark(#eef0f8, #121628);
+    --w-surface-container-high: light-dark(#e4e8f4, #1a1f36);
+    --w-app-bar-frosted: light-dark(rgb(247 248 252 / 0.85), rgb(13 16 32 / 0.85));
+    --w-border: light-dark(#d3d8e8, #2a3150);
+    --w-divider: light-dark(#e1e5f0, #1f2540);
+    --w-radius: 10px;
+    --w-radius-lg: 14px;
+  }
+
+  body {
+    margin: 0;
+    background: var(--w-surface);
+    color: var(--w-text);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
