@@ -1,5 +1,5 @@
 use crate::models::{NativeActiveSessionView, NativeActiveSummaryView, NativeSummaryCardView};
-use crate::utils::TimeFormatUtils;
+use crate::utils::{ActiveSessionUtils, TimeFormatUtils};
 use std::collections::BTreeSet;
 
 pub struct ActiveSummaryUtils;
@@ -170,7 +170,9 @@ impl ActiveSummaryUtils {
     fn harnesses(sessions: &[NativeActiveSessionView]) -> Vec<String> {
         sessions
             .iter()
-            .map(|session: &NativeActiveSessionView| -> String { session.harness.clone() })
+            .map(|session: &NativeActiveSessionView| -> String {
+                ActiveSessionUtils::family_harness(&session.family)
+            })
             .collect::<BTreeSet<String>>()
             .into_iter()
             .collect()

@@ -174,3 +174,16 @@ fn retained_idle_cards_do_not_count_as_active_sessions_or_harnesses() {
     assert_eq!((summary.agents, summary.sessions, summary.tools), (0, 0, 0));
     assert!(summary.harnesses.is_empty());
 }
+
+#[test]
+fn remote_control_and_local_claude_sessions_count_as_one_harness() {
+    let card = |key: &str, harness: &str| crate::models::NativeActiveSessionView {
+        key: key.to_owned(), family: "Claude".to_owned(), harness: harness.to_owned(), linked: true,
+        agent_count: 1, agent_total: 1,
+        ..Default::default()
+    };
+    let cards = [card("Claude:local", "Claude Code"), card("Claude:remote", "Claude Code \u{b7} Remote Control")];
+    let summary = crate::utils::ActiveSummaryUtils::summary(&cards, "Live", 100.0);
+    assert_eq!(summary.sessions, 2);
+    assert_eq!(summary.harnesses, vec!["Claude Code".to_owned()]);
+}

@@ -118,6 +118,10 @@ impl ActiveSessionUtils {
         Self::session_harness(group)
     }
 
+    pub fn family_harness(family: &str) -> String {
+        Self::harness_name(family)
+    }
+
     pub fn session_title(group: &NativeSessionView) -> String {
         Self::title(group)
     }
