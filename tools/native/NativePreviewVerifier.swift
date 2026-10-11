@@ -27,6 +27,8 @@ final class NativePreviewVerifier {
     private static let normalSize: NSSize = NSSize(width: 1240, height: 850)
     private static let fullSize: NSSize = NSSize(width: 1680, height: 850)
     private static let smallSize: NSSize = NSSize(width: 1000, height: 700)
+    // The app's contentMinSize (NativeHostCustomizer).
+    private static let minimumSize: NSSize = NSSize(width: 900, height: 640)
     private static let sectionRoutes: [String: String] = ["What's running": "/", "Resources": "/", "Process tree": "/", "Activity": "/"]
     private static let loadPollNanoseconds: UInt64 = 100_000_000
     private static let resourceSteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
@@ -104,6 +106,20 @@ final class NativePreviewVerifier {
         ("native-session-settled", "polls", "Resources", "", normalSize, ""),
         ("native-session-small", "polls", "Resources", "", smallSize, "")
     ]
+    // Screenshots every drawer tab at normal and minimum sizes with no data checks, for visual review.
+    private static let visualSteps: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)] = [
+        // Waits for the first reported session; the verifier starts at page load, before any report arrives.
+        ("native-visual-settled", settleAction, "What's running", "", normalSize, ""),
+        ("native-visual-running", "running", "What's running", "", normalSize, ""),
+        ("native-visual-resources", "history", "Resources", "", normalSize, ""),
+        ("native-visual-tree", "tree", "Process tree", "tree", normalSize, ""),
+        ("native-visual-activity", "activity", "Activity", "", normalSize, ""),
+        ("native-visual-running-small", "running", "What's running", "", minimumSize, ""),
+        ("native-visual-resources-small", "history", "Resources", "", minimumSize, ""),
+        ("native-visual-tree-small", "tree", "Process tree", "tree", minimumSize, ""),
+        ("native-visual-activity-small", "activity", "Activity", "", minimumSize, ""),
+        ("native-visual-final", "running", "What's running", "", normalSize, "")
+    ]
     private static let focusedSelections: [String: [(label: String, action: String, section: String, mode: String, size: NSSize, check: String)]] = [
         "connectors": connectorSteps,
         "resources": resourceSteps,
@@ -112,7 +128,8 @@ final class NativePreviewVerifier {
         "active-task": activeTaskSteps,
         "stability": stabilitySteps,
         "session-panel": sessionPanelSteps,
-        "drawer": sessionPanelSteps
+        "drawer": sessionPanelSteps,
+        "visual": visualSteps
     ]
     private let view: WKWebView
     private let window: NSWindow
