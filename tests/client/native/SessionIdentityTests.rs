@@ -61,6 +61,7 @@ impl SessionIdentityTests {
             archived: false,
             model: None,
             provider: None,
+            remote_control_id: None,
         }
     }
 

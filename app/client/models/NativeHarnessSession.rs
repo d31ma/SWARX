@@ -10,4 +10,6 @@ pub struct NativeHarnessSession {
     pub archived: bool,
     pub model: Option<String>,
     pub provider: Option<String>,
+    #[serde(default)]
+    pub remote_control_id: Option<String>,
 }

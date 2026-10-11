@@ -10,6 +10,7 @@
           <h2 id="session-panel-title" :title="observatory.model.sessionDetail.title">{observatory.model.sessionDetail.title}</h2>
           <p class="session-harness">{observatory.model.sessionDetail.harness} · {observatory.model.sessionDetail.countLabel}</p>
           <p class="session-id">Session ID · {observatory.model.sessionDetail.id || 'not reported'}</p>
+          <logic :if="observatory.model.sessionDetail.remoteControlId"><p class="session-id">Remote Control ID · {observatory.model.sessionDetail.remoteControlId} · project thread not reported locally</p></logic>
           <logic :if="observatory.sessionView === 'inactive'"><p class="session-panel-note" role="status">No active agents now. Measured resources and past activity stay available while this session is still reported.</p></logic>
         </logic>
       </div>

@@ -121,6 +121,7 @@ impl SessionCardRetentionService {
         NativeActiveSessionView {
             key: card.key.clone(), id: card.id.clone(), title: card.title.clone(),
             family: card.family.clone(), harness: card.harness.clone(), linked: card.linked,
+            remote_control_id: card.remote_control_id.clone(),
             count_label: "Idle".to_owned(), idle: true, started_at: card.started_at,
             ..NativeActiveSessionView::default()
         }

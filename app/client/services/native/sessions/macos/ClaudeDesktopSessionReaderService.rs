@@ -1,4 +1,6 @@
-use crate::models::{NativeClaudeDesktopSessionRecord, NativeHarnessSession};
+use crate::models::{
+    NativeClaudeDesktopSessionRecord, NativeClaudeRemoteControlSpawn, NativeHarnessSession,
+};
 use crate::utils::{HarnessFileUtils, HarnessFolderUtils};
 use crate::HarnessSessionSource;
 use std::path::{Path, PathBuf};
@@ -68,7 +70,12 @@ impl ClaudeDesktopSessionReaderService {
             archived: record.is_archived.unwrap_or_default(),
             model: HarnessFileUtils::reported_identifier(record.model.as_deref()),
             provider: None,
+            remote_control_id: Self::remote_control_id(record.remote_control_spawn),
         })
+    }
+
+    fn remote_control_id(spawn: Option<NativeClaudeRemoteControlSpawn>) -> Option<String> {
+        HarnessFileUtils::reported_identifier(spawn?.remote_control_session_id.as_deref())
     }
 
     fn title_source(&self, source: Option<&str>) -> String {

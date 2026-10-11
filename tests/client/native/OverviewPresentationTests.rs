@@ -874,6 +874,7 @@ fn native_session_links_and_counts_are_preserved() -> () {
         agents: Vec::new(),
         model: None,
         provider: None,
+        remote_control_id: None,
     }];
     let view: NativeOverviewView = OverviewPresentationTests::view(&snapshot);
     assert_eq!(view.session_groups[0].id.as_deref(), Some("explicit"));
@@ -1104,6 +1105,7 @@ fn session_pages_group_by_harness_and_keep_order_within_each() -> () {
             agents: Vec::new(),
             model: None,
             provider: None,
+            remote_control_id: None,
         }
     };
     let mut snapshot: NativeSnapshot = OverviewPresentationTests::snapshot(Vec::new());
@@ -1185,6 +1187,7 @@ fn harness_session_names_resource_cards_and_activity_by_exact_id() -> () {
         archived: false,
         model: Some("claude-opus-5-5".to_owned()),
         provider: None,
+        remote_control_id: None,
     };
     let mut snapshot: NativeSnapshot = OverviewPresentationTests::snapshot(Vec::new());
     snapshot.session_groups = crate::TachyonRustServices::SessionViewUtils::named(

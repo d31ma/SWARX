@@ -9,6 +9,7 @@ export interface ActiveSessionView {
   family: string;
   harness: string;
   linked: boolean;
+  remoteControlId: string | null;
   idle: boolean;
   agentCount: number;
   subAgentCount: number;

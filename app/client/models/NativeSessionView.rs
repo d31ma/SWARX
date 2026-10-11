@@ -14,5 +14,7 @@ pub struct NativeSessionView {
     pub model: Option<String>,
     #[serde(default)]
     pub provider: Option<String>,
+    #[serde(default)]
+    pub remote_control_id: Option<String>,
     pub agents: Vec<NativeLogicalAgentView>,
 }

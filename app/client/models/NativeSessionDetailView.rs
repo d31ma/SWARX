@@ -11,6 +11,8 @@ pub struct NativeSessionDetailView {
     pub harness: String,
     pub family: String,
     pub linked: bool,
+    #[serde(rename = "remoteControlId")]
+    pub remote_control_id: Option<String>,
     pub active: bool,
     #[serde(rename = "stateLabel")]
     pub state_label: String,

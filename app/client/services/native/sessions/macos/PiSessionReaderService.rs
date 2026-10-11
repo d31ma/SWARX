@@ -88,6 +88,7 @@ impl PiSessionReaderService {
             provider: HarnessFileUtils::reported_identifier(model_change.and_then(
                 |line: &NativePiSessionLine| -> Option<&str> { line.provider.as_deref() },
             )),
+            remote_control_id: None,
         })
     }
 

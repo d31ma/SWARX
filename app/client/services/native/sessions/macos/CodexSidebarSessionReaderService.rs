@@ -70,6 +70,7 @@ impl CodexSidebarSessionReaderService {
             archived: false,
             model: HarnessFileUtils::reported_identifier(thread.model.as_deref()),
             provider: HarnessFileUtils::reported_identifier(thread.model_provider.as_deref()),
+            remote_control_id: None,
         })
     }
 
