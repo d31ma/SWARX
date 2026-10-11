@@ -11,7 +11,7 @@
         <div class="history-grid">
           <article class="history-card" :data-group="observatory.model.sessionDetail.chartId">
             <header class="history-card-header">
-              <h3>Session usage · {observatory.model.sessionDetail.processCount} current processes · {observatory.model.sessionDetail.rootCount} verified roots</h3>
+              <h3>Session usage · {observatory.model.sessionDetail.scopeLabel}</h3>
               <p>{observatory.model.sessionDetail.resourceLabel}</p>
               <div class="session-metrics" role="list" aria-label="Current measured session usage">
                 <loop :for="metric of observatory.model.sessionDetail.metrics">

@@ -600,3 +600,14 @@ fn resuming_a_retained_session_produces_one_current_card_with_stable_order() {
     assert_eq!((cards[0].agent_total, cards[0].tool_count), (1, 1));
     assert_eq!(cards[0].started_at, 100.0);
 }
+
+#[test]
+fn session_card_carries_the_hook_reported_model_for_its_exact_session_only() -> () {
+    let mut modelled = ActiveSessionTests::worker("review", "Claude", Some(("review", "Review")), 120.0);
+    modelled.model = Some("claude-opus-5-5".to_owned());
+    let plain = ActiveSessionTests::worker("build", "Codex", Some(("build", "build")), 110.0);
+    let wire = serde_json::to_value(ActiveSessionTests::view(vec![modelled, plain], &[])).unwrap();
+    assert_eq!(wire["activeSessions"][1]["key"], "Claude:review");
+    assert_eq!(wire["activeSessions"][1]["model"], "claude-opus-5-5");
+    assert!(wire["activeSessions"][0]["model"].is_null());
+}

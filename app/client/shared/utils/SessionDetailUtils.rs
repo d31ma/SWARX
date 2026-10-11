@@ -37,6 +37,9 @@ impl SessionDetailUtils {
     ];
     const ENDED_HISTORY: &'static str = "Measured history is kept as captured and no longer updates; no current processes or metrics are shown.";
     const ENDED_METRIC: &'static str = "Process link ended; no current measurement.";
+    // Indexed by usize::from(count == 1).
+    const PROCESS_NOUNS: [&'static str; Self::OUTCOMES] = ["current processes", "current process"];
+    const ROOT_NOUNS: [&'static str; Self::OUTCOMES] = ["verified roots", "verified root"];
     const ENDED_TREE: &'static str = "No current processes: the verified process link ended.";
     const ROLES: [&'static str; Self::OUTCOMES] = ["Agent", "Sub-agent"];
     const UNKNOWN_ROLE: &'static str = "Role not reported";
@@ -153,6 +156,7 @@ impl SessionDetailUtils {
         Self::sampling_details(&mut detail.metrics, sampling_gap);
         detail.process_count = rows.len() as i64;
         detail.root_count = Self::root_count(commands);
+        detail.scope_label = Self::scope_label(detail.process_count, detail.root_count);
         detail.resource_scope = Self::SCOPES[unlinked].to_owned();
         detail.resource_label = Self::RESOURCE_LABELS[unlinked].to_owned();
         detail.resource_label = Self::sampling_label(detail.resource_label, sampling_gap);
@@ -247,6 +251,14 @@ impl SessionDetailUtils {
         Self::resource(resources, key)
             .map(|found| SessionUsageUtils::history_from_samples(&found.history_samples))
             .unwrap_or_default()
+    }
+
+    fn scope_label(processes: i64, roots: i64) -> String {
+        format!(
+            "{processes} {} \u{b7} {roots} {}",
+            Self::PROCESS_NOUNS[usize::from(processes == 1)],
+            Self::ROOT_NOUNS[usize::from(roots == 1)]
+        )
     }
 
     fn root_count(commands: &[NativeRuntimeView]) -> i64 {

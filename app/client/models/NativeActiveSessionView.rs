@@ -7,6 +7,9 @@ pub struct NativeActiveSessionView {
     pub title: String,
     pub family: String,
     pub harness: String,
+    // Reported model for this exact session (SessionViewUtils); None when unreported.
+    #[serde(default)]
+    pub model: Option<String>,
     pub linked: bool,
     // Retained session cards carry no current agents, tools or load ranks.
     #[serde(default)]

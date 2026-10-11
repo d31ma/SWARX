@@ -29,6 +29,9 @@ pub struct NativeSessionDetailView {
     pub process_count: i64,
     #[serde(rename = "rootCount")]
     pub root_count: i64,
+    // "N current processes · N verified roots", singular for one.
+    #[serde(default, rename = "scopeLabel")]
+    pub scope_label: String,
     #[serde(rename = "chartId")]
     pub chart_id: String,
     #[serde(default, rename = "hasResourceHistory")]

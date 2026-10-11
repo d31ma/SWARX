@@ -21,6 +21,7 @@ export interface SessionDetailView {
   metrics: SessionMetricView[];
   processCount: number;
   rootCount: number;
+  scopeLabel: string;
   chartId: string;
   hasResourceHistory: boolean;
   resourceEnded: boolean;

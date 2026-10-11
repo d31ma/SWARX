@@ -336,3 +336,15 @@ fn delayed_live_observation_keeps_already_elapsed_monotonic_activity_age() {
     assert_eq!(service.retain(&[], &[], 1799.999, 1099.999).len(), 1);
     assert!(service.retain(&[], &[], 1800.0, 1100.0).is_empty());
 }
+
+#[test]
+fn idle_card_keeps_the_reported_model() {
+    let service = SessionCardRetentionService::default();
+    let mut wire = serde_json::to_value(SessionCardRetentionTests::card("session")).unwrap();
+    wire["model"] = serde_json::json!("claude-opus-5-5");
+    let card: NativeActiveSessionView = serde_json::from_value(wire).unwrap();
+    service.retain(&[card], &[SessionCardRetentionTests::agent("session", "running")], SessionCardRetentionTests::STARTED, SessionCardRetentionTests::STARTED);
+    let cards = service.retain(&[], &[SessionCardRetentionTests::agent("session", "completed")], SessionCardRetentionTests::COMPLETED, SessionCardRetentionTests::COMPLETED);
+    assert!(cards[0].idle);
+    assert_eq!(serde_json::to_value(&cards[0]).unwrap()["model"], "claude-opus-5-5");
+}
