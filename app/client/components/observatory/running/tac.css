@@ -388,3 +388,11 @@
     transition: none;
   }
 }
+
+.session-card-heading .session-id {
+  overflow: hidden;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
