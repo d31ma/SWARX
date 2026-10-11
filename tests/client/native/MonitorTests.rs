@@ -198,7 +198,7 @@ fn within_limit<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) ->
     receiver.recv_timeout(Duration::from_secs(2)).ok()
 }
 
-fn blocked_monitor() -> (MonitorService, Arc<(Mutex<bool>, Condvar)>, Arc<AtomicUsize>) {
+fn gated_monitor() -> (Arc<MonitorService>, Arc<(Mutex<bool>, Condvar)>, Arc<AtomicUsize>) {
     let gate: Arc<(Mutex<bool>, Condvar)> = Arc::new((Mutex::new(false), Condvar::new()));
     let calls: Arc<AtomicUsize> = Arc::new(AtomicUsize::new(0));
     let source: Box<dyn HarnessSessionSource> = Box::new(BlockedSessions {
@@ -214,18 +214,48 @@ fn blocked_monitor() -> (MonitorService, Arc<(Mutex<bool>, Condvar)>, Arc<Atomic
         ActivityHistoryService::default(),
     )
     .with_sessions(HarnessSessionService::new(vec![source]));
+    (Arc::new(monitor), gate, calls)
+}
+
+fn first_read(monitor: &Arc<MonitorService>) -> () {
+    let reader: Arc<MonitorService> = Arc::clone(monitor);
+    within_limit(move || reader.read()).expect("first read waited for session discovery");
+}
+
+fn wait_for_discovery(calls: &AtomicUsize) -> () {
     let deadline: Instant = Instant::now() + Duration::from_secs(2);
     while calls.load(Ordering::SeqCst) == 0 && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(10));
     }
+}
+
+fn blocked_monitor() -> (Arc<MonitorService>, Arc<(Mutex<bool>, Condvar)>, Arc<AtomicUsize>) {
+    let (monitor, gate, calls) = gated_monitor();
+    first_read(&monitor);
+    wait_for_discovery(&calls);
     (monitor, gate, calls)
+}
+
+// A harness folder on a removable volume makes discovery raise a macOS privacy prompt. Started at
+// launch, before the window exists, that prompt holds app activation and the first frame waits
+// for someone to answer it. The page's first read starts discovery instead.
+#[test]
+fn session_discovery_waits_for_the_first_read() -> () {
+    let (monitor, gate, calls) = gated_monitor();
+    std::thread::sleep(Duration::from_millis(200));
+    assert_eq!(calls.load(Ordering::SeqCst), 0);
+    first_read(&monitor);
+    wait_for_discovery(&calls);
+    assert_eq!(calls.load(Ordering::SeqCst), 1);
+    *gate.0.lock().unwrap() = true;
+    gate.1.notify_all();
+    monitor.stop();
 }
 
 #[test]
 fn blocked_session_discovery_does_not_delay_reads() -> () {
     let (monitor, gate, calls) = blocked_monitor();
     assert_eq!(calls.load(Ordering::SeqCst), 1);
-    let monitor: Arc<MonitorService> = Arc::new(monitor);
     let reader: Arc<MonitorService> = Arc::clone(&monitor);
     let snapshot = within_limit(move || reader.read()).expect("read waited for session discovery");
     assert!(snapshot.harness_sessions.is_empty());
