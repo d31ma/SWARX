@@ -1,0 +1,9 @@
+{
+  "name": "swarx-website",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The Swarx public website, built with Tachyon Tac and DuVay.",
+  "scripts": {
+    "bundle": "\"$TACHYON_COMPILER\" bundle"
+  }
+}

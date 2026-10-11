@@ -1,0 +1,4 @@
+dist/
+.tachyon/
+node_modules/
+.env

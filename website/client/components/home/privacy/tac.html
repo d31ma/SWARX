@@ -1,0 +1,25 @@
+<section id="privacy" class="privacy" aria-labelledby="privacy-heading">
+  <div class="w-container w-container--lg">
+    <site-heading eyebrow="Local by design" heading="Your agents' work stays on your machine." anchor="privacy-heading" lead="Swarx keeps measurements and opt-in task events local. It watches agent work that runs on this machine, and it says plainly what it cannot see." />
+
+    <div class="privacy-columns">
+      <div>
+        <h3>What it never does</h3>
+        <ul>
+          <li>Read prompts, session transcripts or terminal output.</li>
+          <li>Run an HTTP server, a Python runtime or external telemetry.</li>
+          <li>Treat a process as a logical agent, or guess who owns a shared one.</li>
+        </ul>
+      </div>
+      <div>
+        <h3>What it cannot see</h3>
+        <ul>
+          <li>Cloud agent sessions, such as Codex cloud threads. They run remotely and send no local events.</li>
+          <li>Remote model computation. Only local processes are measured.</li>
+          <li>Work from a desktop client that is merely open. That is not counted as active work.</li>
+          <li>Tasks without an explicit, supported event source.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>

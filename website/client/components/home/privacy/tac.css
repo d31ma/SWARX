@@ -1,0 +1,28 @@
+.privacy {
+  padding: clamp(3.5rem, 7vw, 6rem) 1rem;
+  background: var(--w-surface-container-low);
+}
+
+.privacy-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: 2rem;
+}
+
+.privacy-columns h3 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.privacy-columns ul {
+  display: grid;
+  gap: 0.6rem;
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--w-text-subtle);
+  line-height: 1.6;
+}
+
+.privacy-columns li::marker {
+  color: var(--w-primary);
+}
