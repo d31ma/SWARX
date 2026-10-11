@@ -6,14 +6,14 @@ _external() {
 }
 
 _preserve_verified_app() {
-  local app_path="$1/macos/SWARX.app"
+  local app_path="$1/macos/Swarx.app"
   local backup_root="$2"
   local backup_stamp
   backup_stamp="$(/bin/date -u +%Y%m%dT%H%M%SZ)-$$"
   if [[ -d "$app_path" ]]; then
     mkdir -p "$backup_root/$backup_stamp"
-    /bin/cp -R "$app_path" "$backup_root/$backup_stamp/SWARX.app"
-    print "Previous app preserved at $backup_root/$backup_stamp/SWARX.app"
+    /bin/cp -R "$app_path" "$backup_root/$backup_stamp/Swarx.app"
+    print "Previous app preserved at $backup_root/$backup_stamp/Swarx.app"
   fi
 }
 

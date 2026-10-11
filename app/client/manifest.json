@@ -1,5 +1,5 @@
 {
-  "name": "SWARX",
+  "name": "Swarx",
   "start_url": "/",
   "tac": {
     "application": {
@@ -36,7 +36,7 @@
         "help": [
           {
             "id": "local-help",
-            "label": "SWARX Help",
+            "label": "Swarx Help",
             "route": "/help"
           }
         ]
@@ -140,11 +140,11 @@
     },
     "metadata": {
       "defaults": {
-        "title": "SWARX"
+        "title": "Swarx"
       },
       "routes": {
         "/help": {
-          "title": "SWARX Help"
+          "title": "Swarx Help"
         }
       }
     }

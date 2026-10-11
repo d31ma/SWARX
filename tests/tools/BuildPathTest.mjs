@@ -60,7 +60,7 @@ test('build rejects a configured source output before compiler invocation', /** 
 test('build rejects a rollback below the promoted native output before copying or invoking the compiler', /** @param {import('node:test').TestContext} context @returns {void} */ context => {
   const fixture = BuildPathTest.fixture();
   context.after(/** @returns {void} */ () => fs.rmSync(fixture.root, {recursive:true}));
-  const bundle = path.join(fixture.artifacts, 'macos/SWARX.app');
+  const bundle = path.join(fixture.artifacts, 'macos/Swarx.app');
   fs.mkdirSync(bundle, {recursive:true});
   fs.writeFileSync(path.join(bundle, 'preserved.txt'), 'last accepted app');
   const rollback = path.join(fixture.artifacts, 'macos/rollback');

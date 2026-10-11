@@ -4,11 +4,11 @@ import fs from 'node:fs';
 import { NativeHostCustomizer } from '../../tools/NativeHostCustomizer.ts';
 import { NativePackagerFixture } from './NativePackagerFixture.ts';
 
-const GENERATED_MENU = 'menus.install(NSApplication.shared, window, "SWARX", menuNavigation, menuActions)';
-const GENERATED_TITLE = 'window.title = "SWARX"';
+const GENERATED_MENU = 'menus.install(NSApplication.shared, window, "Swarx", menuNavigation, menuActions)';
+const GENERATED_TITLE = 'window.title = "Swarx"';
 const ACTIVATION = '        NSApplication.shared.activate(ignoringOtherApps: true)\n';
 
-test('current framework host keeps the generated SWARX title and menu actions when inserting QA', (context: TestContext): void => {
+test('current framework host keeps the generated Swarx title and menu actions when inserting QA', (context: TestContext): void => {
   const fixture = new NativePackagerFixture();
   context.after((): void => fixture.close());
   const source = fs.readFileSync(fixture.host(), 'utf8');

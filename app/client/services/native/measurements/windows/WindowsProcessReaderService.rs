@@ -22,7 +22,7 @@ impl WindowsProcessReaderService {
     const NO_INHERIT: i32 = 0;
     const SNAPSHOT_UNAVAILABLE: &'static str =
         "Process collection unavailable: the Windows process snapshot could not be read.";
-    const NETWORK_UNAVAILABLE: &'static str = "Network counters unavailable: Windows per-process byte counters need administrator event tracing (ETW), which SWARX does not use.";
+    const NETWORK_UNAVAILABLE: &'static str = "Network counters unavailable: Windows per-process byte counters need administrator event tracing (ETW), which Swarx does not use.";
     const ACCOUNT_UNAVAILABLE: &'static str =
         "Process collection unavailable: the current Windows account could not be read.";
 
