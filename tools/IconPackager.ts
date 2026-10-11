@@ -9,7 +9,7 @@ export class IconPackager {
   private static readonly OUTPUT_FLAG: string = '-o';
   private static readonly ICON_NAME: string = 'Observatory.icns';
   private static readonly ICON_SET_NAME: string = 'Observatory.iconset';
-  private static readonly APP_PATH: string = 'macos/AgentObservatory.app';
+  private static readonly APP_PATH: string = 'macos/SWARX.app';
   private static readonly SWIFT_COMPILER: string = '/usr/bin/swiftc';
   private static readonly PNG_SIGNATURE: Buffer = Buffer.from('89504e470d0a1a0a', 'hex');
   private static readonly PNG_HEADER_BYTES: number = 33;
@@ -41,7 +41,7 @@ export class IconPackager {
   private static readonly PLIST_ICON_KEY: string = 'CFBundleIconFile';
   private static readonly PLIST_DISPLAY_NAME_KEY: string = 'CFBundleDisplayName';
   private static readonly PLIST_NAME_KEY: string = 'CFBundleName';
-  private static readonly DISPLAY_NAME: string = 'Swarx';
+  private static readonly DISPLAY_NAME: string = 'SWARX';
   private static readonly PERMISSION_MASK: number = 0o7777;
   private readonly root: string;
   private readonly artifacts: string;

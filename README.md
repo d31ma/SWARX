@@ -1,6 +1,6 @@
-# Swarx
+# SWARX
 
-Swarx is a local desktop monitor for explicitly reported agents, verified sessions,
+SWARX is a local desktop monitor for explicitly reported agents, verified sessions,
 assigned tasks and measured process resources. It uses Tachyon, a Rust native
 core and a JavaScript browser interface. macOS is the first target; Windows and
 Linux runtime validation is pending.
@@ -10,7 +10,7 @@ unknown. Shared desktop processes and remote model work are not divided into
 invented per-agent resource totals. Missing, denied, stale and reset measurements
 keep their availability labels.
 
-Swarx monitors agent work that runs on this machine. Cloud agent sessions, such as Codex
+SWARX monitors agent work that runs on this machine. Cloud agent sessions, such as Codex
 desktop cloud threads, run remotely and send no local events, so they do not appear; an open
 desktop client by itself is not counted as active work.
 
@@ -27,9 +27,9 @@ trusted in Codex:
   No finish time, duration or exit code is invented; `Stop` closes the calls as
   "no finish".
 - A call longer than 120 seconds with no further hook goes stale.
-- Codex sends no background flag and Swarx has no Codex harness process link,
+- Codex sends no background flag and SWARX has no Codex harness process link,
   so long-running or yielded commands are never shown as background tasks.
-  Swarx does not infer them from the shared Codex process.
+  SWARX does not infer them from the shared Codex process.
 - A sub-agent tool call that carries `agent_id` appears as its own agent under
   the `session_id` Codex reports (not yet probed live). Sub-agent start and stop are not reported until the user trusts
   `SubagentStart` and `SubagentStop` in Codex. If `PostToolUse` is trusted and
@@ -54,10 +54,17 @@ patterns and does not guarantee removal of every secret format. Task visibility
 requires an explicit supported event source; this source does not establish an
 automatic API for every desktop harness.
 
-The source folder is `SWARX`, and the chosen display name is Swarx. Native
-application labels, bundle names and internal identifiers still use Agent
-Observatory. A native rename and acceptance check are pending; publication
-preparation does not establish a renamed executable release.
+The application name is SWARX. The native bundle is `SWARX.app` and its
+executable is `SWARX`. The bundle ID `ma.del.agent-observatory`, the private
+event socket under `/tmp/agent-observatory-<uid>`, the `agent-observatory`
+storage name and the `observatory-event` helper are unchanged, so existing app
+data carries over.
+
+After installing this build, point every installed hook command at
+`.../SWARX.app/Contents/MacOS/observatory-event`, including any
+`~/.local/bin/swarx-hook` relay used by the OpenCode and Pi harnesses. Commands
+that still name `AgentObservatory.app` stop working once the old bundle is
+removed.
 
 See [setup](docs/setup.md) for prerequisites and the current build boundary, and
 [third-party notices](docs/third-party-notices.md) for bundled dependencies.

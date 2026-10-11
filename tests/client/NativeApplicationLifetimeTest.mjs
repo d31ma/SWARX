@@ -33,7 +33,7 @@ class NativeApplicationLifetimeTest {
     fs.rmSync(this.REPORT, {force: true});
     const log = fs.openSync(path.join(this.ROOT, 'evidence/' + this.LABEL + '-app.txt'), 'w');
     const started = new Date().toISOString();
-    const child = spawn(path.join(this.BUNDLE, 'Contents/MacOS/AgentObservatory'), [], {
+    const child = spawn(path.join(this.BUNDLE, 'Contents/MacOS/SWARX'), [], {
       env: {...process.env, OBSERVATORY_QA: '', OBSERVATORY_LIFETIME_QA: '1', OBSERVATORY_ROOT: this.ROOT,
         OBSERVATORY_LIFETIME_MODE: this.MODE, OBSERVATORY_LIFETIME_SOCKET: this.SOCKET,
         OBSERVATORY_LIFETIME_EVENT_FILE: this.EVENT},

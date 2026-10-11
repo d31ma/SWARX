@@ -1,5 +1,5 @@
 {
-  "name": "Agent Observatory",
+  "name": "SWARX",
   "start_url": "/",
   "tac": {
     "application": {
@@ -36,7 +36,7 @@
         "help": [
           {
             "id": "local-help",
-            "label": "Swarx Help",
+            "label": "SWARX Help",
             "route": "/help"
           }
         ]
@@ -140,11 +140,11 @@
     },
     "metadata": {
       "defaults": {
-        "title": "Swarx Agent Observatory"
+        "title": "SWARX"
       },
       "routes": {
         "/help": {
-          "title": "Swarx Help"
+          "title": "SWARX Help"
         }
       }
     }

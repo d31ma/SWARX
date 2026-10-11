@@ -131,7 +131,7 @@ export class NativeRustPackager {
   }
 
   private copyEmitter(): void {
-    const destination: string = path.join(this.artifacts, 'macos/AgentObservatory.app/Contents/MacOS', NativeRustPackager.EMITTER_NAME);
+    const destination: string = path.join(this.artifacts, 'macos/SWARX.app/Contents/MacOS', NativeRustPackager.EMITTER_NAME);
     fs.mkdirSync(path.dirname(destination), { recursive: true });
     fs.copyFileSync(path.join(this.target, NativeRustPackager.DEBUG_OUTPUT, NativeRustPackager.EMITTER_NAME), destination);
     fs.chmodSync(destination, NativeRustPackager.EXECUTABLE_MODE);
