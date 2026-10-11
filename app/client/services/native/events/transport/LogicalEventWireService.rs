@@ -241,9 +241,9 @@ impl LogicalEventWireService {
     ) -> Result<(), String> {
         let remaining: Duration = deadline.saturating_duration_since(Instant::now());
         self.require_time(remaining)?;
-        stream
-            .set_read_timeout(Some(remaining))
-            .map_err(Self::connection_error)?;
+        // macOS rejects socket options once the peer has answered and closed; its reply stays
+        // readable and the timeout set when the exchange began still bounds this read.
+        let _tightened: Result<(), std::io::Error> = stream.set_read_timeout(Some(remaining));
         let mut block: [u8; Self::BLOCK_SIZE] = [0; Self::BLOCK_SIZE];
         let count: usize = stream.read(&mut block).map_err(Self::connection_error)?;
         self.require_bytes(count)?;
