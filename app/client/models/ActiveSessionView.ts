@@ -8,6 +8,7 @@ export interface ActiveSessionView {
   title: string;
   family: string;
   harness: string;
+  model: string | null;
   linked: boolean;
   idle: boolean;
   agentCount: number;

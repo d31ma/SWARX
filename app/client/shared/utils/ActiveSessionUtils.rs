@@ -159,6 +159,7 @@ impl ActiveSessionUtils {
             id: group.id.clone(),
             title: Self::title(group),
             harness: Self::harness_name(&group.family),
+            model: group.model.clone(),
             family: group.family.clone(),
             linked: group.known,
             idle: false,

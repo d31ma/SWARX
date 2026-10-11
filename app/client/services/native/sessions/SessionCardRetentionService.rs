@@ -120,7 +120,7 @@ impl SessionCardRetentionService {
     fn idle(card: &NativeActiveSessionView) -> NativeActiveSessionView {
         NativeActiveSessionView {
             key: card.key.clone(), id: card.id.clone(), title: card.title.clone(),
-            family: card.family.clone(), harness: card.harness.clone(), linked: card.linked,
+            family: card.family.clone(), harness: card.harness.clone(), model: card.model.clone(), linked: card.linked,
             count_label: "Idle".to_owned(), idle: true, started_at: card.started_at,
             ..NativeActiveSessionView::default()
         }
