@@ -70,13 +70,16 @@ impl MonitorService {
 
     // Session discovery refreshes on its own thread; page reads take only its latest result.
     pub fn with_sessions(mut self, sessions: HarnessSessionService) -> Self {
-        let interval: Duration = Duration::from_secs(Self::SESSION_INTERVAL_SECONDS);
-        sessions.start(Arc::clone(&self.clock), interval);
         self.sessions = sessions;
         self
     }
 
+    // The first read starts discovery. A harness folder on a removable volume raises a macOS
+    // privacy prompt; raised at launch, before the window exists, it holds app activation and
+    // the first frame waits for an answer. Later reads find the refresh already running.
     pub fn read(&self) -> NativeSnapshot {
+        let interval: Duration = Duration::from_secs(Self::SESSION_INTERVAL_SECONDS);
+        self.sessions.start(Arc::clone(&self.clock), interval);
         self.current()
     }
 
