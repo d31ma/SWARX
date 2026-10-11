@@ -64,11 +64,11 @@ impl LogicalSocketWorkerService {
         Self::readable(descriptor.revents)
     }
 
-    fn readable(revents: libc::c_short) -> std::io::Result<bool> {
-        if revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0 {
+    fn readable(returned_events: libc::c_short) -> std::io::Result<bool> {
+        if returned_events & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0 {
             return Err(std::io::Error::other("Private event listener failed."));
         }
-        Ok(revents & libc::POLLIN != 0)
+        Ok(returned_events & libc::POLLIN != 0)
     }
 
     fn accept_one(&self, listener: &std::os::unix::net::UnixListener) -> () {
