@@ -7,7 +7,7 @@ import test from 'node:test';
 /** @typedef {QaRectangle & {top: number, bottom: number}} QaBounds */
 /** @typedef {{id: string, name: string, status: string, source: string, task: string, action?: string, sessionId?: string, taskId?: string, provider?: string, rawSource?: string}} QaLogicalRecord */
 /** @typedef {{id: string, agent: string, sessionId: string, taskId: string, name: string, status: string, source: string, running: boolean}} QaActionRecord */
-/** @typedef {{logicalText?: string, activityText?: string, overflowScroll?: boolean, actions?: QaActionRecord[], columns?: number, logicalRows?: QaLogicalRecord[], navigationDelay?: number, noGroups?: boolean, activityCards?: number, overflow?: boolean, width?: number, height?: number, nativeFailure?: boolean, advanceSamples?: boolean, advancePaused?: boolean, replaceOnLayout?: boolean}} QaOptions */
+/** @typedef {{logicalText?: string, activityText?: string, overflowScroll?: boolean, actions?: QaActionRecord[], columns?: number, logicalRows?: QaLogicalRecord[], navigationDelay?: number, noGroups?: boolean, activityCards?: number, overflow?: boolean, width?: number, height?: number, nativeFailure?: boolean, advanceSamples?: boolean, advancePaused?: boolean, replaceOnLayout?: boolean, nodeFrame?: QaRectangle}} QaOptions */
 /** @typedef {{section: string, tab: string, drawer: boolean, opened: string, samples: number, live: string, clock: number, columns: number, activeGroup: number, groupClicks: number, groupPending: boolean, groupDropped: boolean}} QaState */
 /** @typedef {{dataset: Record<string, string | undefined>}} QaBody */
 /** @typedef {{label: string, action: string, check: string, section: string, mode: string, width: number, height: number, actionName?: string, agentRecordId?: string, sessionId?: string, taskId?: string, actionRecordId?: string}} QaInput */
@@ -143,6 +143,7 @@ function environment(options={}) {
   graphs[0].dataset.group='fixture-a';
   graphs[1].dataset.group='fixture-b';
   graphs.forEach(/** @param {QaElement} graph @param {number} index @returns {void} */ (graph,index)=>{
+    graph.closest=/** @param {string} selector @returns {QaElement | null} */ selector=>selector==='.graph-node-frame'&&options.nodeFrame?new QaElement('frame',options.nodeFrame):null;
     graph.query=/** @param {string} selector @returns {QaElement} */ selector=>{
       if(selector==='.graph-canvas')return graphCanvases[index];
       if(selector==='.graph-name')return new QaElement('Fixture process');
@@ -584,4 +585,15 @@ test('open-first-session clicks the first session card control and reports the p
   assert.equal(report.diagnostics.panel.session,'first-agent');
   assert.equal(report.diagnostics.panel.view,'detail');
   assert.equal('drawer' in report.diagnostics,false);
+});
+
+test('tree check accepts process titles that fit inside their node frames',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({nodeFrame:{x:0,y:0,width:400,height:200}});
+  const report=parse(await tree(context));
+  assert.equal(report.verification.success,true);
+});
+
+test('tree check fails a process title that runs past its node frame',/** @returns {Promise<void>} */ async()=>{
+  const context=environment({nodeFrame:{x:0,y:0,width:400,height:100}});
+  await assert.rejects(tree(context),/process node titles are missing or clipped: .*"frameBottom":100/);
 });
