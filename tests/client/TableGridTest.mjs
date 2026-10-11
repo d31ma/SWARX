@@ -128,6 +128,7 @@ class TableGridTest {
       .replace(/:class="'(agent-role|agent-tool)'[^"]*"/g, 'class="$1"')
       .replace(/\{session\.title\}/g, 'Synthetic ' + session.name + ' session')
       .replace(/\{session\.harness\}/g, session.harness)
+      .replace(/\{session\.id \|\| 'not reported'\}/g, 'synthetic-' + session.name)
       .replace(/\{session\.countLabel\}/g, '1 Agent · 0 Sub-agents · 1 tool running')
       .replace(/\{row\.roleLabel\}/g, 'Agent')
       .replace(/\{row\.toolLabel\}/g, 'fixture-action')
