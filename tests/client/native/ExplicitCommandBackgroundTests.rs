@@ -363,3 +363,10 @@ fn nested_explicit_command_keeps_the_outer_legacy_work_without_double_counting()
     assert_eq!(tasks[0].pids, vec![42]);
     assert_eq!(tasks[1].pids, vec![43]);
 }
+
+#[test]
+fn session_scope_label_uses_singular_for_one_verified_root() -> () {
+    let view = ExplicitCommandBackgroundTests::view(ExplicitCommandBackgroundTests::base(), 100.0);
+    let wire = serde_json::to_value(view.session_detail.as_ref().unwrap()).unwrap();
+    assert_eq!(wire["scopeLabel"], "2 current processes \u{b7} 1 verified root");
+}
