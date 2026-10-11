@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use test_clock::TestClock;
 
 /// Receipt latency of hook events with a roster near its production size, through the real
-/// socket (includes its accept poll) and directly at the receiver, both over the real roster
+/// socket (includes its accept wait) and directly at the receiver, both over the real roster
 /// file. Run on demand: `RosterReceiptLatencyTests --ignored --nocapture`.
 struct RosterReceiptLatencyTests;
 

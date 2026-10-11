@@ -1,8 +1,6 @@
 use crate::models::NativeLogicalReceipt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 
 #[Service]
 pub struct LogicalSocketWorkerService {
@@ -36,22 +34,48 @@ impl LogicalSocketWorkerService {
         self.accept_loop(&listener);
     }
 
+    // Waiting in poll accepts a connection as soon as it arrives; the timeout only bounds how
+    // long stop waits for the worker to observe the stopping flag.
     fn accept_loop(&self, listener: &std::os::unix::net::UnixListener) -> () {
         while !self.stopping.load(Ordering::Acquire) {
-            self.accept_one(listener);
+            self.accept_ready(listener);
         }
+    }
+
+    fn accept_ready(&self, listener: &std::os::unix::net::UnixListener) -> () {
+        match self.wait_readable(listener) {
+            Ok(true) => self.accept_one(listener),
+            Ok(false) => (),
+            Err(failure) => self.stop_on_fatal(failure.kind()),
+        }
+    }
+
+    fn wait_readable(&self, listener: &std::os::unix::net::UnixListener) -> std::io::Result<bool> {
+        let mut descriptor: libc::pollfd = libc::pollfd {
+            fd: std::os::fd::AsRawFd::as_raw_fd(listener),
+            events: libc::POLLIN,
+            revents: 0,
+        };
+        let timeout: libc::c_int = Self::POLL_MILLISECONDS as libc::c_int;
+        let ready: libc::c_int = unsafe { libc::poll(&mut descriptor, 1, timeout) };
+        if ready < 0 {
+            return Err(std::io::Error::last_os_error());
+        }
+        Self::readable(descriptor.revents)
+    }
+
+    fn readable(revents: libc::c_short) -> std::io::Result<bool> {
+        if revents & (libc::POLLERR | libc::POLLHUP | libc::POLLNVAL) != 0 {
+            return Err(std::io::Error::other("Private event listener failed."));
+        }
+        Ok(revents & libc::POLLIN != 0)
     }
 
     fn accept_one(&self, listener: &std::os::unix::net::UnixListener) -> () {
         match listener.accept() {
             Ok((stream, _address)) => self.handle(stream),
-            Err(failure) => self.accept_failure(failure),
+            Err(failure) => self.stop_on_fatal(failure.kind()),
         }
-    }
-
-    fn accept_failure(&self, failure: std::io::Error) -> () {
-        self.stop_on_fatal(failure.kind());
-        thread::sleep(Duration::from_millis(Self::POLL_MILLISECONDS));
     }
 
     fn stop_on_fatal(&self, kind: std::io::ErrorKind) -> () {
@@ -87,7 +111,9 @@ impl LogicalSocketWorkerService {
     fn accept_one(&self, pipe: &mut std::fs::File) -> () {
         match LogicalPipeService::accept(pipe) {
             Ok(true) => self.serve(pipe),
-            Ok(false) => thread::sleep(Duration::from_millis(Self::POLL_MILLISECONDS)),
+            Ok(false) => {
+                std::thread::sleep(std::time::Duration::from_millis(Self::POLL_MILLISECONDS))
+            }
             Err(_failure) => self.stopping.store(true, Ordering::Release),
         }
     }
