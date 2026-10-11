@@ -10,6 +10,7 @@ export interface ActiveSessionView {
   harness: string;
   model: string | null;
   linked: boolean;
+  remoteControlId: string | null;
   idle: boolean;
   agentCount: number;
   subAgentCount: number;

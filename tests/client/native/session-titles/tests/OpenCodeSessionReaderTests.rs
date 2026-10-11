@@ -79,6 +79,7 @@ fn reads_older_local_schema_title_with_exact_session_id() -> () {
         archived: false,
         model: None,
         provider: None,
+        remote_control_id: None,
     };
     assert_eq!(read(&fixture), vec![expected]);
 }

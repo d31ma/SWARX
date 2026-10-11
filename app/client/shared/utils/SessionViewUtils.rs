@@ -149,6 +149,7 @@ impl SessionViewUtils {
             known: linked.is_some(),
             model: None,
             provider: None,
+            remote_control_id: None,
             agents: Vec::new(),
         }
     }
@@ -284,6 +285,7 @@ impl SessionViewUtils {
         if let Some(candidate) = reported {
             session.model = candidate.model.clone().or(session.model.take());
             session.provider = candidate.provider.clone();
+            session.remote_control_id = candidate.remote_control_id.clone();
         }
         session
     }
@@ -439,6 +441,7 @@ impl SessionViewUtils {
             known: true,
             model: candidate.model.clone(),
             provider: candidate.provider.clone(),
+            remote_control_id: candidate.remote_control_id.clone(),
             agents: Vec::new(),
         }
     }

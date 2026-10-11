@@ -49,6 +49,7 @@ fn reads_kilo_database_as_kilo_sessions() -> () {
         archived: false,
         model: Some("kilo/auto".to_owned()),
         provider: Some("kilo".to_owned()),
+        remote_control_id: None,
     };
     let sessions: Vec<NativeHarnessSession> =
         KiloSessionReaderService::for_data(&fixture.root, &data(&fixture)).sessions();

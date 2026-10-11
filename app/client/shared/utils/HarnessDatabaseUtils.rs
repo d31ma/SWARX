@@ -88,6 +88,7 @@ impl HarnessDatabaseUtils {
             archived: Self::archived(row.integer(Self::ARCHIVED_COLUMN)),
             model: Self::identifier(row.text(Self::MODEL_COLUMN)),
             provider: Self::identifier(row.text(Self::PROVIDER_COLUMN)),
+            remote_control_id: None,
         })
     }
 

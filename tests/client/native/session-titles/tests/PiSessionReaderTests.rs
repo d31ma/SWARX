@@ -133,6 +133,7 @@ fn header_id_and_latest_session_name_become_the_session() -> () {
         archived: false,
         model: None,
         provider: None,
+        remote_control_id: None,
     };
     assert_eq!(read(&fixture), vec![expected]);
 }

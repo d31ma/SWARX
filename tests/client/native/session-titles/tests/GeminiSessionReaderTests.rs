@@ -174,6 +174,7 @@ fn metadata_and_latest_summary_become_the_session() -> () {
         archived: false,
         model: None,
         provider: None,
+        remote_control_id: None,
     };
     assert_eq!(read(&fixture), vec![expected]);
 }

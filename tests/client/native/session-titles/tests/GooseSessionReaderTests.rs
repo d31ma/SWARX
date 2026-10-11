@@ -113,6 +113,7 @@ fn reads_goose_session_name_with_exact_goose_id() -> () {
         archived: false,
         model: Some("claude-sonnet-4-5".to_owned()),
         provider: Some("anthropic".to_owned()),
+        remote_control_id: None,
     };
     assert_eq!(read(&fixture), vec![expected]);
 }

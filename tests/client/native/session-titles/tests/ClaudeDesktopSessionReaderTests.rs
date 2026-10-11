@@ -55,6 +55,7 @@ fn reads_genuine_title_with_exact_provider_and_desktop_ids() -> () {
         archived: false,
         model: None,
         provider: None,
+        remote_control_id: None,
     };
     assert_eq!(read(&fixture), vec![expected]);
 }
@@ -75,6 +76,7 @@ fn private_fields_beside_the_allowlist_are_not_retained() -> () {
         archived: true,
         model: Some("claude-opus-5-5".to_owned()),
         provider: None,
+        remote_control_id: None,
     };
     assert_eq!(sessions, vec![expected]);
     assert!(
@@ -350,4 +352,49 @@ fn unsafe_model_values_become_unknown_without_losing_the_session() -> () {
             .map(|model: &str| -> usize { model.len() }),
         Some(128)
     );
+}
+
+#[test]
+fn remote_control_spawn_reports_its_exact_remote_control_id_only() -> () {
+    let fixture: SessionFolderFixture = SessionFolderFixture::new("remote-control");
+    fixture.write(
+        &file("local_remote.json"),
+        r#"{
+  "cliSessionId": "remote-id",
+  "title": "Remote Control session (from a project)",
+  "bridgeSessionIds": ["cse_01ExampleBridge"],
+  "remoteControlSpawn": {
+    "ccrSessionId": "cse_01ExampleRemoteControl",
+    "folder": "/Users/example/Projects/FYLO",
+    "projectThreadChild": true,
+    "rcChild": true
+  },
+  "pendingSystemReminder": "PRIVATE-REMINDER-MARKER"
+}"#,
+    );
+    fixture.write(
+        &file("local_plain.json"),
+        &SessionFolderFixture::record("plain-id", "Plain", 1),
+    );
+    let mut sessions: Vec<NativeHarnessSession> = read(&fixture);
+    sessions.sort_by(|left: &NativeHarnessSession, right: &NativeHarnessSession| left.id.cmp(&right.id));
+    assert_eq!(ids(&sessions), vec!["plain-id".to_owned(), "remote-id".to_owned()]);
+    assert_eq!(sessions[0].remote_control_id, None);
+    assert_eq!(
+        sessions[1].remote_control_id.as_deref(),
+        Some("cse_01ExampleRemoteControl")
+    );
+    assert_eq!(sessions[1].project, None);
+    assert!(!format!("{sessions:?}").contains("PRIVATE-"));
+    assert!(!format!("{sessions:?}").contains("FYLO"));
+}
+
+#[test]
+fn remote_control_id_that_looks_like_a_secret_is_dropped() -> () {
+    let fixture: SessionFolderFixture = SessionFolderFixture::new("remote-control-secret");
+    fixture.write(
+        &file("local_secret.json"),
+        r#"{"cliSessionId": "secret-id", "remoteControlSpawn": {"ccrSessionId": "sk-PRIVATE"}}"#,
+    );
+    assert_eq!(read(&fixture)[0].remote_control_id, None);
 }

@@ -11,6 +11,7 @@ export interface SessionDetailView {
   harness: string;
   family: string;
   linked: boolean;
+  remoteControlId: string | null;
   active: boolean;
   stateLabel: string;
   countLabel: string;

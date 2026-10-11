@@ -23,6 +23,7 @@ impl ActiveSessionUtils {
     const SHOW_FEWER: &'static str = "Show fewer";
     const CLAUDE: &'static str = "Claude";
     const CLAUDE_NAME: &'static str = "Claude Code";
+    const REMOTE_CONTROL: &'static str = "Remote Control";
     const SEPARATOR: &'static str = " \u{b7} ";
     const SINGLE: i64 = 1;
     const NONE: i64 = 0;
@@ -41,7 +42,8 @@ impl ActiveSessionUtils {
         expanded: &[String],
         background: (&[NativeBackgroundTaskView], &[NativeSessionView]),
     ) -> Vec<NativeActiveSessionView> {
-        let mut groups: Vec<NativeSessionView> = SessionViewUtils::sessions(agents);
+        let mut groups: Vec<NativeSessionView> =
+            Self::remote_controlled(SessionViewUtils::sessions(agents), background.1);
         let background_only: Vec<NativeSessionView> =
             Self::background_sessions(&groups, background);
         groups.extend(background_only);
@@ -49,6 +51,31 @@ impl ActiveSessionUtils {
             Self::session_views(&groups, sources, (expanded, background.0));
         sessions.sort_by(Self::session_order);
         sessions
+    }
+
+    fn remote_controlled(
+        groups: Vec<NativeSessionView>,
+        reported: &[NativeSessionView],
+    ) -> Vec<NativeSessionView> {
+        groups
+            .into_iter()
+            .map(|group: NativeSessionView| -> NativeSessionView {
+                Self::with_remote_control(group, reported)
+            })
+            .collect()
+    }
+
+    fn with_remote_control(
+        mut group: NativeSessionView,
+        reported: &[NativeSessionView],
+    ) -> NativeSessionView {
+        group.remote_control_id = reported
+            .iter()
+            .find(|candidate: &&NativeSessionView| -> bool { candidate.key == group.key })
+            .and_then(|candidate: &NativeSessionView| -> Option<String> {
+                candidate.remote_control_id.clone()
+            });
+        group
     }
 
     pub fn retained(
@@ -87,7 +114,11 @@ impl ActiveSessionUtils {
             .filter(|card| !keys.contains(&card.key)).cloned().collect()
     }
 
-    pub fn harness(family: &str) -> String {
+    pub fn harness(group: &NativeSessionView) -> String {
+        Self::session_harness(group)
+    }
+
+    pub fn family_harness(family: &str) -> String {
         Self::harness_name(family)
     }
 
@@ -158,10 +189,11 @@ impl ActiveSessionUtils {
             key: group.key.clone(),
             id: group.id.clone(),
             title: Self::title(group),
-            harness: Self::harness_name(&group.family),
+            harness: Self::session_harness(group),
             model: group.model.clone(),
             family: group.family.clone(),
             linked: group.known,
+            remote_control_id: group.remote_control_id.clone(),
             idle: false,
             agent_count: total - sub_agents,
             sub_agent_count: sub_agents,
@@ -373,6 +405,20 @@ impl ActiveSessionUtils {
             return title;
         }
         Self::UNLINKED_TITLE.to_owned()
+    }
+
+    fn session_harness(group: &NativeSessionView) -> String {
+        [
+            Some(Self::harness_name(&group.family)),
+            group
+                .remote_control_id
+                .as_ref()
+                .map(|_identifier: &String| -> String { Self::REMOTE_CONTROL.to_owned() }),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<String>>()
+        .join(Self::SEPARATOR)
     }
 
     fn harness_name(family: &str) -> String {

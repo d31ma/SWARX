@@ -1,3 +1,5 @@
+use crate::models::NativeClaudeRemoteControlSpawn;
+
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeClaudeDesktopSessionRecord {
@@ -10,4 +12,5 @@ pub struct NativeClaudeDesktopSessionRecord {
     pub is_archived: Option<bool>,
     pub last_activity_at: Option<f64>,
     pub model: Option<String>,
+    pub remote_control_spawn: Option<NativeClaudeRemoteControlSpawn>,
 }

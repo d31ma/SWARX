@@ -611,3 +611,39 @@ fn session_card_carries_the_hook_reported_model_for_its_exact_session_only() -> 
     assert_eq!(wire["activeSessions"][1]["model"], "claude-opus-5-5");
     assert!(wire["activeSessions"][0]["model"].is_null());
 }
+
+#[test]
+fn remote_control_session_card_is_marked_with_its_exact_remote_control_id() {
+    let agents: Vec<NativeLogicalAgentView> = vec![
+        ActiveSessionTests::worker("remote:main", "Claude", Some(("remote-id", "Remote")), 100.0),
+        ActiveSessionTests::worker("local:main", "Claude", Some(("local-id", "Local")), 100.0),
+    ];
+    let harness: Vec<crate::models::NativeHarnessSession> = vec![crate::models::NativeHarnessSession {
+        family: "Claude".to_owned(),
+        id: "remote-id".to_owned(),
+        title: Some("Disk-full recovery test".to_owned()),
+        title_source: "Claude desktop session title (auto)".to_owned(),
+        last_activity_at: Some(ActiveSessionTests::RECENT),
+        remote_control_id: Some("cse_01ExampleRemoteControl".to_owned()),
+        ..Default::default()
+    }];
+    let mut snapshot: NativeSnapshot = NativeSnapshot::default();
+    snapshot.ready = true;
+    snapshot.sampled_at = ActiveSessionTests::RECENT;
+    snapshot.logical_views = agents.clone();
+    snapshot.session_groups = SessionViewUtils::named(SessionViewUtils::sessions(&agents), &harness, ActiveSessionTests::NOW);
+    snapshot.harness_sessions = harness;
+    let selection: NativeViewSelection = NativeViewSelection { selected_session: "Claude:remote-id".to_owned(), ..NativeViewSelection::default() };
+    let view: NativeOverviewView = OverviewViewUtils::view(&snapshot, &selection, ActiveSessionTests::NOW);
+    let card = |key: &str| -> NativeActiveSessionView { view.active_sessions.iter().find(|card| card.key == key).unwrap().clone() };
+    let remote: NativeActiveSessionView = card("Claude:remote-id");
+    assert_eq!(remote.title, "Disk-full recovery test");
+    assert_eq!(remote.harness, "Claude Code \u{b7} Remote Control");
+    assert_eq!(remote.remote_control_id.as_deref(), Some("cse_01ExampleRemoteControl"));
+    let local: NativeActiveSessionView = card("Claude:local-id");
+    assert_eq!(local.harness, "Claude Code");
+    assert_eq!(local.remote_control_id, None);
+    let detail = view.session_detail.unwrap();
+    assert_eq!(detail.harness, "Claude Code \u{b7} Remote Control");
+    assert_eq!(detail.remote_control_id.as_deref(), Some("cse_01ExampleRemoteControl"));
+}

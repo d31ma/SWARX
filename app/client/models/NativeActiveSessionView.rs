@@ -11,6 +11,8 @@ pub struct NativeActiveSessionView {
     #[serde(default)]
     pub model: Option<String>,
     pub linked: bool,
+    #[serde(default, rename = "remoteControlId")]
+    pub remote_control_id: Option<String>,
     // Retained session cards carry no current agents, tools or load ranks.
     #[serde(default)]
     pub idle: bool,
