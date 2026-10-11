@@ -10,13 +10,13 @@ export class NativeHostCustomizer {
   private static readonly SQLITE_LIBRARY_FLAG: string = '-lsqlite3';
   private static readonly SOURCE_PATH: string = 'macos/project/TachyonHost.swift';
   private static readonly COMPANION_PATH: string = 'macos/project/libtachyoncompanion.a';
-  private static readonly EXECUTABLE_PATH: string = 'macos/SWARX.app/Contents/MacOS/SWARX';
+  private static readonly EXECUTABLE_PATH: string = 'macos/Swarx.app/Contents/MacOS/Swarx';
   private static readonly VERIFY_SOURCE: string = 'NativePreviewVerifier.swift';
   private static readonly LIFETIME_SOURCE: string = 'NativeApplicationLifetimeVerifier.swift';
   private static readonly NATIVE_SOURCE: string = 'app/client/shared/native';
   private static readonly ICON_SOURCE: string = 'NativeApplicationIcon.swift';
   private static readonly QA_SOURCE: string = 'tools/native';
-  private static readonly COLLECTOR_RESOURCE: string = 'macos/SWARX.app/Contents/Resources/Collector';
+  private static readonly COLLECTOR_RESOURCE: string = 'macos/Swarx.app/Contents/Resources/Collector';
   private static readonly REPORT_SOURCE: string = 'NativePreviewReport.js';
   private static readonly REPORT_MARKER: string = '"__NATIVE_REPORT_SCRIPT__"';
   private static readonly MINIMUM_OLD: string = 'window.contentMinSize = NSSize(width: 0, height: 0)';

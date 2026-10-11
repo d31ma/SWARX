@@ -55,7 +55,7 @@ class NativeCurrentWorkLiveTest {
     assert.equal(fs.existsSync(this.SOCKET), false, 'Quit the owned monitor before starting native QA.');
     fs.rmSync(this.STATUS, {force:true});
     const log = fs.openSync(path.join(this.ROOT,'evidence/queue27-current-work-native-app.txt'),'w');
-    const app = spawn(path.join(this.BUNDLE,'Contents/MacOS/SWARX'),[],{
+    const app = spawn(path.join(this.BUNDLE,'Contents/MacOS/Swarx'),[],{
       env:{...process.env,OBSERVATORY_QA:'1',OBSERVATORY_QA_FOCUS:'current-work',
         OBSERVATORY_QA_ACTION_NAME:this.ACTION,OBSERVATORY_QA_ACTION_RECORD_ID:this.EXECUTION,OBSERVATORY_QA_AGENT_RECORD_ID:`coord:${this.SESSION}:${this.AGENT}`,OBSERVATORY_ROOT:this.ROOT,OBSERVATORY_LIFETIME_QA:''},
       stdio:['ignore',log,log]

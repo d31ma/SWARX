@@ -1,7 +1,7 @@
 <w-container fluid class="observatory">
   <logic :if="!observatory.model"><main class="main overview-loading" aria-busy="true"><div class="loading-message"><h1>Loading local observations.</h1><p>Connecting to the app-owned native core.</p><p role="status">{observatory.problem}</p></div></main></logic>
   <logic :if="observatory.model"><main class="main">
-    <w-app-bar class="topbar"><div class="brand"><img class="brand-symbol" src="/shared/assets/observatory.svg" alt="" role="presentation" /><strong>SWARX</strong></div><div class="status-controls"><span class="eyebrow">LOCAL AGENT &amp; RESOURCE MONITOR</span><span :class="'live-state state-' + observatory.status"><i class="dot"></i>{observatory.status}</span></div></w-app-bar>
+    <w-app-bar class="topbar"><div class="brand"><img class="brand-symbol" src="/shared/assets/observatory.svg" alt="" role="presentation" /><strong>Swarx</strong></div><div class="status-controls"><span class="eyebrow">LOCAL AGENT &amp; RESOURCE MONITOR</span><span :class="'live-state state-' + observatory.status"><i class="dot"></i>{observatory.status}</span></div></w-app-bar>
     <section class="page-heading"><div><h1>What’s running.</h1><p>Verified active agents from explicit local reports. Select a session for its measured resources, process tree and past activity.</p></div><div class="sample-info">Updated {observatory.model.sampled}<br /><span>Observed for {observatory.model.elapsed}</span></div></section>
     <logic :if="observatory.problem"><w-alert variant="warning" class="alert" role="status">{observatory.problem}</w-alert></logic>
     <loop :for="error of observatory.model.errors"><w-alert variant="warning" class="alert" role="status">{error}</w-alert></loop>

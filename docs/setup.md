@@ -97,7 +97,7 @@ configured `OBSERVATORY_RUST_CACHE_PATH`.
 
 The build composes the Tachyon output, Rust companion, thin native host and
 application icon. Its current native bundle is
-`macos/SWARX.app` under `OBSERVATORY_NATIVE_ARTIFACTS`. Generated project inputs also remain under that external
+`macos/Swarx.app` under `OBSERVATORY_NATIVE_ARTIFACTS`. Generated project inputs also remain under that external
 root. The output route has source and fixture checks; this preparation did not
 perform a new native build or launch.
 

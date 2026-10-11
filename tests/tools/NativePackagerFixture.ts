@@ -55,8 +55,8 @@ export class NativePackagerFixture {
 
   host(): string {
     const source: string = 'window.contentMinSize = NSSize(width: 0, height: 0)\n'
-      + '        window.title = "SWARX"\n'
-      + '        menus.install(NSApplication.shared, window, "SWARX", menuNavigation, menuActions)\n'
+      + '        window.title = "Swarx"\n'
+      + '        menus.install(NSApplication.shared, window, "Swarx", menuNavigation, menuActions)\n'
       + '        NSApplication.shared.activate(ignoringOtherApps: true)\n'
       + '        Telemetry.shared.record("controller.active")\n';
     this.write('tools/native/NativePreviewVerifier.swift', 'let script = "__NATIVE_REPORT_SCRIPT__"\n');
@@ -66,8 +66,8 @@ export class NativePackagerFixture {
   }
 
   icon(): void {
-    this.write('app/dist/macos/SWARX.app/Contents/Info.plist', '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>local.fixture.monitor</string></dict></plist>');
-    this.write('app/dist/macos/SWARX.app/Contents/Resources/WebBundle/index.html', '<html><head></head><body>Fixture</body></html>');
+    this.write('app/dist/macos/Swarx.app/Contents/Info.plist', '<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict><key>CFBundleIdentifier</key><string>local.fixture.monitor</string></dict></plist>');
+    this.write('app/dist/macos/Swarx.app/Contents/Resources/WebBundle/index.html', '<html><head></head><body>Fixture</body></html>');
   }
 
   png(pixels: number, filter: number = 0): Buffer {

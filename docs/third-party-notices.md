@@ -1,7 +1,7 @@
 # Third-party notices
 
 These notices describe the files inspected in this source tree. They do not
-select a license for SWARX application code. Preserve each dependency's full
+select a license for Swarx application code. Preserve each dependency's full
 license text and any notice in its distributed asset when redistributing it.
 
 | Dependency | Inspected version and files | Existing notice |

@@ -7,9 +7,9 @@ import {userInfo} from 'node:os';
 
 class NativeMenusTest {
   /** @type {string} */
-  static APP_NAME = 'SWARX';
+  static APP_NAME = 'Swarx';
   /** @type {string} */
-  static HELP_LABEL = 'SWARX Help';
+  static HELP_LABEL = 'Swarx Help';
   /** @type {string} */
   static EVENT_SOCKET = '/tmp/agent-observatory-' + userInfo().uid + '/hooks-native.sock';
   /** @type {number} */
@@ -21,7 +21,7 @@ class NativeMenusTest {
   /** @type {string} */
   static OUTPUT = QaPathUtils.evidence('queue21-native-menus-ui.json');
   /** @type {string} */
-  static EXECUTABLE = path.join(QaPathUtils.external('OBSERVATORY_APP_BUNDLE'), 'Contents/MacOS/SWARX');
+  static EXECUTABLE = path.join(QaPathUtils.external('OBSERVATORY_APP_BUNDLE'), 'Contents/MacOS/Swarx');
   /** @type {{checked_at: string, pid: number, status: string, actions: {name: string, passed: boolean, result: string}[], limits: string[], error?: string}} */
   static receipt = {checked_at: new Date().toISOString(), pid: this.PID, status: 'running', actions: [], limits: ['Actual own-process Mac UI only; no permission or settings changes.', 'No custom Service actions, File Close or Command1–5 claim.', 'HideOthers/ShowAll, clipboard mutation, full-screen and zoom not exercised.', 'Edit › Select All not exercised: the single What’s running page has no text input.']};
 
