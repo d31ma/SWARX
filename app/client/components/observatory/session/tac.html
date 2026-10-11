@@ -9,6 +9,7 @@
           <p class="session-panel-state"><span :class="'session-state ' + (observatory.model.sessionDetail.active ? 'is-active' : 'is-inactive')">{observatory.model.sessionDetail.stateLabel}</span><span>{observatory.model.sessionDetail.harness}</span></p>
           <h2 id="session-panel-title" :title="observatory.model.sessionDetail.title">{observatory.model.sessionDetail.title}</h2>
           <p class="session-harness">{observatory.model.sessionDetail.harness} · {observatory.model.sessionDetail.countLabel}</p>
+          <p class="session-id">Session ID · {observatory.model.sessionDetail.id || 'not reported'}</p>
           <logic :if="observatory.sessionView === 'inactive'"><p class="session-panel-note" role="status">No active agents now. Measured resources and past activity stay available while this session is still reported.</p></logic>
         </logic>
       </div>
