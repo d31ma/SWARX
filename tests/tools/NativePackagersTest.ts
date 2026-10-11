@@ -30,7 +30,7 @@ test('Rust packaging appends current exports, builds offline and copies library/
   assert.ok(fs.readFileSync(path.join(fixture.rustCache, 'emitter.rs'), 'utf8').includes('EventEmitterMain::run()'));
   assert.ok(fs.readFileSync(path.join(fixture.rustCache, 'emitter.rs'), 'utf8').includes('use observatory_native::{models, ProcessIdentityReader, ClaudeHookAdapter};\nuse observatory_native::services::{LogicalEventClientService, LogicalEventWireService, LogicalSocketService, NativePlatformCompositionService};'));
   assert.equal(fs.readFileSync(path.join(fixture.artifacts, 'macos/project/libtachyoncompanion.a'), 'utf8'), 'fixture static library');
-  const emitter = path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/MacOS/observatory-event');
+  const emitter = path.join(fixture.artifacts, 'macos/SWARX.app/Contents/MacOS/observatory-event');
   assert.equal(fs.statSync(emitter).mode & 0o777, 0o755);
 });
 
@@ -103,7 +103,7 @@ test('Host builds with static companion and preserves literal embedded report ch
   const fixture = new NativePackagerFixture();
   context.after((): void => fixture.close());
   fixture.host();
-  const collector = fixture.write('app/dist/macos/AgentObservatory.app/Contents/Resources/Collector/old.txt', 'legacy fixture');
+  const collector = fixture.write('app/dist/macos/SWARX.app/Contents/Resources/Collector/old.txt', 'legacy fixture');
   const customizer = new NativeHostCustomizer(fixture.root, fixture.run);
   customizer.build();
   assert.equal(fs.existsSync(collector), false);
@@ -118,7 +118,7 @@ test('Host builds with static companion and preserves literal embedded report ch
 test('Host refuses non-directory Collector resource without deleting it', (context: TestContext): void => {
   const fixture = new NativePackagerFixture();
   context.after((): void => fixture.close());
-  const collector = fixture.write('app/dist/macos/AgentObservatory.app/Contents/Resources/Collector', 'keep');
+  const collector = fixture.write('app/dist/macos/SWARX.app/Contents/Resources/Collector', 'keep');
   const customizer = new NativeHostCustomizer(fixture.root, fixture.run);
   assert.throws((): void => customizer.removeLegacyCollector(), /real directory/);
   assert.equal(fs.readFileSync(collector, 'utf8'), 'keep');
@@ -137,7 +137,7 @@ test('Icon packaging preserves dimensions, plist keys, local favicon and signing
   assert.equal(decode[4], '-o');
   assert.equal(path.basename(decode[5]!), 'decoded.iconset');
   assert.deepEqual(fs.readFileSync(path.join(fixture.artifacts, 'icons/Observatory.icns')),
-    fs.readFileSync(path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/Resources/Observatory.icns')));
+    fs.readFileSync(path.join(fixture.artifacts, 'macos/SWARX.app/Contents/Resources/Observatory.icns')));
   const iconset: string = path.join(fixture.artifacts, 'icons/Observatory.iconset');
   const expected: readonly (readonly [string, number])[] = [
     ['icon_16x16.png', 16], ['icon_16x16@2x.png', 32],
@@ -155,14 +155,14 @@ test('Icon packaging preserves dimensions, plist keys, local favicon and signing
     assert.equal(packaged.readUInt32BE(16), pixels);
     assert.equal(packaged.readUInt32BE(20), pixels);
   }
-  assert.deepEqual(fixture.commands.at(-1), ['/usr/bin/codesign', '--force', '--sign', '-', path.join(fixture.artifacts, 'macos/AgentObservatory.app')]);
-  const plist = path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/Info.plist');
+  assert.deepEqual(fixture.commands.at(-1), ['/usr/bin/codesign', '--force', '--sign', '-', path.join(fixture.artifacts, 'macos/SWARX.app')]);
+  const plist = path.join(fixture.artifacts, 'macos/SWARX.app/Contents/Info.plist');
   const icon = spawnSync('/usr/bin/plutil', ['-extract', 'CFBundleIconFile', 'raw', '-o', '-', plist], {encoding: 'utf8'});
   const identifier = spawnSync('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', '-o', '-', plist], {encoding: 'utf8'});
   assert.equal(icon.status, 0);
   assert.equal(icon.stdout.trim(), 'Observatory.icns');
   assert.equal(identifier.stdout.trim(), 'local.fixture.monitor');
-  assert.ok(fs.readFileSync(path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/Resources/WebBundle/index.html'), 'utf8').includes('/shared/assets/observatory.svg'));
+  assert.ok(fs.readFileSync(path.join(fixture.artifacts, 'macos/SWARX.app/Contents/Resources/WebBundle/index.html'), 'utf8').includes('/shared/assets/observatory.svg'));
 });
 
 const invalidIconInputs: readonly (readonly [string, (fixture: NativePackagerFixture) => Buffer | undefined])[] = [
@@ -320,7 +320,7 @@ for (const [name, corrupt] of invalidAssemblyInputs) {
     fixture.icon();
     new IconPackager(fixture.root, fixture.run).package();
     const file: string = path.join(fixture.artifacts, 'icons/Observatory.icns');
-    const delivered: string = path.join(fixture.artifacts, 'macos/AgentObservatory.app/Contents/Resources/Observatory.icns');
+    const delivered: string = path.join(fixture.artifacts, 'macos/SWARX.app/Contents/Resources/Observatory.icns');
     const previous: Buffer = fs.readFileSync(file);
     const previousDelivered: Buffer = fs.readFileSync(delivered);
     const bad: Buffer = corrupt(fixture);

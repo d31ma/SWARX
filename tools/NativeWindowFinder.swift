@@ -2,7 +2,7 @@ import Foundation
 import CoreGraphics
 @main
 final class NativeWindowFinder {
-    private static let applicationName: String = "AgentObservatory"
+    private static let applicationName: String = "SWARX"
 
     static func main() -> Void {
         let records: [[String: Any]] = windows()
