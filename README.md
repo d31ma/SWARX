@@ -35,8 +35,17 @@ trusted in Codex:
   `SubagentStart` and `SubagentStop` in Codex. If `PostToolUse` is trusted and
   Codex sends it when a long command yields, that command shows as completed
   while its process still runs; this has not been probed.
-- The shell tool name and command field Codex reports are not yet confirmed by a
-  live probe, so the action detail may be empty.
+- A live local Codex CLI run (2026-10-11) confirmed that `PreToolUse` reports
+  the shell tool as `Bash` with the command in `tool_input.command`, which
+  becomes the action detail. In that run (one `codex app-server` process, two
+  turns) `SessionStart` fired only at the first turn, so the later turn was
+  first seen at its first tool call.
+- Without `UserPromptSubmit`, nothing marks a turn start, so a turn with no tool
+  call should not appear (inferred from the hook set, not observed).
+- Without `SessionEnd`, Swarx gets no event when a Codex thread's process exits;
+  the card simply stays idle after the last `Stop`. Without a process link, its
+  Resources and Process Tree stay empty. The session is named by its thread ID
+  because Codex hooks send no title.
 
 The application keeps measurements and opt-in task events local. The collectors
 do not read prompts, session transcripts or terminal output. Event adapters must
