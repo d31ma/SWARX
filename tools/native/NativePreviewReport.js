@@ -49,6 +49,10 @@ class NativePreviewReport {
   /** @type {string} */
   static #GRAPH_NODE_SELECTOR = '.graph-node';
   /** @type {string} */
+  static #GRAPH_NAME_SELECTOR = '.graph-name';
+  /** @type {string} */
+  static #GRAPH_FRAME_SELECTOR = '.graph-node-frame';
+  /** @type {string} */
   static #COMMAND_RESOURCE_SELECTOR = '.history-card';
   /** @type {string} */
   static #ACTION_RUNNING = 'action-running';
@@ -808,21 +812,36 @@ class NativePreviewReport {
 
   /** @param {string} check @returns {void} */
   static #assertNodeLabels(check) {
-    if (check !== this.#TREE) return;
-    this.#requireNodeLabels(this.#nodeLabelBounds());
+    const labels = this.#nodeLabelBounds();
+    const clipped = labels.filter(this.#clippedLabel.bind(this));
+    const failed = [labels.length === this.#EMPTY_COUNT, clipped.length > this.#EMPTY_COUNT].some(Boolean);
+    if ([check === this.#TREE, failed].every(Boolean)) throw new Error('Native QA process node titles are missing or clipped: ' + JSON.stringify(clipped));
   }
 
-  /** @returns {{top: number, bottom: number, textTop: number, textBottom: number}[]} */
+  /** @returns {{text: string, textTop: number, textBottom: number, frameTop: number, frameBottom: number}[]} */
   static #nodeLabelBounds() {
-    return Array.from(document.querySelectorAll(this.#GRAPH_NODE_SELECTOR)).map(
-      /** @param {Element} node @returns {Element | null} */ node => node.querySelector('.graph-name')
-    ).filter(/** @param {Element | null} label @returns {label is Element} */ label => label !== null).map(this.#elementTextBound.bind(this));
+    return Array.from(document.querySelectorAll(this.#GRAPH_NODE_SELECTOR))
+      .filter(/** @param {Element} node @returns {boolean} */ node => this.#visible(node))
+      .filter(/** @param {Element} node @returns {boolean} */ node => node.querySelector(this.#GRAPH_NAME_SELECTOR) !== null)
+      .map(this.#nodeLabelBound.bind(this));
   }
 
-  /** @param {{top: number, bottom: number, textTop: number, textBottom: number}[]} labels @returns {void} */
-  static #requireNodeLabels(labels) {
-    const ready = [labels.length > this.#EMPTY_COUNT, labels.every(/** @param {{top: number, bottom: number, textTop: number, textBottom: number}} label @returns {boolean} */ label => [label.textTop >= label.top, label.textBottom <= label.bottom].every(Boolean))].every(Boolean);
-    if (!ready) throw new Error('Native QA process node titles are missing or clipped.');
+  /** @param {Element} node @returns {{text: string, textTop: number, textBottom: number, frameTop: number, frameBottom: number}} */
+  static #nodeLabelBound(node) {
+    const label = /** @type {Element} */ (node.querySelector(this.#GRAPH_NAME_SELECTOR));
+    const text = this.#elementTextBound(label);
+    const frame = this.#nodeFrame(node).getBoundingClientRect();
+    return {text: this.#text(label), textTop: text.textTop, textBottom: text.textBottom, frameTop: frame.top, frameBottom: frame.bottom};
+  }
+
+  /** @param {Element} node @returns {Element} */
+  static #nodeFrame(node) {
+    return node.closest(this.#GRAPH_FRAME_SELECTOR) ?? node;
+  }
+
+  /** @param {{textTop: number, textBottom: number, frameTop: number, frameBottom: number}} label @returns {boolean} */
+  static #clippedLabel(label) {
+    return [label.textTop < label.frameTop - this.#SIZE_TOLERANCE, label.textBottom > label.frameBottom + this.#SIZE_TOLERANCE].some(Boolean);
   }
 
   /** @returns {{text: string, top: number, bottom: number, textTop: number, textBottom: number, height: number, lineHeight: string, overflow: string}[]} */
