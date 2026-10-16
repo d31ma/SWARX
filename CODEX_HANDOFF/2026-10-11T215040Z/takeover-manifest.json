@@ -1,0 +1,60 @@
+{
+  "checkpoint_at": "2026-10-11T21:50:40.888100+00:00",
+  "recovery": {
+    "owner": "Assistant SSH task 01a12c31-5976-747d-845c-00610048b0cc",
+    "verified_by_parent": "WSL stopped at 21:38 UTC and restarted at 21:42 UTC; services are not healthy; health diagnosis continues.",
+    "healthy": false,
+    "claude_may_restart": false,
+    "post_recovery_source_verification": "PENDING: actual remote HEADs, dirty paths, surviving processes, Docker state, locks and service health. Restart is not qualification."
+  },
+  "threads": [
+    {
+      "project": "SWARX",
+      "title": "Swarx website",
+      "local_session_id": "289f8398-84d1-49a4-9a04-dfa36a06ec31",
+      "claude_thread_id": "cmsg_01UQHdzjQTZhsgxFr92JP1YH1y3MNW1Xac6VKz2ZSoYm3o",
+      "codex_project_id": null,
+      "codex_chat_id": "01a12ce7-e594-7164-bc1d-9451638ed0d7",
+      "status": "unfinished_hosting_intentionally_paused",
+      "prior_handoff_path": "/Volumes/ANNEX/Users/iyor/Library/CloudStorage/Google Drive/myOrganizations/DELMA/SWARX/CODEX_HANDOFF/2026-10-11T2125Z/289f8398-84d1-49a4-9a04-dfa36a06ec31.md",
+      "handoff_path": "/Volumes/ANNEX/Users/iyor/Library/CloudStorage/Google Drive/myOrganizations/DELMA/SWARX/CODEX_HANDOFF/2026-10-11T215040Z/289f8398-84d1-49a4-9a04-dfa36a06ec31.md",
+      "latest_record_at": "2026-10-11T07:32:18.440Z",
+      "notes": {
+        "status": "unfinished_hosting_intentionally_paused",
+        "wsl_scope": "None; keep dormant.",
+        "receipt": "07:32 Claude closed website thread without deployment. Parent retains it because hosting is unfinished.",
+        "source": "Website locally merged into SWARX develop c68198c; not pushed/deployed according to last report.",
+        "pending": "Hosting only after official Tachyon RC and SWARX app RC CI/CD. Consult PaaS hosting details; proposed swarx.del.ma domain was a guess, not user-confirmed.",
+        "stale": "No newer session tail than 07:32. Recheck current RC/CI/source state before activation.",
+        "blockers": [
+          "Intentional hosting pause",
+          "RC and CI/CD dependency",
+          "Domain/destination and publishing authorization not established"
+        ]
+      },
+      "fresh_local_git": [
+        {
+          "path": "/Volumes/ANNEX/Users/iyor/Library/CloudStorage/Google Drive/myOrganizations/DELMA/SWARX",
+          "exists": true,
+          "verified_git_root": "/Volumes/ANNEX/Users/iyor/Library/CloudStorage/Google Drive/myOrganizations/DELMA/SWARX",
+          "head": "c68198c714fe3db50c557b72bde296a7b8f6a860",
+          "branch": "develop",
+          "dirty_paths": [
+            "?? CLAUDE_HANDOFF.md",
+            "?? CODEX_HANDOFF/"
+          ]
+        }
+      ],
+      "remote_post_recovery_verified": false,
+      "latest_status": {
+        "at": "2026-10-11T07:23:27.725Z",
+        "text": "Swarx website\n\n\u2713 Studied Fylo, Sesame, Heimdall and Duvay sites (Tachyon + DuVay)\n\u2713 Read Swarx's rules, brand and develop branch\n\u2713 Created worktree on branch swarm/website off develop\n\u2713 Wrote the site; it passes Swarx's Tachyon compiler checks\n\u2713 Rendered it in light, dark and phone widths\n**\u2713 Merged into local develop (not pushed)**"
+      },
+      "latest_reply": {
+        "at": "2026-10-11T07:32:16.223Z",
+        "text": "The website stays on your local `develop` as it is. I've noted that hosting waits for a Tachyon release candidate and then the app's CI/CD file, and that the hosting details are in the PaaS repo."
+      },
+      "activation_scope": "standby_no_execution"
+    }
+  ]
+}
